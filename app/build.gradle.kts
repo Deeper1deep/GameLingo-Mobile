@@ -133,6 +133,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.android)
 
     implementation(libs.mlkit.text.recognition)
+    implementation(libs.mlkit.translate)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

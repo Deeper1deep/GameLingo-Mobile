@@ -3,6 +3,7 @@ package com.gamelingo.mobile.ui.navigation
 import androidx.lifecycle.ViewModel
 import com.gamelingo.mobile.core.session.OcrLine
 import com.gamelingo.mobile.core.session.SessionState
+import com.gamelingo.mobile.core.session.TranslatedLine
 import com.gamelingo.mobile.core.session.TranslationSessionBus
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
@@ -13,4 +14,6 @@ import kotlinx.coroutines.flow.StateFlow
 class SessionViewModel @Inject constructor() : ViewModel() {
     val sessionState: StateFlow<SessionState> = TranslationSessionBus.state
     val latestLine: StateFlow<OcrLine?> = TranslationSessionBus.latestLine
+    val translatedLine: StateFlow<TranslatedLine?> = TranslationSessionBus.translatedLine
+    val translationFailure: StateFlow<String?> = TranslationSessionBus.translationFailure
 }
