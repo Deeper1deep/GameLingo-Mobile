@@ -16,6 +16,7 @@ class HybridTranslationEngineTest {
         override val engineId: String,
         var answer: String = "ترجمة",
         var failure: Exception? = null,
+        var latencyMs: Long = 0,
     ) : TranslationEngine {
         var calls = 0
             private set
@@ -24,6 +25,7 @@ class HybridTranslationEngineTest {
 
         override suspend fun translate(request: TranslationRequest): TranslationResult {
             calls++
+            if (latencyMs > 0) kotlinx.coroutines.delay(latencyMs)
             failure?.let { throw it }
             return TranslationResult(translatedText = answer, engineId = engineId)
         }
@@ -215,6 +217,53 @@ class HybridTranslationEngineTest {
         assertEquals("mlkit-ondevice", result.engineId)
         assertEquals(3, online.calls)
         assertEquals(1, local.calls)
+    }
+
+    @Test
+    fun `AUTO fast online wins and local never runs`() = runTest {
+        val online = StubEngine("gemini-flash-lite", latencyMs = 100)
+        val local = StubEngine("mlkit-ondevice", latencyMs = 10)
+        val (engine, _, _) = hybrid(AiMode.AUTO, online = online, local = local)
+        engine.sleep = { }
+        engine.autoSoftTimeoutMs = 1_000
+        val result = engine.translate(TranslationRequest(text = "hi"))
+        assertEquals("gemini-flash-lite", result.engineId)
+        assertEquals(0, local.calls)
+    }
+
+    @Test
+    fun `AUTO slow online loses the race to the local engine`() = runTest {
+        val online = StubEngine("gemini-flash-lite", latencyMs = 5_000)
+        val local = StubEngine("mlkit-ondevice", latencyMs = 50)
+        val (engine, _, _) = hybrid(AiMode.AUTO, online = online, local = local)
+        engine.sleep = { }
+        engine.autoSoftTimeoutMs = 1_000
+        val result = engine.translate(TranslationRequest(text = "hi"))
+        // Online exceeded the soft timeout, local answered first.
+        assertEquals("mlkit-ondevice", result.engineId)
+    }
+
+    @Test
+    fun `AUTO fast online failure falls back to local immediately`() = runTest {
+        val online = StubEngine("gemini-flash-lite", failure = QuotaExceededException("429"))
+        val local = StubEngine("mlkit-ondevice", latencyMs = 10)
+        val (engine, _, _) = hybrid(AiMode.AUTO, online = online, local = local)
+        engine.sleep = { }
+        engine.autoSoftTimeoutMs = 1_000
+        val result = engine.translate(TranslationRequest(text = "hi"))
+        assertEquals("mlkit-ondevice", result.engineId)
+    }
+
+    @Test
+    fun `AUTO race failure surfaces when both engines fail`() = runTest {
+        val online = StubEngine("gemini-flash-lite", failure = ApiAuthException("403"))
+        val local = StubEngine("mlkit-ondevice", failure = IOException("model missing"))
+        val (engine, _, _) = hybrid(AiMode.AUTO, online = online, local = local)
+        engine.sleep = { }
+        engine.autoSoftTimeoutMs = 1_000
+        val thrown = runCatching { engine.translate(TranslationRequest(text = "hi")) }
+            .exceptionOrNull()
+        assertTrue(thrown is IOException)
     }
 
     @Test
