@@ -21,8 +21,11 @@ import android.view.Display
 import android.view.Surface
 import androidx.core.app.NotificationCompat
 import com.gamelingo.mobile.R
+import com.gamelingo.mobile.core.capture.BlockDynamicsTracker
 import com.gamelingo.mobile.core.capture.DisplayGeometry
 import com.gamelingo.mobile.core.capture.FailureTracker
+import com.gamelingo.mobile.core.capture.SubtitleBlockScorer
+import com.gamelingo.mobile.core.capture.translated
 import com.gamelingo.mobile.core.capture.FrameChangeDetector
 import com.gamelingo.mobile.core.capture.RegionMapper
 import com.gamelingo.mobile.core.session.TranslationSessionBus
@@ -84,6 +87,7 @@ class ScreenCaptureService : Service() {
     private val stabilityTracker = TextStabilityTracker()
     private val deduplicator = Deduplicator()
     private val failureTracker = FailureTracker()
+    private val blockDynamicsTracker = BlockDynamicsTracker()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -200,11 +204,13 @@ class ScreenCaptureService : Service() {
                 null,
             )
             currentGeometry = latest
-            // The frame stream restarts: stale digests and half-stable lines
-            // from the old geometry must not gate the new one.
+            // The frame stream restarts: stale digests, half-stable lines and
+            // block-position history from the old geometry must not gate the
+            // new one.
             frameChangeDetector.reset()
             stabilityTracker.reset()
             deduplicator.reset()
+            blockDynamicsTracker.reset()
         }
     }
 
@@ -252,6 +258,7 @@ class ScreenCaptureService : Service() {
             return
         }
 
+        var cropTop = 0
         val ocrBitmap = if (settings.restrictToTextRegion) {
             val region = settings.effectiveRegion
             val rect = RegionMapper.mapToPixels(
@@ -260,12 +267,31 @@ class ScreenCaptureService : Service() {
                 frameWidth = geometry.width,
                 frameHeight = geometry.height,
             )
+            cropTop = rect.top
             Bitmap.createBitmap(fullBitmap, rect.left, rect.top, rect.width, rect.height)
         } else {
             fullBitmap
         }
 
-        val rawText = recognizerEngine.recognize(InputImage.fromBitmap(ocrBitmap, 0))
+        val rawText = if (settings.smartTextDetection) {
+            // Smart mode: read positioned blocks, shift them into full-frame
+            // coordinates, and let the scorer pick the real subtitle line over
+            // static corner watermarks and HUD labels.
+            val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(ocrBitmap, 0))
+            val shifted = blocks.map { block ->
+                block.copy(rect = block.rect.translated(0, cropTop))
+            }
+            val winner = SubtitleBlockScorer.selectBest(
+                blocks = shifted,
+                frameWidth = geometry.width,
+                frameHeight = geometry.height,
+                dynamics = blockDynamicsTracker,
+            )
+            blockDynamicsTracker.offer(shifted)
+            winner?.text.orEmpty()
+        } else {
+            recognizerEngine.recognize(InputImage.fromBitmap(ocrBitmap, 0))
+        }
         if (ocrBitmap !== fullBitmap) ocrBitmap.recycle()
         fullBitmap.recycle()
 
@@ -335,6 +361,7 @@ class ScreenCaptureService : Service() {
         stabilityTracker.reset()
         deduplicator.reset()
         failureTracker.reset()
+        blockDynamicsTracker.reset()
         TranslationSessionBus.onSessionStopped()
         stopService(OverlayService.startIntent(this))
         stopForeground(STOP_FOREGROUND_REMOVE)
