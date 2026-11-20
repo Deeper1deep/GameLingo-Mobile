@@ -51,7 +51,7 @@
 ## GitHub Actions
 
 - `CI` (`ci.yml`): بيعمل Build للـ Debug APK، بيشغل اختبارات الوحدة، وlint على كل push وPR على `main`، ويرفع الـ APK والتقارير كـ Artifacts.
-- `Publish` (`publish.yml`): يدوي التشغيل، بيبني Release موقع بالمفتاح الثابت، بيتحقق من التوقيع وSHA-256، وبينشر على `GameLingo-Updates` مع تحديث `latest.json`. (يُضاف في المرحلة التاسعة، بعد اكتمال إعداد الـ Secrets.)
+- `Publish` (`publish.yml`): يدوي التشغيل، بيرفع versionCode ويحدّث versionName من المدخلات، بيبني Release موقع بالمفتاح الثابت (كلمة سر المفتاح = كلمة سر المخزن في PKCS12)، بيتحقق من التوقيع وشهادة مثبتة بالـ SHA-256 (أي اختلاف يلغي النشر)، وبينشر الـ APK و`latest.json` على `GameLingo-Updates` ويرجّع رفع الإصدار للسورس مع tag. يحتاج سر `UPDATES_REPO_TOKEN` (PAT بدقة محدودة: كتابة المحتوى على GameLingo-Updates فقط) قبل أول نشر فعلي.
 
 ## نظام التحديثات
 

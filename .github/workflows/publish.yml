@@ -1,0 +1,161 @@
+name: Publish
+
+on:
+  workflow_dispatch:
+    inputs:
+      versionName:
+        description: 'إصدار العرض (مثال: 0.2.0)'
+        required: true
+        type: string
+      changelog:
+        description: 'سجل التغييرات بالعربي اللي هيظهر للمستخدمين'
+        required: true
+        type: string
+      mandatoryUpdate:
+        description: 'تحديث إجباري؟'
+        required: false
+        default: false
+        type: boolean
+      minimumSupportedVersionCode:
+        description: 'أقل versionCode مدعوم (الأقدم منه يُجبَر على التحديث)'
+        required: false
+        default: '1'
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: publish
+  cancel-in-progress: false
+
+env:
+  EXPECTED_CERT_SHA256: '0e:1d:8a:cc:71:38:01:c1:41:39:af:7c:77:a1:ac:ad:de:d9:77:f6:d1:3a:c6:38:1d:11:2f:8a:23:84:66:7e'
+
+jobs:
+  publish:
+    name: Build signed release and publish to GameLingo-Updates
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Restore Gradle wrapper jar and make gradlew executable
+        run: |
+          base64 -d gradle/wrapper/gradle-wrapper.jar.b64 > gradle/wrapper/gradle-wrapper.jar
+          echo "7d3a4ac4de1c32b59bc6a4eb8ecb8e612ccd0cf1ae1e99f66902da64df296172  gradle/wrapper/gradle-wrapper.jar" | sha256sum -c -
+          chmod +x ./gradlew
+
+      - name: Bump version (versionCode +1, versionName from input)
+        id: version
+        run: |
+          current_code=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
+          new_code=$((current_code + 1))
+          sed -i "s/versionCode = ${current_code}/versionCode = ${new_code}/" app/build.gradle.kts
+          sed -i "s/versionName = \"[^\"]*\"/versionName = \"${{ inputs.versionName }}\"/" app/build.gradle.kts
+          echo "code=${new_code}" >> "$GITHUB_OUTPUT"
+          grep -n "versionCode\|versionName" app/build.gradle.kts
+
+      - name: Decode release keystore
+        run: |
+          mkdir -p keystore
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > keystore/gamelingo-release.keystore
+          chmod 600 keystore/gamelingo-release.keystore
+
+      - name: Run unit tests
+        run: ./gradlew :app:testDebugUnitTest --stacktrace
+
+      - name: Build signed release APK
+        env:
+          GAMELINGO_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          GAMELINGO_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          # PKCS12: key password equals the store password. ANDROID_KEY_PASSWORD is
+          # intentionally never referenced (obsolete secret left over from setup).
+          GAMELINGO_KEY_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: ./gradlew :app:assembleRelease --stacktrace
+
+      - name: Verify signature and pinned certificate
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          test -f "$APK"
+          APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
+          CERT=$("$APKSIGNER" verify --print-certs "$APK" | grep 'Signer #1 certificate SHA-256 digest')
+          echo "$CERT"
+          echo "$CERT" | grep -q "$EXPECTED_CERT_SHA256" || { echo 'Certificate mismatch: refusing to publish'; exit 1; }
+
+      - name: Compute APK hash and size
+        id: apk
+        run: |
+          APK=app/build/outputs/apk/release/app-release.apk
+          echo "sha256=$(sha256sum "$APK" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+          echo "size=$(stat -c%s "$APK")" >> "$GITHUB_OUTPUT"
+
+      - name: Clone GameLingo-Updates
+        run: |
+          git clone "https://x-access-token:${{ secrets.UPDATES_REPO_TOKEN }}@github.com/Deeper1deep/GameLingo-Updates.git" updates-repo
+
+      - name: Publish APK and latest.json
+        run: |
+          set -e
+          APK_NAME="gamelingo-${{ inputs.versionName }}.apk"
+          mkdir -p updates-repo/apk
+          cp app/build/outputs/apk/release/app-release.apk "updates-repo/apk/${APK_NAME}"
+          APK_SHA="${{ steps.apk.outputs.sha256 }}"
+          APK_SIZE="${{ steps.apk.outputs.size }}"
+          VERSION_CODE="${{ steps.version.outputs.code }}"
+          RELEASE_DATE=$(date +%F)
+          MANDATORY=${{ inputs.mandatoryUpdate }}
+          MIN_CODE="${{ inputs.minimumSupportedVersionCode }}"
+          export APK_NAME APK_SHA APK_SIZE VERSION_CODE RELEASE_DATE MANDATORY MIN_CODE
+          export CHANGELOG_TEXT='${{ inputs.changelog }}'
+          export VERSION_NAME='${{ inputs.versionName }}'
+          python3 - <<'PYJSON'
+          import json, os
+          data = {
+              "schemaVersion": 1,
+              "appId": "com.gamelingo.mobile",
+              "latestVersion": os.environ["VERSION_NAME"],
+              "latestVersionCode": int(os.environ["VERSION_CODE"]),
+              "minimumSupportedVersionCode": int(os.environ["MIN_CODE"]),
+              "releaseDate": os.environ["RELEASE_DATE"],
+              "changelog": os.environ["CHANGELOG_TEXT"],
+              "downloadUrl": "https://raw.githubusercontent.com/Deeper1deep/GameLingo-Updates/main/apk/" + os.environ["APK_NAME"],
+              "sha256": os.environ["APK_SHA"],
+              "mandatoryUpdate": os.environ["MANDATORY"].lower() == "true",
+              "fileSizeBytes": int(os.environ["APK_SIZE"]),
+          }
+          with open("updates-repo/latest.json", "w", encoding="utf-8") as f:
+              json.dump(data, f, ensure_ascii=False, indent=2)
+              f.write("\n")
+          PYJSON
+
+      - name: Commit and push to GameLingo-Updates
+        run: |
+          cd updates-repo
+          git config user.name "gamelingo-publish[bot]"
+          git config user.email "gamelingo-publish[bot]@users.noreply.github.com"
+          git add "apk/gamelingo-${{ inputs.versionName }}.apk" latest.json
+          git commit -m "release: v${{ inputs.versionName }} (versionCode ${{ steps.version.outputs.code }})"
+          git push origin main
+
+      - name: Commit version bump to source repo
+        run: |
+          git config user.name "gamelingo-publish[bot]"
+          git config user.email "gamelingo-publish[bot]@users.noreply.github.com"
+          git add app/build.gradle.kts
+          git commit -m "release: bump to v${{ inputs.versionName }} (versionCode ${{ steps.version.outputs.code }})"
+          git tag "v${{ inputs.versionName }}"
+          git push origin main --tags
+
+      - name: Wipe the keystore
+        if: always()
+        run: rm -rf keystore
