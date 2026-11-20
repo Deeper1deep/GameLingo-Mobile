@@ -1,45 +1,67 @@
 package com.gamelingo.mobile.data.settings
 
+import com.gamelingo.mobile.core.model.OverlayColors
 import kotlinx.coroutines.flow.Flow
 
-/** Engine selection for the hybrid translator. */
-enum class AiMode {
-    /** Try the online provider first, fall back to the local engine. */
-    AUTO,
-
-    /** Online provider only; fail visibly when there is no connection. */
-    ONLINE,
-
-    /** On-device engine only; never touches the network. */
-    LOCAL,
-}
-
+/** Every user-tunable setting, persisted in DataStore. Defaults match [SettingsConstraints]. */
 data class AppSettings(
-    val aiMode: AiMode = AiMode.AUTO,
-    val captureIntervalMs: Long = DEFAULT_CAPTURE_INTERVAL_MS,
-    val restrictToTextRegion: Boolean = true,
-    val overlayOpacity: Float = DEFAULT_OVERLAY_OPACITY,
-    val overlayTextSizeSp: Int = DEFAULT_OVERLAY_TEXT_SIZE_SP,
+    // Translation
     val showOriginalText: Boolean = true,
+    // OCR
+    val captureIntervalMs: Long = SettingsConstraints.DEFAULT_CAPTURE_INTERVAL_MS,
+    val restrictToTextRegion: Boolean = true,
+    val regionPreset: TextRegionPreset = TextRegionPreset.LOWER_THIRD,
+    val regionTopFraction: Float = SettingsConstraints.DEFAULT_REGION_TOP,
+    val regionBottomFraction: Float = SettingsConstraints.DEFAULT_REGION_BOTTOM,
+    val dedupEnabled: Boolean = true,
+    val ignoreUnstableText: Boolean = true,
+    val batterySaverEnabled: Boolean = true,
+    // Hybrid AI
+    val aiMode: AiMode = AiMode.AUTO,
+    /** User-supplied key for the online provider. Stored on-device only, never shipped in the APK. */
+    val onlineApiKey: String = "",
+    val requestTimeoutSec: Int = SettingsConstraints.DEFAULT_TIMEOUT_SEC,
+    val cacheEnabled: Boolean = true,
+    val contextLines: Int = SettingsConstraints.DEFAULT_CONTEXT_LINES,
+    // Floating window
+    val overlayOpacity: Float = SettingsConstraints.DEFAULT_OVERLAY_OPACITY,
+    val overlayTextSizeSp: Int = SettingsConstraints.DEFAULT_OVERLAY_TEXT_SIZE_SP,
+    val overlayTextColor: Long = OverlayColors.DEFAULT_TEXT,
+    val overlayBackgroundColor: Long = OverlayColors.DEFAULT_BACKGROUND,
+    val overlayPosition: OverlayPosition = OverlayPosition.BOTTOM,
 ) {
-    companion object {
-        const val DEFAULT_CAPTURE_INTERVAL_MS = 1_000L
-        const val MIN_CAPTURE_INTERVAL_MS = 300L
-        const val MAX_CAPTURE_INTERVAL_MS = 3_000L
-        const val DEFAULT_OVERLAY_OPACITY = 0.85f
-        const val DEFAULT_OVERLAY_TEXT_SIZE_SP = 18
-        const val MIN_OVERLAY_TEXT_SIZE_SP = 12
-        const val MAX_OVERLAY_TEXT_SIZE_SP = 30
-    }
+    /** The effective OCR band for the current preset. */
+    val effectiveRegion: TextRegionFractions
+        get() = SettingsConstraints.resolveRegion(
+            preset = regionPreset,
+            customTop = regionTopFraction,
+            customBottom = regionBottomFraction,
+        )
 }
 
 interface SettingsRepository {
     val settings: Flow<AppSettings>
 
-    suspend fun setAiMode(mode: AiMode)
+    suspend fun setShowOriginalText(show: Boolean)
+
     suspend fun setCaptureIntervalMs(intervalMs: Long)
     suspend fun setRestrictToTextRegion(restrict: Boolean)
+    suspend fun setRegionPreset(preset: TextRegionPreset)
+    suspend fun setRegionTopFraction(fraction: Float)
+    suspend fun setRegionBottomFraction(fraction: Float)
+    suspend fun setDedupEnabled(enabled: Boolean)
+    suspend fun setIgnoreUnstableText(ignore: Boolean)
+    suspend fun setBatterySaverEnabled(enabled: Boolean)
+
+    suspend fun setAiMode(mode: AiMode)
+    suspend fun setOnlineApiKey(key: String)
+    suspend fun setRequestTimeoutSec(seconds: Int)
+    suspend fun setCacheEnabled(enabled: Boolean)
+    suspend fun setContextLines(lines: Int)
+
     suspend fun setOverlayOpacity(opacity: Float)
     suspend fun setOverlayTextSizeSp(sizeSp: Int)
-    suspend fun setShowOriginalText(show: Boolean)
+    suspend fun setOverlayTextColor(argb: Long)
+    suspend fun setOverlayBackgroundColor(argb: Long)
+    suspend fun setOverlayPosition(position: OverlayPosition)
 }
