@@ -14,7 +14,7 @@
 -if @kotlinx.serialization.Serializable class ** {
     static ** Companion;
 }
--keepclassmembers class <2>.<3> {
+-keepclassmembers class <2>.Companion {
     kotlinx.serialization.KSerializer serializer(...);
     kotlinx.serialization.KSerializer[] childSerializers();
 }
