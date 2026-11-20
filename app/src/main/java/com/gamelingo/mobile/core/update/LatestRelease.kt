@@ -20,6 +20,8 @@ data class LatestRelease(
     val downloadUrl: String,
     val sha256: String,
     val mandatoryUpdate: Boolean = false,
+    /** Optional APK size; older/latest.json without it fall back to a HEAD request. */
+    val fileSizeBytes: Long? = null,
 ) {
     /** Older installs only understand schemas up to [CURRENT_SCHEMA]. */
     val isSupportedSchema: Boolean
