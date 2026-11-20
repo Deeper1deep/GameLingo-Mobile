@@ -24,6 +24,35 @@ enum class SessionNotice {
     FELL_BACK_TO_LOCAL,
 }
 
+/**
+ * The reason a session went to ERROR. Kept apart from the session state
+ * itself: the teardown that follows a failure flips the state back to
+ * STOPPED, but the user must still see WHY the session died, so the reason
+ * survives until the next start or an explicit dismiss.
+ */
+enum class SessionError {
+    /** The consent intent extras never reached the capture service. */
+    MISSING_CONSENT_DATA,
+
+    /** startForeground failed before the projection handoff. */
+    FOREGROUND_START_FAILED,
+
+    /** getMediaProjection rejected the consent token (reused or revoked). */
+    PROJECTION_REJECTED,
+
+    /** Frame reads or OCR failed persistently, not once. */
+    CAPTURE_PERSISTENT_FAILURE,
+
+    /** The settings store could not be read inside the capture loop. */
+    SETTINGS_UNAVAILABLE,
+
+    /** The overlay permission was missing or revoked while running. */
+    OVERLAY_PERMISSION_LOST,
+
+    /** WindowManager refused the overlay view. */
+    OVERLAY_WINDOW_FAILED,
+}
+
 /** One accepted OCR line, ready for the translation engine (Phase 4). */
 data class OcrLine(
     val text: String,
@@ -61,7 +90,16 @@ object TranslationSessionBus {
     private val _notice = MutableStateFlow<SessionNotice?>(null)
     val notice: StateFlow<SessionNotice?> = _notice.asStateFlow()
 
+    /**
+     * Why the session last failed, or null. Survives [onSessionStopped]: the
+     * teardown after a failure must not erase the explanation the user needs.
+     * Cleared by the next [onSessionStarted] or by [dismissError].
+     */
+    private val _error = MutableStateFlow<SessionError?>(null)
+    val error: StateFlow<SessionError?> = _error.asStateFlow()
+
     fun onSessionStarted() {
+        _error.value = null
         _state.value = SessionState.RUNNING
     }
 
@@ -73,8 +111,17 @@ object TranslationSessionBus {
         _notice.value = null
     }
 
-    fun onSessionError() {
+    fun onSessionError(reason: SessionError) {
+        _error.value = reason
         _state.value = SessionState.ERROR
+    }
+
+    /** Hides the current error reason; the state settles back to STOPPED. */
+    fun dismissError() {
+        _error.value = null
+        if (_state.value == SessionState.ERROR) {
+            _state.value = SessionState.STOPPED
+        }
     }
 
     fun onNewLine(text: String, capturedAtMillis: Long) {

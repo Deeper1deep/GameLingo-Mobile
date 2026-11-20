@@ -17,6 +17,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.gamelingo.mobile.core.overlay.OverlayLayout
+import com.gamelingo.mobile.core.session.SessionError
 import com.gamelingo.mobile.core.session.SessionState
 import com.gamelingo.mobile.core.session.TranslationSessionBus
 import com.gamelingo.mobile.data.settings.AppSettings
@@ -62,7 +63,7 @@ class OverlayService : Service() {
         // run silently windowless: say so (the home screen shows the error
         // state) and stop.
         if (!Settings.canDrawOverlays(this)) {
-            TranslationSessionBus.onSessionError()
+            TranslationSessionBus.onSessionError(SessionError.OVERLAY_PERMISSION_LOST)
             stopSelf()
         }
         return START_NOT_STICKY
@@ -73,14 +74,14 @@ class OverlayService : Service() {
         if (!Settings.canDrawOverlays(this)) {
             // Do not hide the failure: capture without the window leaves the
             // user staring at nothing with no explanation.
-            TranslationSessionBus.onSessionError()
+            TranslationSessionBus.onSessionError(SessionError.OVERLAY_PERMISSION_LOST)
             stopSelf()
             return
         }
         lifecycleOwner.onServiceCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
         if (!addOverlayWindow()) {
-            TranslationSessionBus.onSessionError()
+            TranslationSessionBus.onSessionError(SessionError.OVERLAY_WINDOW_FAILED)
             stopSelf()
             return
         }
@@ -202,6 +203,15 @@ class OverlayService : Service() {
         serviceScope.launch {
             TranslationSessionBus.translatedLine.collect { line ->
                 if (line != null) {
+                    // The permission can be revoked while the session runs;
+                    // the system then drops the window silently. Detect it on
+                    // the next line and surface the reason instead of letting
+                    // the translations vanish without a word.
+                    if (!Settings.canDrawOverlays(this@OverlayService)) {
+                        TranslationSessionBus.onSessionError(SessionError.OVERLAY_PERMISSION_LOST)
+                        stopSelf()
+                        return@collect
+                    }
                     uiState.value = OverlayUiState(
                         original = line.original,
                         translated = line.translated,
