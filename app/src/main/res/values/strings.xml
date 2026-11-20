@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">GameLingo</string>
+
+    <string name="nav_home">الرئيسية</string>
+    <string name="nav_translation_settings">إعدادات الترجمة</string>
+    <string name="nav_ocr_settings">إعدادات OCR</string>
+    <string name="nav_ai_settings">إعدادات الذكاء الاصطناعي</string>
+    <string name="nav_overlay_settings">إعدادات النافذة العائمة</string>
+    <string name="nav_history">سجل الترجمات</string>
+    <string name="nav_about">حول التطبيق</string>
+    <string name="nav_voice">ترجمة الصوت</string>
+
+    <string name="home_headline">ترجمة نصوص الألعاب للعامية المصرية</string>
+    <string name="home_description">شغّل أي فيديو لعبة، وابدأ التقاط الشاشة، والترجمة هتظهر فوق الفيديو في نافذة عائمة.</string>
+    <string name="home_start">بدء الترجمة</string>
+    <string name="home_start_pending">هتتفعل مع ميزة التقاط الشاشة (المرحلة الثالثة)</string>
+    <string name="home_history_count">ترجمة محفوظة: %1$d</string>
+
+    <string name="translation_target_dialect">اللهجة المستهدفة</string>
+    <string name="translation_dialect_egyptian">العامية المصرية</string>
+    <string name="translation_show_original">عرض النص الإنجليزي الأصلي مع الترجمة</string>
+
+    <string name="ocr_capture_interval">معدل الالتقاط</string>
+    <string name="ocr_capture_interval_value">كل %1$d مللي ثانية</string>
+    <string name="ocr_region_only">اقتصار القراءة على منطقة النص</string>
+    <string name="ocr_region_hint">يقلل استهلاك البطارية والمعالج</string>
+
+    <string name="ai_mode_title">وضع المحرك</string>
+    <string name="ai_mode_auto">تلقائي (أونلاين أولًا ثم محلي)</string>
+    <string name="ai_mode_online">أونلاين فقط</string>
+    <string name="ai_mode_local">محلي فقط (بدون إنترنت)</string>
+    <string name="ai_no_keys_hint">مفيش أي مفاتيح API جوه التطبيق. الأونلاين هيبقى بمفتاح بتدخله انت من إعداداتك.</string>
+
+    <string name="overlay_opacity">شفافية الخلفية</string>
+    <string name="overlay_text_size">حجم الخط</string>
+    <string name="overlay_text_size_value">%1$dsp</string>
+
+    <string name="history_empty">مفيش ترجمات محفوظة لسه.</string>
+
+    <string name="about_version">الإصدار %1$s (رقم البناء %2$d)</string>
+    <string name="about_package">معرّف التطبيق: %1$s</string>
+    <string name="about_updates">التحديثات بتتسحب من مستودع GameLingo-Updates، مستقل عن سورس الكود.</string>
+
+    <string name="voice_coming_soon">ترجمة الصوت جاية في إصدار لاحق. البنية جاهزة ليها، بس مش ميزة مكتملة في الإصدار الأول.</string>
+
+    <string name="back">رجوع</string>
+</resources>
