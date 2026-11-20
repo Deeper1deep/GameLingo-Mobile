@@ -16,6 +16,7 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.util.Log
 import android.os.IBinder
 import android.view.Display
 import android.view.Surface
@@ -28,6 +29,7 @@ import com.gamelingo.mobile.core.capture.SubtitleBlockScorer
 import com.gamelingo.mobile.core.capture.translated
 import com.gamelingo.mobile.core.capture.FrameChangeDetector
 import com.gamelingo.mobile.core.capture.RegionMapper
+import com.gamelingo.mobile.core.session.SessionError
 import com.gamelingo.mobile.core.session.TranslationSessionBus
 import com.gamelingo.mobile.core.text.Deduplicator
 import com.gamelingo.mobile.core.text.TextNormalizer
@@ -125,10 +127,23 @@ class ScreenCaptureService : Service() {
                 intent.getParcelableExtra(EXTRA_RESULT_DATA)
             }
         if (resultData == null) {
-            TranslationSessionBus.onSessionError()
+            Log.e(TAG, "startCapture without consent data")
+            TranslationSessionBus.onSessionError(SessionError.MISSING_CONSENT_DATA)
             stopCapture()
             return
         }
+
+        // Android 14+ order is strict: the service must already be foreground
+        // with the MEDIA_PROJECTION type BEFORE getMediaProjection, otherwise
+        // the system throws SecurityException. startForeground must also
+        // follow startForegroundService quickly, so it runs first here.
+        runCatching { startForegroundWithNotification() }
+            .onFailure {
+                Log.e(TAG, "startForeground failed", it)
+                TranslationSessionBus.onSessionError(SessionError.FOREGROUND_START_FAILED)
+                stopCapture()
+                return
+            }
 
         // getMediaProjection throws SecurityException on a reused or revoked
         // consent token; that is a session error to show, not a crash.
@@ -136,26 +151,18 @@ class ScreenCaptureService : Service() {
             getSystemService(MediaProjectionManager::class.java)
         val projection = try {
             projectionManager.getMediaProjection(resultCode, resultData)
-        } catch (_: SecurityException) {
+        } catch (error: SecurityException) {
+            Log.e(TAG, "getMediaProjection rejected the consent token", error)
             null
-        } catch (_: IllegalStateException) {
+        } catch (error: IllegalStateException) {
+            Log.e(TAG, "getMediaProjection failed", error)
             null
         }
         if (projection == null) {
-            TranslationSessionBus.onSessionError()
+            TranslationSessionBus.onSessionError(SessionError.PROJECTION_REJECTED)
             stopCapture()
             return
         }
-
-        // startForeground must follow startForegroundService quickly; doing it
-        // after the (fast) projection handoff keeps both failures in one place.
-        runCatching { startForegroundWithNotification() }
-            .onFailure {
-                runCatching { projection.stop() }
-                TranslationSessionBus.onSessionError()
-                stopCapture()
-                return
-            }
 
         projection.registerCallback(
             object : MediaProjection.Callback() {
@@ -247,8 +254,9 @@ class ScreenCaptureService : Service() {
                 settingsRepository.settings.first()
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
-                TranslationSessionBus.onSessionError()
+            } catch (error: Exception) {
+                Log.e(TAG, "settings read failed inside the capture loop", error)
+                TranslationSessionBus.onSessionError(SessionError.SETTINGS_UNAVAILABLE)
                 stopCapture()
                 break
             }
@@ -266,11 +274,13 @@ class ScreenCaptureService : Service() {
                 failureTracker.onSuccess()
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
-            } catch (_: Exception) {
+            } catch (error: Exception) {
                 // A single bad frame or OCR failure must not kill the session,
                 // but a persistent failure is a broken session: say so and stop.
+                Log.w(TAG, "frame processing failed", error)
                 if (failureTracker.onFailure()) {
-                    TranslationSessionBus.onSessionError()
+                    Log.e(TAG, "frame processing keeps failing; stopping the session")
+                    TranslationSessionBus.onSessionError(SessionError.CAPTURE_PERSISTENT_FAILURE)
                     stopCapture()
                     break
                 }
@@ -475,6 +485,7 @@ class ScreenCaptureService : Service() {
         const val ACTION_STOP = "com.gamelingo.mobile.action.STOP_CAPTURE"
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"
+        private const val TAG = "ScreenCapture"
         private const val CHANNEL_ID = "screen_capture"
         private const val NOTIFICATION_ID = 1001
 
