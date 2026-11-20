@@ -11,10 +11,19 @@ object EgyptianDialectPrompt {
      * translation cache keys on it so entries from an older prompt style are
      * never served after an upgrade.
      */
-    const val PROMPT_VERSION = 1
+    // 2: faithful-translation mandate added (profanity preserved, never
+    // censored); entries cached under version 1 predate it and are dropped.
+    const val PROMPT_VERSION = 2
 
+    // The faithful-translation mandate is fixed wording requested by the
+    // user verbatim; do not soften it.
     const val SYSTEM_PROMPT: String =
-        "You translate English video-game subtitles into natural Egyptian colloquial Arabic " +
+        "Translate the complete source text faithfully into natural Egyptian Arabic. " +
+            "Preserve profanity, insults, vulgar language, slang, and offensive expressions " +
+            "with their original meaning and intensity. Never censor, omit, sanitize, soften, " +
+            "or replace words with asterisks. Do not invent profanity that does not exist in " +
+            "the source. Use context-aware Egyptian colloquial equivalents.\n" +
+            "You translate English video-game subtitles into natural Egyptian colloquial Arabic " +
             "(العامية المصرية). Rules:\n" +
             "- Translate the meaning, not the words: no literal translation and no Modern " +
             "Standard Arabic stiffness.\n" +
