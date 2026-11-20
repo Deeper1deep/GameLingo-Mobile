@@ -11,6 +11,19 @@ enum class SessionState {
     ERROR,
 }
 
+/**
+ * A user-visible session notice the UI maps to an Arabic string. Distinct
+ * from failures: the session keeps running, but the user must know the
+ * translation path is not what they picked.
+ */
+enum class SessionNotice {
+    /** ONLINE was selected without an API key or cloud consent. */
+    ONLINE_NOT_CONFIGURED,
+
+    /** Online translation failed and AUTO quietly used the on-device engine. */
+    FELL_BACK_TO_LOCAL,
+}
+
 /** One accepted OCR line, ready for the translation engine (Phase 4). */
 data class OcrLine(
     val text: String,
@@ -44,6 +57,10 @@ object TranslationSessionBus {
     private val _translationFailure = MutableStateFlow<String?>(null)
     val translationFailure: StateFlow<String?> = _translationFailure.asStateFlow()
 
+    /** Latest user-visible notice (mode mismatch, silent fallback), or null. */
+    private val _notice = MutableStateFlow<SessionNotice?>(null)
+    val notice: StateFlow<SessionNotice?> = _notice.asStateFlow()
+
     fun onSessionStarted() {
         _state.value = SessionState.RUNNING
     }
@@ -53,6 +70,7 @@ object TranslationSessionBus {
         _latestLine.value = null
         _translatedLine.value = null
         _translationFailure.value = null
+        _notice.value = null
     }
 
     fun onSessionError() {
@@ -83,5 +101,9 @@ object TranslationSessionBus {
 
     fun onTranslationFailed(original: String) {
         _translationFailure.value = original
+    }
+
+    fun onNotice(notice: SessionNotice) {
+        _notice.value = notice
     }
 }

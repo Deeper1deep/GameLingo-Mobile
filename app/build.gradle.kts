@@ -57,6 +57,14 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            // ~99MB of the APK is ML Kit native code duplicated per ABI.
+            // Shipping arm64-v8a (every modern phone, incl. the Galaxy A35)
+            // plus armeabi-v7a (older 32-bit devices) roughly halves the APK
+            // without removing any feature; x86/x86_64 are emulator ABIs and
+            // stay available in debug builds.
+            ndk {
+                abiFilters += setOf("arm64-v8a", "armeabi-v7a")
+            }
             // Unsigned unless the fixed keystore is present. The publish
             // workflow refuses to continue without a signed, verified APK.
             if (releaseKeystoreFile.exists()) {
@@ -100,6 +108,12 @@ android {
         abortOnError = true
         warningsAsErrors = false
     }
+
+    testOptions {
+        // Robolectric migration tests read the exported Room schema JSONs
+        // from src/test/assets; without this assets never reach the test runtime.
+        unitTests.isIncludeAndroidResources = true
+    }
 }
 
 dependencies {
@@ -142,6 +156,10 @@ dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.kotlinx.serialization.json)
+    // Room migration tests run on the JVM via Robolectric: no emulator needed.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.androidx.room.testing)
+    testImplementation(libs.androidx.test.core)
 }
 
 // Keep every Kotlin module on metadata the Hilt javac processor can read.

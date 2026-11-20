@@ -59,4 +59,18 @@ class OverlayLayoutTest {
     fun `clamp never goes negative when the view is taller than the screen`() {
         assertEquals(0, OverlayLayout.clampVerticalOffset(50, viewHeight = 900, screenHeight = 800))
     }
+
+    @Test
+    fun `horizontal drag is clamped to the free space around the centered window`() {
+        // Window 200 wide on an 800 screen: +/- 300 of free space.
+        assertEquals(300, OverlayLayout.clampHorizontalOffset(900, viewWidth = 200, screenWidth = 800))
+        assertEquals(-300, OverlayLayout.clampHorizontalOffset(-900, viewWidth = 200, screenWidth = 800))
+        assertEquals(120, OverlayLayout.clampHorizontalOffset(120, viewWidth = 200, screenWidth = 800))
+    }
+
+    @Test
+    fun `a window as wide as the screen cannot move horizontally`() {
+        assertEquals(0, OverlayLayout.clampHorizontalOffset(100, viewWidth = 800, screenWidth = 800))
+        assertEquals(0, OverlayLayout.clampHorizontalOffset(-100, viewWidth = 900, screenWidth = 800))
+    }
 }

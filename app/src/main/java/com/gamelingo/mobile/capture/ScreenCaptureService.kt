@@ -74,6 +74,9 @@ class ScreenCaptureService : Service() {
     private val exceptionHandler = CoroutineExceptionHandler { _, _ -> }
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + exceptionHandler)
 
+    /** True once teardown has begun; stopCapture runs its body only once. */
+    private val stopping = java.util.concurrent.atomic.AtomicBoolean(false)
+
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
@@ -108,8 +111,10 @@ class ScreenCaptureService : Service() {
 
     private fun startCapture(intent: Intent) {
         if (mediaProjection != null) return // already running
-
-        startForegroundWithNotification()
+        // A previous teardown nulls every field synchronously before its
+        // guarded releases, so reaching this point means it is safe to run
+        // again; clear the flag so the next stop works.
+        stopping.set(false)
 
         val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
         val resultData: Intent? =
@@ -125,14 +130,33 @@ class ScreenCaptureService : Service() {
             return
         }
 
+        // getMediaProjection throws SecurityException on a reused or revoked
+        // consent token; that is a session error to show, not a crash.
         val projectionManager =
             getSystemService(MediaProjectionManager::class.java)
-        val projection = projectionManager.getMediaProjection(resultCode, resultData)
+        val projection = try {
+            projectionManager.getMediaProjection(resultCode, resultData)
+        } catch (_: SecurityException) {
+            null
+        } catch (_: IllegalStateException) {
+            null
+        }
         if (projection == null) {
             TranslationSessionBus.onSessionError()
             stopCapture()
             return
         }
+
+        // startForeground must follow startForegroundService quickly; doing it
+        // after the (fast) projection handoff keeps both failures in one place.
+        runCatching { startForegroundWithNotification() }
+            .onFailure {
+                runCatching { projection.stop() }
+                TranslationSessionBus.onSessionError()
+                stopCapture()
+                return
+            }
+
         projection.registerCallback(
             object : MediaProjection.Callback() {
                 override fun onStop() {
@@ -216,7 +240,18 @@ class ScreenCaptureService : Service() {
 
     private suspend fun captureLoop() {
         while (serviceScope.isActive) {
-            val settings = settingsRepository.settings.first()
+            // The settings read lives inside error handling too: a failing
+            // DataStore must surface as a session error, not kill the loop
+            // silently while the UI keeps showing RUNNING.
+            val settings = try {
+                settingsRepository.settings.first()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                TranslationSessionBus.onSessionError()
+                stopCapture()
+                break
+            }
             try {
                 rebuildDisplayIfNeeded()
                 val geometry = currentGeometry
@@ -250,34 +285,37 @@ class ScreenCaptureService : Service() {
         settings: com.gamelingo.mobile.data.settings.AppSettings,
     ) {
         val fullBitmap = image.toBitmap(geometry.width, geometry.height)
+        // Every bitmap this frame creates is released exactly once, whatever
+        // happens below: the finally owns recycling, never the success path.
+        var ocrBitmap: Bitmap? = null
+        try {
+            val shouldRunOcr = !settings.batterySaverEnabled ||
+                frameChangeDetector.hasChanged(fullBitmap.toDownsampledBytes())
+            if (!shouldRunOcr) {
+                return
+            }
 
-        val shouldRunOcr = !settings.batterySaverEnabled ||
-            frameChangeDetector.hasChanged(fullBitmap.toDownsampledBytes())
-        if (!shouldRunOcr) {
-            fullBitmap.recycle()
-            return
-        }
+            var cropTop = 0
+            val workingBitmap = if (settings.restrictToTextRegion) {
+                val region = settings.effectiveRegion
+                val rect = RegionMapper.mapToPixels(
+                    topFraction = region.top,
+                    bottomFraction = region.bottom,
+                    frameWidth = geometry.width,
+                    frameHeight = geometry.height,
+                )
+                cropTop = rect.top
+                Bitmap.createBitmap(fullBitmap, rect.left, rect.top, rect.width, rect.height)
+                    .also { ocrBitmap = it }
+            } else {
+                fullBitmap
+            }
 
-        var cropTop = 0
-        val ocrBitmap = if (settings.restrictToTextRegion) {
-            val region = settings.effectiveRegion
-            val rect = RegionMapper.mapToPixels(
-                topFraction = region.top,
-                bottomFraction = region.bottom,
-                frameWidth = geometry.width,
-                frameHeight = geometry.height,
-            )
-            cropTop = rect.top
-            Bitmap.createBitmap(fullBitmap, rect.left, rect.top, rect.width, rect.height)
-        } else {
-            fullBitmap
-        }
-
-        val rawText = if (settings.smartTextDetection) {
+            val rawText = if (settings.smartTextDetection) {
             // Smart mode: read positioned blocks, shift them into full-frame
             // coordinates, and let the scorer pick the real subtitle over
             // static corner watermarks and HUD labels, merging wrapped lines.
-            val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(ocrBitmap, 0))
+            val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(workingBitmap, 0))
             val shifted = blocks.map { block ->
                 block.copy(rect = block.rect.translated(0, cropTop))
             }
@@ -289,22 +327,28 @@ class ScreenCaptureService : Service() {
             )
             blockDynamicsTracker.offer(shifted)
             subtitle.orEmpty()
-        } else {
-            recognizerEngine.recognize(InputImage.fromBitmap(ocrBitmap, 0))
+            } else {
+                recognizerEngine.recognize(InputImage.fromBitmap(workingBitmap, 0))
+            }
+
+            val text = TextNormalizer.normalize(rawText)
+            if (text.isEmpty()) return
+
+            if (settings.ignoreUnstableText && !stabilityTracker.offer(text)) return
+            if (settings.dedupEnabled && !deduplicator.shouldDeliver(text)) return
+
+            TranslationSessionBus.onNewLine(
+                text = text,
+                capturedAtMillis = System.currentTimeMillis(),
+            )
+        } finally {
+            // Never recycle the same bitmap twice: the cropped bitmap may BE
+            // the full bitmap when no region crop applies.
+            ocrBitmap?.let { cropped ->
+                if (cropped !== fullBitmap && !cropped.isRecycled) cropped.recycle()
+            }
+            if (!fullBitmap.isRecycled) fullBitmap.recycle()
         }
-        if (ocrBitmap !== fullBitmap) ocrBitmap.recycle()
-        fullBitmap.recycle()
-
-        val text = TextNormalizer.normalize(rawText)
-        if (text.isEmpty()) return
-
-        if (settings.ignoreUnstableText && !stabilityTracker.offer(text)) return
-        if (settings.dedupEnabled && !deduplicator.shouldDeliver(text)) return
-
-        TranslationSessionBus.onNewLine(
-            text = text,
-            capturedAtMillis = System.currentTimeMillis(),
-        )
     }
 
     /** Converts an RGBA_8888 ImageReader frame into a Bitmap, handling row padding. */
@@ -348,6 +392,10 @@ class ScreenCaptureService : Service() {
     }
 
     private fun stopCapture() {
+        // Re-entry is expected: the stop button, the projection callback, an
+        // OCR failure and onDestroy can all arrive together. Only the first
+        // caller runs teardown.
+        if (!stopping.compareAndSet(false, true)) return
         captureJob?.cancel()
         captureJob = null
         // Null the fields before releasing: when the system stops the
@@ -363,18 +411,25 @@ class ScreenCaptureService : Service() {
         val projection = mediaProjection
         mediaProjection = null
         currentGeometry = null
-        runCatching { display?.release() }
-        runCatching { reader?.close() }
-        runCatching { projection?.stop() }
-        frameChangeDetector.reset()
-        stabilityTracker.reset()
-        deduplicator.reset()
-        failureTracker.reset()
-        blockDynamicsTracker.reset()
-        TranslationSessionBus.onSessionStopped()
-        runCatching { stopService(OverlayService.startIntent(this)) }
-        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
-        stopSelf()
+        // Teardown ordered behind the display mutex: a frame read or OCR pass
+        // in flight finishes (or observes cancellation) before its surface is
+        // released, so no resource is freed while in use.
+        serviceScope.launch {
+            displayMutex.withLock {
+                runCatching { display?.release() }
+                runCatching { reader?.close() }
+            }
+            runCatching { projection?.stop() }
+            frameChangeDetector.reset()
+            stabilityTracker.reset()
+            deduplicator.reset()
+            failureTracker.reset()
+            blockDynamicsTracker.reset()
+            TranslationSessionBus.onSessionStopped()
+            runCatching { stopService(OverlayService.startIntent(this@ScreenCaptureService)) }
+            runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
+            stopSelf()
+        }
     }
 
     private fun startForegroundWithNotification() {

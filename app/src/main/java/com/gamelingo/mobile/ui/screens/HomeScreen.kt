@@ -65,6 +65,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gamelingo.mobile.R
 import com.gamelingo.mobile.capture.ScreenCaptureService
+import com.gamelingo.mobile.core.session.SessionNotice
 import com.gamelingo.mobile.core.session.SessionState
 import com.gamelingo.mobile.ui.navigation.GameLingoRoutes
 import com.gamelingo.mobile.ui.navigation.HistoryViewModel
@@ -93,6 +94,7 @@ fun HomeScreen(
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
     val captureCancelledMessage = stringResource(R.string.home_capture_cancelled)
+    val overlayNeededMessage = stringResource(R.string.perm_overlay_needed_for_start)
     val context = LocalContext.current
 
     var overlayGranted by remember { mutableStateOf(hasOverlayPermission(context)) }
@@ -166,6 +168,22 @@ fun HomeScreen(
                     if (sessionState == SessionState.RUNNING) {
                         val translated by sessionViewModel.translatedLine.collectAsStateWithLifecycle()
                         val failure by sessionViewModel.translationFailure.collectAsStateWithLifecycle()
+                        val notice by sessionViewModel.notice.collectAsStateWithLifecycle()
+                        notice?.let {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            Text(
+                                text = stringResource(
+                                    when (it) {
+                                        SessionNotice.ONLINE_NOT_CONFIGURED ->
+                                            R.string.overlay_notice_online_not_configured
+                                        SessionNotice.FELL_BACK_TO_LOCAL ->
+                                            R.string.overlay_notice_fell_back_local
+                                    },
+                                ),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.tertiary,
+                            )
+                        }
                         when {
                             translated != null -> {
                                 Spacer(modifier = Modifier.height(8.dp))
@@ -206,9 +224,29 @@ fun HomeScreen(
                     SessionButton(
                         sessionState = sessionState,
                         onStart = {
-                            val projectionManager =
-                                context.getSystemService(MediaProjectionManager::class.java)
-                            projectionLauncher.launch(projectionManager.createScreenCaptureIntent())
+                            // Never start a session the user cannot watch:
+                            // without the overlay permission the translation
+                            // window cannot appear, so ask for it first and
+                            // send him straight to the right system screen.
+                            if (!hasOverlayPermission(context)) {
+                                scope.launch {
+                                    snackbarHostState.showSnackbar(overlayNeededMessage)
+                                }
+                                runCatching {
+                                    context.startActivity(
+                                        Intent(
+                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                                            Uri.parse("package:${context.packageName}"),
+                                        ),
+                                    )
+                                }
+                            } else {
+                                val projectionManager =
+                                    context.getSystemService(MediaProjectionManager::class.java)
+                                projectionLauncher.launch(
+                                    projectionManager.createScreenCaptureIntent(),
+                                )
+                            }
                         },
                         onStop = {
                             context.startService(ScreenCaptureService.stopIntent(context))

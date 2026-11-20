@@ -3,9 +3,18 @@ package com.gamelingo.mobile.data.local
 import androidx.room.Database
 import androidx.room.RoomDatabase
 
+/**
+ * Schema history:
+ *  - v1: translation_history table.
+ *  - v2: index on created_at (the history screen sorts by it on every open).
+ *
+ * Every future schema change MUST ship a real Migration in [Migrations] plus a
+ * migration test. Destructive fallback is banned: it would silently wipe the
+ * user's translation history on upgrade.
+ */
 @Database(
     entities = [TranslationHistoryEntity::class],
-    version = 1,
+    version = 2,
     exportSchema = true,
 )
 abstract class GameLingoDatabase : RoomDatabase() {

@@ -6,6 +6,13 @@ package com.gamelingo.mobile.translate
  */
 object EgyptianDialectPrompt {
 
+    /**
+     * Bump when the prompt wording changes in a meaning-affecting way; the
+     * translation cache keys on it so entries from an older prompt style are
+     * never served after an upgrade.
+     */
+    const val PROMPT_VERSION = 1
+
     const val SYSTEM_PROMPT: String =
         "You translate English video-game subtitles into natural Egyptian colloquial Arabic " +
             "(العامية المصرية). Rules:\n" +

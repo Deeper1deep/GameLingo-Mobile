@@ -57,24 +57,45 @@ class OverlayService : Service() {
 
     override fun onBind(intent: Intent?): IBinder? = null
 
+    override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        // Permission can be revoked while the capture session is alive. Never
+        // run silently windowless: say so (the home screen shows the error
+        // state) and stop.
+        if (!Settings.canDrawOverlays(this)) {
+            TranslationSessionBus.onSessionError()
+            stopSelf()
+        }
+        return START_NOT_STICKY
+    }
+
     override fun onCreate() {
         super.onCreate()
         if (!Settings.canDrawOverlays(this)) {
+            // Do not hide the failure: capture without the window leaves the
+            // user staring at nothing with no explanation.
+            TranslationSessionBus.onSessionError()
             stopSelf()
             return
         }
         lifecycleOwner.onServiceCreate()
         windowManager = getSystemService(WINDOW_SERVICE) as WindowManager
-        addOverlayWindow()
+        if (!addOverlayWindow()) {
+            TranslationSessionBus.onSessionError()
+            stopSelf()
+            return
+        }
         lifecycleOwner.onServiceStart()
         collectState()
     }
 
-    private fun addOverlayWindow() {
+    /** @return false when the window could not be created; never throws. */
+    private fun addOverlayWindow(): Boolean {
         val density = resources.displayMetrics.density
         val marginPx = (EDGE_MARGIN_DP * density).toInt()
         val params = WindowManager.LayoutParams(
-            WindowManager.LayoutParams.MATCH_PARENT,
+            // Wrap-content width keeps the bar draggable horizontally and
+            // stops the window from claiming the whole screen width.
+            WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
@@ -95,8 +116,15 @@ class OverlayService : Service() {
         attachDragHandler(view)
 
         applyAnchor(settingsState.value.overlayPosition, marginPx)
-        windowManager?.addView(view, params)
-        overlayView = view
+        return try {
+            windowManager?.addView(view, params)
+            overlayView = view
+            true
+        } catch (_: Exception) {
+            // Permission revoked between check and add, or a dead window
+            // manager: the caller reports the failure visibly.
+            false
+        }
     }
 
     /** Re-anchors the window when the user changes the position setting. */
@@ -111,37 +139,49 @@ class OverlayService : Service() {
             params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
             params.y = margin
         }
+        // A re-anchor also re-centers horizontally.
+        params.x = 0
         overlayView?.let { view ->
             runCatching { windowManager?.updateViewLayout(view, params) }
         }
     }
 
-    /** Vertical drag: the window follows the finger, clamped on screen. */
+    /** Free drag: the window follows the finger on both axes, clamped on screen. */
     @SuppressLint("ClickableViewAccessibility")
     private fun attachDragHandler(view: View) {
-        var startOffset = 0
+        var startOffsetY = 0
+        var startOffsetX = 0
         var startTouchY = 0f
+        var startTouchX = 0f
         view.setOnTouchListener { _, event ->
             val params = layoutParams ?: return@setOnTouchListener false
             val screenHeight = resources.displayMetrics.heightPixels
+            val screenWidth = resources.displayMetrics.widthPixels
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    startOffset = params.y
+                    startOffsetY = params.y
+                    startOffsetX = params.x
                     startTouchY = event.rawY
+                    startTouchX = event.rawX
                     true
                 }
 
                 MotionEvent.ACTION_MOVE -> {
                     // For a bottom-anchored window, dragging up increases y.
-                    val delta = if (params.gravity and Gravity.BOTTOM == Gravity.BOTTOM) {
+                    val deltaY = if (params.gravity and Gravity.BOTTOM == Gravity.BOTTOM) {
                         startTouchY - event.rawY
                     } else {
                         event.rawY - startTouchY
                     }
                     params.y = OverlayLayout.clampVerticalOffset(
-                        offsetY = (startOffset + delta).toInt(),
+                        offsetY = (startOffsetY + deltaY).toInt(),
                         viewHeight = view.height,
                         screenHeight = screenHeight,
+                    )
+                    params.x = OverlayLayout.clampHorizontalOffset(
+                        offsetX = (startOffsetX + (event.rawX - startTouchX)).toInt(),
+                        viewWidth = view.width,
+                        screenWidth = screenWidth,
                     )
                     runCatching { windowManager?.updateViewLayout(view, params) }
                     true
@@ -181,6 +221,11 @@ class OverlayService : Service() {
                 uiState.value = uiState.value.copy(
                     sessionError = sessionState == SessionState.ERROR,
                 )
+            }
+        }
+        serviceScope.launch {
+            TranslationSessionBus.notice.collect { notice ->
+                uiState.value = uiState.value.copy(notice = notice)
             }
         }
     }

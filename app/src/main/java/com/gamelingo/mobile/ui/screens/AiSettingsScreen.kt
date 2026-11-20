@@ -95,6 +95,13 @@ fun AiSettingsScreen(
             onSelect = viewModel::setAiMode,
         )
 
+        Text(
+            text = stringResource(R.string.ai_local_quality_note),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+
         SectionHeader(stringResource(R.string.ai_online_section))
         Card(modifier = Modifier.fillMaxWidth()) {
             Column(modifier = Modifier.padding(16.dp)) {

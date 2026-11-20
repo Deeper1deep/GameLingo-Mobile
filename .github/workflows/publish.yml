@@ -49,6 +49,15 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Validate versionName input
+        env:
+          VERSION_NAME: ${{ inputs.versionName }}
+        run: |
+          if ! [[ "$VERSION_NAME" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "versionName must look like 1.2.3, got: $VERSION_NAME"
+            exit 1
+          fi
+
       - name: Restore Gradle wrapper jar and make gradlew executable
         run: |
           base64 -d gradle/wrapper/gradle-wrapper.jar.b64 > gradle/wrapper/gradle-wrapper.jar
@@ -57,11 +66,13 @@ jobs:
 
       - name: Bump version (versionCode +1, versionName from input)
         id: version
+        env:
+          VERSION_NAME: ${{ inputs.versionName }}
         run: |
           current_code=$(grep -oP 'versionCode = \K[0-9]+' app/build.gradle.kts)
           new_code=$((current_code + 1))
           sed -i "s/versionCode = ${current_code}/versionCode = ${new_code}/" app/build.gradle.kts
-          sed -i "s/versionName = \"[^\"]*\"/versionName = \"${{ inputs.versionName }}\"/" app/build.gradle.kts
+          sed -i "s/versionName = \"[^\"]*\"/versionName = \"${VERSION_NAME}\"/" app/build.gradle.kts
           echo "code=${new_code}" >> "$GITHUB_OUTPUT"
           grep -n "versionCode\|versionName" app/build.gradle.kts
 
@@ -91,10 +102,11 @@ jobs:
           echo "apksigner binary: $APKSIGNER"
           # Print the full verifier output: a silent assignment failure under
           # bash -e hid the real error in earlier runs.
-          "$APKSIGNER" verify --print-certs "$APK" | tee certs.txt || true
+          "$APKSIGNER" verify --print-certs "$APK" | tee certs.txt
           # build-tools <=36 prints "Signer #1 certificate ...", 37+ prints
           # "V2 Signer: certificate ..." - match the version-agnostic core.
-          CERT=$(grep 'certificate SHA-256 digest' certs.txt | head -1 || true)
+          CERT=$(grep 'certificate SHA-256 digest' certs.txt | head -1)
+          test -n "$CERT"
           echo "CERT=$CERT"
           # apksigner prints the digest without colons; EXPECTED_CERT_SHA256 keeps
           # the colonated pinned form, so compare both sides colon-stripped.
@@ -129,18 +141,18 @@ jobs:
           git clone "https://x-access-token:${{ secrets.UPDATES_REPO_TOKEN }}@github.com/Deeper1deep/GameLingo-Updates.git" updates-repo
 
       - name: Publish latest.json
+        env:
+          VERSION_NAME: ${{ inputs.versionName }}
+          CHANGELOG_TEXT: ${{ inputs.changelog }}
+          MANDATORY: ${{ inputs.mandatoryUpdate }}
+          MIN_CODE: ${{ inputs.minimumSupportedVersionCode }}
+          APK_SHA: ${{ steps.apk.outputs.sha256 }}
+          APK_SIZE: ${{ steps.apk.outputs.size }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           set -e
-          APK_NAME="gamelingo-${{ inputs.versionName }}.apk"
-          APK_SHA="${{ steps.apk.outputs.sha256 }}"
-          APK_SIZE="${{ steps.apk.outputs.size }}"
-          VERSION_CODE="${{ steps.version.outputs.code }}"
-          RELEASE_DATE=$(date +%F)
-          MANDATORY=${{ inputs.mandatoryUpdate }}
-          MIN_CODE="${{ inputs.minimumSupportedVersionCode }}"
-          export APK_NAME APK_SHA APK_SIZE VERSION_CODE RELEASE_DATE MANDATORY MIN_CODE
-          export CHANGELOG_TEXT='${{ inputs.changelog }}'
-          export VERSION_NAME='${{ inputs.versionName }}'
+          export APK_NAME="gamelingo-${VERSION_NAME}.apk"
+          export RELEASE_DATE=$(date +%F)
           python3 - <<'PYJSON'
           import json, os
           data = {
@@ -162,21 +174,27 @@ jobs:
           PYJSON
 
       - name: Commit and push latest.json to GameLingo-Updates
+        env:
+          VERSION_NAME: ${{ inputs.versionName }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           cd updates-repo
           git config user.name "gamelingo-publish[bot]"
           git config user.email "gamelingo-publish[bot]@users.noreply.github.com"
           git add latest.json
-          git commit -m "release: v${{ inputs.versionName }} (versionCode ${{ steps.version.outputs.code }})"
+          git commit -m "release: v${VERSION_NAME} (versionCode ${VERSION_CODE})"
           git push origin main
 
       - name: Commit version bump to source repo
+        env:
+          VERSION_NAME: ${{ inputs.versionName }}
+          VERSION_CODE: ${{ steps.version.outputs.code }}
         run: |
           git config user.name "gamelingo-publish[bot]"
           git config user.email "gamelingo-publish[bot]@users.noreply.github.com"
           git add app/build.gradle.kts
-          git commit -m "release: bump to v${{ inputs.versionName }} (versionCode ${{ steps.version.outputs.code }})"
-          git tag "v${{ inputs.versionName }}"
+          git commit -m "release: bump to v${VERSION_NAME} (versionCode ${VERSION_CODE})"
+          git tag "v${VERSION_NAME}"
           git push origin main --tags
 
       - name: Wipe the keystore

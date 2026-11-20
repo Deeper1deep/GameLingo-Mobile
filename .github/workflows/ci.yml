@@ -6,11 +6,23 @@ on:
   pull_request:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      upload_debug_apk:
+        description: "Upload the debug APK and test reports as artifacts (uses artifact storage quota)"
+        type: boolean
+        default: false
 
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
 
+# The debug APK and test-report artifacts are OFF by default. The account's
+# Actions artifact storage quota is exhausted, so every run must opt out
+# unless someone really needs the build output for debugging. Enable it
+# manually from the Actions tab (workflow_dispatch -> upload_debug_apk=true);
+# PR and push runs keep it off. Nothing else about the pipeline depends on
+# the artifacts, so this cannot hide a failure: the APK build, unit tests and
+# lint still run and still fail the job when they break.
 jobs:
   build:
     name: Build, test, lint
@@ -43,7 +55,8 @@ jobs:
       - name: Run lint
         run: ./gradlew :app:lintDebug --stacktrace
 
-      - name: Upload debug APK
+      - name: Upload debug APK (opt-in only)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_debug_apk == 'true'
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:
@@ -52,8 +65,8 @@ jobs:
           retention-days: 7
           if-no-files-found: error
 
-      - name: Upload test reports
-        if: always()
+      - name: Upload test reports (opt-in only)
+        if: github.event_name == 'workflow_dispatch' && github.event.inputs.upload_debug_apk == 'true'
         uses: actions/upload-artifact@v4
         continue-on-error: true
         with:

@@ -1,6 +1,5 @@
 package com.gamelingo.mobile.ui.update
 
-import android.content.ActivityNotFoundException
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -160,7 +159,9 @@ private fun ReadyDialog(
         if (apk != null) {
             try {
                 context.startActivity(viewModel.apkInstaller.installIntent(apk))
-            } catch (_: ActivityNotFoundException) {
+            } catch (_: Exception) {
+                // No installer activity, revoked permission, dead FileProvider:
+                // any launcher failure must surface, not crash.
                 launchFailed = true
             }
         } else {

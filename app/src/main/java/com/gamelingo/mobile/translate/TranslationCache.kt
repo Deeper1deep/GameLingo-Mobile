@@ -12,29 +12,44 @@ data class CachedTranslation(
 /**
  * Small in-memory least-recently-used cache for repeated subtitle lines.
  * Game dialogue repeats itself (menus, combat barks), so a hit saves an
- * online request or an on-device pass. Keys are normalised (trimmed,
- * whitespace-collapsed, lowercased) so trivial OCR jitter still hits.
+ * online request or an on-device pass.
+ *
+ * An entry is stored and looked up under the normalized text AND the full
+ * [CacheContext] (AI mode, planned engine, prompt version, context signature,
+ * language pair), so a change in mode, engine, prompt style or dialogue
+ * context never serves a stale or misattributed answer. The stored engine id
+ * is additionally checked against [CacheContext.accepts], so an online result
+ * is never presented as a local one or vice versa.
  */
 @Singleton
 class TranslationCache @Inject constructor() {
 
-    private val entries = object : LinkedHashMap<String, CachedTranslation>(
+    private class Entry(
+        val translation: CachedTranslation,
+        val context: CacheContext,
+    )
+
+    private val entries = object : LinkedHashMap<String, Entry>(
         MAX_ENTRIES,
         0.75f,
         true,
     ) {
         override fun removeEldestEntry(
-            eldest: MutableMap.MutableEntry<String, CachedTranslation>?,
+            eldest: MutableMap.MutableEntry<String, Entry>?,
         ): Boolean = size > MAX_ENTRIES
     }
 
-    fun get(text: String): CachedTranslation? = synchronized(entries) {
-        entries[normalize(text)]
+    fun get(text: String, context: CacheContext): CachedTranslation? = synchronized(entries) {
+        val entry = entries[normalize(text)] ?: return null
+        if (entry.context != context || !context.accepts(entry.translation.engineId)) {
+            return null
+        }
+        entry.translation
     }
 
-    fun put(text: String, translation: CachedTranslation) {
+    fun put(text: String, context: CacheContext, translation: CachedTranslation) {
         synchronized(entries) {
-            entries[normalize(text)] = translation
+            entries[normalize(text)] = Entry(translation, context)
         }
     }
 

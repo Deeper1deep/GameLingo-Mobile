@@ -14,6 +14,7 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
@@ -23,9 +24,11 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
 @Singleton
 class DataStoreSettingsRepository @Inject constructor(
     @ApplicationContext context: Context,
+    private val apiKeyCipher: ApiKeyCipher,
 ) : SettingsRepository {
 
     private val dataStore = context.settingsDataStore
+    private val migrationDone = java.util.concurrent.atomic.AtomicBoolean(false)
 
     override val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
         val region = SettingsConstraints.clampRegionFractions(
@@ -49,7 +52,7 @@ class DataStoreSettingsRepository @Inject constructor(
             ignoreUnstableText = prefs[KEY_IGNORE_UNSTABLE] ?: true,
             batterySaverEnabled = prefs[KEY_BATTERY_SAVER] ?: true,
             aiMode = parseEnumOrDefault(prefs[KEY_AI_MODE], AiMode.AUTO),
-            onlineApiKey = prefs[KEY_ONLINE_API_KEY].orEmpty(),
+            onlineApiKey = resolveApiKey(prefs),
             cloudTranslationOptIn = prefs[KEY_CLOUD_OPT_IN] ?: false,
             requestTimeoutSec = SettingsConstraints.clampTimeoutSec(
                 prefs[KEY_TIMEOUT_SEC] ?: SettingsConstraints.DEFAULT_TIMEOUT_SEC,
@@ -130,7 +133,46 @@ class DataStoreSettingsRepository @Inject constructor(
     }
 
     override suspend fun setOnlineApiKey(key: String) {
-        dataStore.edit { it[KEY_ONLINE_API_KEY] = key.trim() }
+        val trimmed = key.trim()
+        dataStore.edit { prefs ->
+            if (trimmed.isEmpty()) {
+                prefs.remove(KEY_ONLINE_API_KEY_ENC)
+            } else {
+                prefs[KEY_ONLINE_API_KEY_ENC] = apiKeyCipher.encrypt(trimmed)
+            }
+            // The plaintext slot is legacy: never write it again.
+            prefs.remove(KEY_ONLINE_API_KEY)
+        }
+    }
+
+    /**
+     * Reads the encrypted key, falling back to a not-yet-migrated plaintext
+     * value so the key keeps working between the update and the one-time
+     * migration. A corrupt or undecryptable value reads as no key.
+     */
+    private fun resolveApiKey(prefs: Preferences): String {
+        val encrypted = prefs[KEY_ONLINE_API_KEY_ENC]
+        if (encrypted != null) {
+            return apiKeyCipher.decrypt(encrypted).orEmpty()
+        }
+        return prefs[KEY_ONLINE_API_KEY].orEmpty()
+    }
+
+    override suspend fun migrateApiKeyIfNeeded() {
+        if (!migrationDone.compareAndSet(false, true)) return
+        val snapshot = dataStore.data.first()
+        val plaintext = snapshot[KEY_ONLINE_API_KEY].orEmpty()
+        if (plaintext.isBlank()) return
+        if (!snapshot[KEY_ONLINE_API_KEY_ENC].isNullOrBlank()) {
+            // Already migrated; just drop the legacy plaintext copy.
+            dataStore.edit { it.remove(KEY_ONLINE_API_KEY) }
+            return
+        }
+        val encrypted = runCatching { apiKeyCipher.encrypt(plaintext) }.getOrNull() ?: return
+        dataStore.edit { prefs ->
+            prefs[KEY_ONLINE_API_KEY_ENC] = encrypted
+            prefs.remove(KEY_ONLINE_API_KEY)
+        }
     }
 
     override suspend fun setCloudTranslationOptIn(enabled: Boolean) {
@@ -184,6 +226,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val KEY_BATTERY_SAVER = booleanPreferencesKey("battery_saver_enabled")
         val KEY_AI_MODE = stringPreferencesKey("ai_mode")
         val KEY_ONLINE_API_KEY = stringPreferencesKey("online_api_key")
+        val KEY_ONLINE_API_KEY_ENC = stringPreferencesKey("online_api_key_enc")
         val KEY_CLOUD_OPT_IN = booleanPreferencesKey("cloud_translation_opt_in")
         val KEY_TIMEOUT_SEC = intPreferencesKey("request_timeout_sec")
         val KEY_CACHE_ENABLED = booleanPreferencesKey("cache_enabled")

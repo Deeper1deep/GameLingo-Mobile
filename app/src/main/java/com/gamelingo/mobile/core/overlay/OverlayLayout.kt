@@ -24,6 +24,16 @@ object OverlayLayout {
     }
 
     /**
+     * Clamps a horizontal drag offset so the window stays fully on screen.
+     * [offsetX] is the distance from the horizontal center. A window as wide
+     * as the screen cannot move; a narrower one moves within the free space.
+     */
+    fun clampHorizontalOffset(offsetX: Int, viewWidth: Int, screenWidth: Int): Int {
+        val max = ((screenWidth - viewWidth) / 2).coerceAtLeast(0)
+        return offsetX.coerceIn(-max, max)
+    }
+
+    /**
      * Clamps a vertical drag offset so the window stays fully on screen.
      * [offsetY] is the distance from the anchored edge (top offset for a
      * top-anchored window, distance above the bottom edge for a
