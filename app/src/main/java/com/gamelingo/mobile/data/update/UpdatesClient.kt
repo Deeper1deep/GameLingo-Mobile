@@ -19,13 +19,19 @@ class UpdatesClient @Inject constructor(
     private val client: OkHttpClient,
 ) {
 
-    /** Fetches and parses latest.json. Throws on network or parse failure. */
+    /**
+     * Fetches and parses latest.json. Throws IOException on network/HTTP
+     * failure and SerializationException on a malformed manifest, so callers
+     * can tell a connection problem apart from untrustworthy metadata.
+     */
     suspend fun fetchLatestRelease(): LatestRelease = withContext(Dispatchers.IO) {
         val request = Request.Builder().url(LATEST_JSON_URL).get().build()
         client.newCall(request).execute().use { response ->
-            check(response.isSuccessful) { "latest.json HTTP ${response.code}" }
+            if (!response.isSuccessful) {
+                throw java.io.IOException("latest.json HTTP ${response.code}")
+            }
             val body = response.body?.string().orEmpty()
-            check(body.isNotBlank()) { "latest.json empty body" }
+            if (body.isBlank()) throw java.io.IOException("latest.json empty body")
             LatestRelease.parse(body)
         }
     }
