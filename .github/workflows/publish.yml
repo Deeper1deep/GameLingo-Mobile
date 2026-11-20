@@ -90,7 +90,9 @@ jobs:
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
           CERT=$("$APKSIGNER" verify --print-certs "$APK" | grep 'Signer #1 certificate SHA-256 digest')
           echo "$CERT"
-          echo "$CERT" | grep -q "$EXPECTED_CERT_SHA256" || { echo 'Certificate mismatch: refusing to publish'; exit 1; }
+          # apksigner prints the digest without colons; EXPECTED_CERT_SHA256 keeps
+          # the colonated pinned form, so compare both sides colon-stripped.
+          echo "$CERT" | tr -d ':' | grep -qi "$(echo "$EXPECTED_CERT_SHA256" | tr -d ':')" || { echo 'Certificate mismatch: refusing to publish'; exit 1; }
 
       - name: Compute APK hash and size
         id: apk
