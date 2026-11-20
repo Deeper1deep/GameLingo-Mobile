@@ -17,6 +17,15 @@ data class OcrLine(
     val capturedAtMillis: Long,
 )
 
+/** One finished translation, ready for the floating window (Phase 6). */
+data class TranslatedLine(
+    val original: String,
+    val translated: String,
+    val engineId: String,
+    val fromCache: Boolean,
+    val capturedAtMillis: Long,
+)
+
 /**
  * Process-wide bus connecting the capture service, the (future) translation engine
  * and the UI. The capture service publishes; the overlay and home screen subscribe.
@@ -28,6 +37,13 @@ object TranslationSessionBus {
     private val _latestLine = MutableStateFlow<OcrLine?>(null)
     val latestLine: StateFlow<OcrLine?> = _latestLine.asStateFlow()
 
+    private val _translatedLine = MutableStateFlow<TranslatedLine?>(null)
+    val translatedLine: StateFlow<TranslatedLine?> = _translatedLine.asStateFlow()
+
+    /** Original text of the last line whose translation failed, or null. */
+    private val _translationFailure = MutableStateFlow<String?>(null)
+    val translationFailure: StateFlow<String?> = _translationFailure.asStateFlow()
+
     fun onSessionStarted() {
         _state.value = SessionState.RUNNING
     }
@@ -35,6 +51,8 @@ object TranslationSessionBus {
     fun onSessionStopped() {
         _state.value = SessionState.STOPPED
         _latestLine.value = null
+        _translatedLine.value = null
+        _translationFailure.value = null
     }
 
     fun onSessionError() {
@@ -43,5 +61,27 @@ object TranslationSessionBus {
 
     fun onNewLine(text: String, capturedAtMillis: Long) {
         _latestLine.value = OcrLine(text = text, capturedAtMillis = capturedAtMillis)
+        _translationFailure.value = null
+    }
+
+    fun onTranslated(
+        original: String,
+        translated: String,
+        engineId: String,
+        fromCache: Boolean,
+        capturedAtMillis: Long,
+    ) {
+        _translatedLine.value = TranslatedLine(
+            original = original,
+            translated = translated,
+            engineId = engineId,
+            fromCache = fromCache,
+            capturedAtMillis = capturedAtMillis,
+        )
+        _translationFailure.value = null
+    }
+
+    fun onTranslationFailed(original: String) {
+        _translationFailure.value = original
     }
 }
