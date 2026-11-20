@@ -13,9 +13,12 @@ import androidx.datastore.preferences.preferencesDataStore
 import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.withContext
 
 private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "gamelingo_settings",
@@ -30,6 +33,11 @@ class DataStoreSettingsRepository @Inject constructor(
     private val dataStore = context.settingsDataStore
     private val migrationDone = java.util.concurrent.atomic.AtomicBoolean(false)
 
+    // flowOn(IO) is load-bearing: the map resolves the API key, which can
+    // touch the Android Keystore. That work must never run on a collector's
+    // thread: the overlay service and Compose screens collect on the main
+    // thread, and a blocking keystore call there froze the app on session
+    // start (v0.2.0 hotfix).
     override val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
         val region = SettingsConstraints.clampRegionFractions(
             top = prefs[KEY_REGION_TOP] ?: SettingsConstraints.DEFAULT_REGION_TOP,
@@ -76,7 +84,7 @@ class DataStoreSettingsRepository @Inject constructor(
                 OverlayPosition.BOTTOM,
             ),
         )
-    }
+    }.flowOn(Dispatchers.IO)
 
     override suspend fun setShowOriginalText(show: Boolean) {
         dataStore.edit { it[KEY_SHOW_ORIGINAL] = show }
@@ -134,11 +142,18 @@ class DataStoreSettingsRepository @Inject constructor(
 
     override suspend fun setOnlineApiKey(key: String) {
         val trimmed = key.trim()
+        // Keystore encryption off the caller's thread: this is invoked from
+        // view models on the main thread.
+        val encrypted = if (trimmed.isEmpty()) {
+            null
+        } else {
+            withContext(Dispatchers.IO) { apiKeyCipher.encrypt(trimmed) }
+        }
         dataStore.edit { prefs ->
-            if (trimmed.isEmpty()) {
+            if (encrypted == null) {
                 prefs.remove(KEY_ONLINE_API_KEY_ENC)
             } else {
-                prefs[KEY_ONLINE_API_KEY_ENC] = apiKeyCipher.encrypt(trimmed)
+                prefs[KEY_ONLINE_API_KEY_ENC] = encrypted
             }
             // The plaintext slot is legacy: never write it again.
             prefs.remove(KEY_ONLINE_API_KEY)
