@@ -24,12 +24,13 @@ data class AppSettings(
     val batterySaverEnabled: Boolean = true,
     // Hybrid AI
     val aiMode: AiMode = AiMode.AUTO,
-    /** User-supplied key for the online provider. Stored on-device only, never shipped in the APK. */
+    /** User-supplied key for the online provider. Stored encrypted on-device only, never shipped in the APK. */
     val onlineApiKey: String = "",
     /**
      * Explicit consent to send recognized subtitle text (plus short context) to
-     * the cloud provider. False means every mode behaves as local: until the
-     * user accepts the in-app explainer, no OCR text ever leaves the device.
+     * the cloud provider. False means no OCR text ever leaves the device:
+     * LOCAL and AUTO stay on-device, and ONLINE fails visibly with a setup
+     * notice instead of silently translating locally.
      */
     val cloudTranslationOptIn: Boolean = false,
     val requestTimeoutSec: Int = SettingsConstraints.DEFAULT_TIMEOUT_SEC,
@@ -68,6 +69,14 @@ interface SettingsRepository {
 
     suspend fun setAiMode(mode: AiMode)
     suspend fun setOnlineApiKey(key: String)
+
+    /**
+     * Moves a legacy plaintext API key into encrypted storage. Runs once at
+     * app start; a no-op when there is nothing to migrate. Never deletes the
+     * plaintext until the ciphertext is confirmed written.
+     */
+    suspend fun migrateApiKeyIfNeeded()
+
     suspend fun setCloudTranslationOptIn(enabled: Boolean)
     suspend fun setRequestTimeoutSec(seconds: Int)
     suspend fun setCacheEnabled(enabled: Boolean)
