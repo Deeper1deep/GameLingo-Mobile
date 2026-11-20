@@ -94,6 +94,10 @@
     <string name="ai_cloud_status_off">السحابة مقفولة: كل الترجمة محلية على الجهاز، ومفيش أي نص بيطلع منه.</string>
     <string name="overlay_waiting">بيسمع اللعبة… الترجمة هتظهر هنا</string>
     <string name="overlay_error">حصلت مشكلة في قراءة الشاشة. افتح GameLingo وابدأ الجلسة من جديد.</string>
+    <string name="overlay_notice_online_not_configured">وضع أونلاين مش جاهز: دخّل مفتاح API ووافق على الترجمة السحابية من الإعدادات</string>
+    <string name="overlay_notice_fell_back_local">الترجمة الأونلاين مش متاحة دلوقتي، شغالين بالترجمة المحلية</string>
+    <string name="perm_overlay_needed_for_start">إذن الظهور فوق التطبيقات مطلوب قبل بدء الجلسة، هنفتحلك الإعدادات</string>
+    <string name="ai_local_quality_note">ملحوظة: الترجمة المحلية على الجهاز بتطلع عربي فصيح أو عام، مش عامية مصرية كاملة. للعامية المصرية الطبيعية استخدم الوضع الأونلاين بمفتاحك المجاني.</string>
     <string name="ai_quality_section">الجودة والسرعة</string>
     <string name="ai_cache">تخزين الترجمات مؤقتًا (Cache)</string>
     <string name="ai_cache_hint">نفس الجملة بتتجاب فورًا بدون طلب جديد</string>
