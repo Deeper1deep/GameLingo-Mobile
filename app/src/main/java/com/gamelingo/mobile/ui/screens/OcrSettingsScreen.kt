@@ -42,6 +42,13 @@ fun OcrSettingsScreen(
             onCheckedChange = viewModel::setRestrictToTextRegion,
         )
 
+        SwitchCard(
+            title = stringResource(R.string.ocr_smart_detection),
+            subtitle = stringResource(R.string.ocr_smart_detection_hint),
+            checked = settings.smartTextDetection,
+            onCheckedChange = viewModel::setSmartTextDetection,
+        )
+
         if (settings.restrictToTextRegion) {
             RadioGroupCard(
                 title = stringResource(R.string.ocr_region_preset),

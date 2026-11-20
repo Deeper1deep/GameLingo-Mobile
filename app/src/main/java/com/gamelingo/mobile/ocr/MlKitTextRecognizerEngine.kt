@@ -1,5 +1,7 @@
 package com.gamelingo.mobile.ocr
 
+import com.gamelingo.mobile.core.capture.PixelRect
+import com.gamelingo.mobile.core.capture.RecognizedBlock
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
@@ -19,6 +21,23 @@ class MlKitTextRecognizerEngine @Inject constructor() : TextRecognizerEngine {
         suspendCancellableCoroutine { continuation ->
             recognizer.process(image)
                 .addOnSuccessListener { result -> continuation.resume(result.text) }
+                .addOnFailureListener { error -> continuation.resumeWithException(error) }
+        }
+
+    override suspend fun recognizeBlocks(image: InputImage): List<RecognizedBlock> =
+        suspendCancellableCoroutine { continuation ->
+            recognizer.process(image)
+                .addOnSuccessListener { result ->
+                    continuation.resume(
+                        result.textBlocks.mapNotNull { block ->
+                            val box = block.boundingBox ?: return@mapNotNull null
+                            RecognizedBlock(
+                                text = block.text,
+                                rect = PixelRect(box.left, box.top, box.right, box.bottom),
+                            )
+                        },
+                    )
+                }
                 .addOnFailureListener { error -> continuation.resumeWithException(error) }
         }
 

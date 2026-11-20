@@ -38,6 +38,7 @@ class DataStoreSettingsRepository @Inject constructor(
                 prefs[KEY_CAPTURE_INTERVAL_MS] ?: SettingsConstraints.DEFAULT_CAPTURE_INTERVAL_MS,
             ),
             restrictToTextRegion = prefs[KEY_RESTRICT_TO_REGION] ?: true,
+            smartTextDetection = prefs[KEY_SMART_TEXT_DETECTION] ?: true,
             regionPreset = parseEnumOrDefault(
                 prefs[KEY_REGION_PRESET],
                 TextRegionPreset.LOWER_THIRD,
@@ -86,6 +87,10 @@ class DataStoreSettingsRepository @Inject constructor(
 
     override suspend fun setRestrictToTextRegion(restrict: Boolean) {
         dataStore.edit { it[KEY_RESTRICT_TO_REGION] = restrict }
+    }
+
+    override suspend fun setSmartTextDetection(enabled: Boolean) {
+        dataStore.edit { it[KEY_SMART_TEXT_DETECTION] = enabled }
     }
 
     override suspend fun setRegionPreset(preset: TextRegionPreset) {
@@ -170,6 +175,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val KEY_SHOW_ORIGINAL = booleanPreferencesKey("show_original_text")
         val KEY_CAPTURE_INTERVAL_MS = longPreferencesKey("capture_interval_ms")
         val KEY_RESTRICT_TO_REGION = booleanPreferencesKey("restrict_to_text_region")
+        val KEY_SMART_TEXT_DETECTION = booleanPreferencesKey("smart_text_detection")
         val KEY_REGION_PRESET = stringPreferencesKey("region_preset")
         val KEY_REGION_TOP = floatPreferencesKey("region_top_fraction")
         val KEY_REGION_BOTTOM = floatPreferencesKey("region_bottom_fraction")

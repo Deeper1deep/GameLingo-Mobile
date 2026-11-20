@@ -10,6 +10,12 @@ data class AppSettings(
     // OCR
     val captureIntervalMs: Long = SettingsConstraints.DEFAULT_CAPTURE_INTERVAL_MS,
     val restrictToTextRegion: Boolean = true,
+    /**
+     * Smart subtitle detection: score positioned OCR blocks and pick the real
+     * subtitle line, rejecting static corner watermarks and HUD labels. When
+     * false, all recognized text in the scan band is used as before.
+     */
+    val smartTextDetection: Boolean = true,
     val regionPreset: TextRegionPreset = TextRegionPreset.LOWER_THIRD,
     val regionTopFraction: Float = SettingsConstraints.DEFAULT_REGION_TOP,
     val regionBottomFraction: Float = SettingsConstraints.DEFAULT_REGION_BOTTOM,
@@ -52,6 +58,7 @@ interface SettingsRepository {
 
     suspend fun setCaptureIntervalMs(intervalMs: Long)
     suspend fun setRestrictToTextRegion(restrict: Boolean)
+    suspend fun setSmartTextDetection(enabled: Boolean)
     suspend fun setRegionPreset(preset: TextRegionPreset)
     suspend fun setRegionTopFraction(fraction: Float)
     suspend fun setRegionBottomFraction(fraction: Float)

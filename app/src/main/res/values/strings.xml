@@ -53,6 +53,8 @@
     <string name="ocr_capture_interval_hint">معدل أقل يعني معالجة أقل وبطارية أطول، بس استجابة أبطأ.</string>
     <string name="ocr_region_only">اقتصار القراءة على منطقة النص</string>
     <string name="ocr_region_hint">يقلل استهلاك البطارية والمعالج</string>
+    <string name="ocr_smart_detection">اكتشاف الترجمة تلقائيًا</string>
+    <string name="ocr_smart_detection_hint">يختار سطر الترجمة الحقيقي ويتجاهل الشعارات والعلامات الثابتة في الزوايا</string>
     <string name="ocr_region_preset">منطقة النص</string>
     <string name="ocr_region_full">الشاشة كلها</string>
     <string name="ocr_region_lower">الثلث السفلي (مكان الترجمة المعتاد)</string>
