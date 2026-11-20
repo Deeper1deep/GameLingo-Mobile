@@ -20,8 +20,8 @@ android {
         applicationId = "com.gamelingo.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 9
-        versionName = "0.2.2"
+        versionCode = 10
+        versionName = "0.3.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
