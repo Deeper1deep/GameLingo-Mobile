@@ -55,6 +55,9 @@ class SettingsViewModel @Inject constructor(
     fun setOnlineApiKey(key: String) =
         viewModelScope.launch { repository.setOnlineApiKey(key) }
 
+    fun setCloudTranslationOptIn(enabled: Boolean) =
+        viewModelScope.launch { repository.setCloudTranslationOptIn(enabled) }
+
     fun setRequestTimeoutSec(seconds: Int) =
         viewModelScope.launch { repository.setRequestTimeoutSec(seconds) }
 
