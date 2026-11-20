@@ -30,6 +30,18 @@ class ApiKeyCipher @Inject constructor() {
         KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
     }
 
+    // The keystore key is cached in memory: getEntry is a binder call into the
+    // keystore daemon, far too expensive to repeat on every decrypt (the
+    // settings flow resolves the key on every emission).
+    @Volatile
+    private var cachedKey: SecretKey? = null
+
+    // Memoized decrypt results, keyed by the ciphertext: the same encrypted
+    // value is never decrypted twice in a process, so hot paths (settings
+    // reads on every capture tick and every UI collect) never touch the
+    // keystore after the first resolution.
+    private val decryptCache = java.util.concurrent.ConcurrentHashMap<String, String>()
+
     fun encrypt(plaintext: String): String {
         val cipher = Cipher.getInstance(TRANSFORMATION)
         cipher.init(Cipher.ENCRYPT_MODE, secretKey())
@@ -38,19 +50,36 @@ class ApiKeyCipher @Inject constructor() {
     }
 
     /** @return the decrypted key, or null when the stored value cannot be decrypted. */
-    fun decrypt(encoded: String): String? = runCatching {
-        val bytes = Base64.decode(encoded, Base64.NO_WRAP)
-        require(bytes.size > GCM_IV_LENGTH) { "value too short" }
-        val cipher = Cipher.getInstance(TRANSFORMATION)
-        cipher.init(
-            Cipher.DECRYPT_MODE,
-            secretKey(),
-            GCMParameterSpec(GCM_TAG_LENGTH_BITS, bytes, 0, GCM_IV_LENGTH),
-        )
-        String(cipher.doFinal(bytes, GCM_IV_LENGTH, bytes.size - GCM_IV_LENGTH), Charsets.UTF_8)
-    }.getOrNull()
+    fun decrypt(encoded: String): String? {
+        decryptCache[encoded]?.let { return it }
+        val decrypted = runCatching {
+            val bytes = Base64.decode(encoded, Base64.NO_WRAP)
+            require(bytes.size > GCM_IV_LENGTH) { "value too short" }
+            val cipher = Cipher.getInstance(TRANSFORMATION)
+            cipher.init(
+                Cipher.DECRYPT_MODE,
+                secretKey(),
+                GCMParameterSpec(GCM_TAG_LENGTH_BITS, bytes, 0, GCM_IV_LENGTH),
+            )
+            String(cipher.doFinal(bytes, GCM_IV_LENGTH, bytes.size - GCM_IV_LENGTH), Charsets.UTF_8)
+        }.getOrNull() ?: return null
+        if (decryptCache.size < MAX_CACHE_ENTRIES) {
+            decryptCache[encoded] = decrypted
+        }
+        return decrypted
+    }
 
     private fun secretKey(): SecretKey {
+        cachedKey?.let { return it }
+        synchronized(this) {
+            cachedKey?.let { return it }
+            val key = loadOrCreateKey()
+            cachedKey = key
+            return key
+        }
+    }
+
+    private fun loadOrCreateKey(): SecretKey {
         (keyStore.getEntry(KEY_ALIAS, null) as? KeyStore.SecretKeyEntry)?.let {
             return it.secretKey
         }
@@ -75,5 +104,6 @@ class ApiKeyCipher @Inject constructor() {
         const val GCM_IV_LENGTH = 12
         const val GCM_TAG_LENGTH_BITS = 128
         const val KEY_SIZE_BITS = 256
+        private const val MAX_CACHE_ENTRIES = 8
     }
 }
