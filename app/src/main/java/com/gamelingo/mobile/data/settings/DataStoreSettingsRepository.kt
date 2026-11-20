@@ -49,6 +49,7 @@ class DataStoreSettingsRepository @Inject constructor(
             batterySaverEnabled = prefs[KEY_BATTERY_SAVER] ?: true,
             aiMode = parseEnumOrDefault(prefs[KEY_AI_MODE], AiMode.AUTO),
             onlineApiKey = prefs[KEY_ONLINE_API_KEY].orEmpty(),
+            cloudTranslationOptIn = prefs[KEY_CLOUD_OPT_IN] ?: false,
             requestTimeoutSec = SettingsConstraints.clampTimeoutSec(
                 prefs[KEY_TIMEOUT_SEC] ?: SettingsConstraints.DEFAULT_TIMEOUT_SEC,
             ),
@@ -127,6 +128,10 @@ class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { it[KEY_ONLINE_API_KEY] = key.trim() }
     }
 
+    override suspend fun setCloudTranslationOptIn(enabled: Boolean) {
+        dataStore.edit { it[KEY_CLOUD_OPT_IN] = enabled }
+    }
+
     override suspend fun setRequestTimeoutSec(seconds: Int) {
         dataStore.edit { it[KEY_TIMEOUT_SEC] = SettingsConstraints.clampTimeoutSec(seconds) }
     }
@@ -173,6 +178,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val KEY_BATTERY_SAVER = booleanPreferencesKey("battery_saver_enabled")
         val KEY_AI_MODE = stringPreferencesKey("ai_mode")
         val KEY_ONLINE_API_KEY = stringPreferencesKey("online_api_key")
+        val KEY_CLOUD_OPT_IN = booleanPreferencesKey("cloud_translation_opt_in")
         val KEY_TIMEOUT_SEC = intPreferencesKey("request_timeout_sec")
         val KEY_CACHE_ENABLED = booleanPreferencesKey("cache_enabled")
         val KEY_CONTEXT_LINES = intPreferencesKey("context_lines")
