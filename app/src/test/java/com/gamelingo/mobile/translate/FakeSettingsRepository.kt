@@ -64,6 +64,8 @@ class FakeSettingsRepository(
         state.value = state.value.copy(onlineApiKey = key)
     }
 
+    override suspend fun migrateApiKeyIfNeeded() = Unit
+
     override suspend fun setCloudTranslationOptIn(enabled: Boolean) {
         state.value = state.value.copy(cloudTranslationOptIn = enabled)
     }
