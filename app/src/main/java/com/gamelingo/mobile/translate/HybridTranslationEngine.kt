@@ -51,6 +51,9 @@ class HybridTranslationEngine @Inject constructor(
     /** Injectable for tests. */
     var cooldownMs: Long = DEFAULT_COOLDOWN_MS
 
+    /** Extra random delay in [0, base/2]; tests inject { 0 } for exactness. */
+    var jitter: (Long) -> Long = { base -> (0..base / 2).random() }
+
     /**
      * Bounded retry for transient online failures (network drops, 5xx): a
      * short burst of subtitles must not lose lines to one flaky moment, and
@@ -116,6 +119,17 @@ class HybridTranslationEngine @Inject constructor(
 
     private fun inCooldown(): Boolean = now() < onlineCooldownUntil.get()
 
+    /**
+     * Quota spent or provider down: skip the online engine for a while
+     * instead of retrying it on every subtitle line. A Retry-After hint
+     * from the provider extends (never shortens) the cooldown.
+     */
+    private fun coolDownOnlineIfNeeded(error: Throwable?) {
+        if (error !is QuotaExceededException && error !is ProviderUnavailableException) return
+        val hintMs = (error as? QuotaExceededException)?.retryAfterMs ?: 0L
+        onlineCooldownUntil.set(now() + maxOf(cooldownMs, hintMs))
+    }
+
     private suspend fun translateAuto(
         request: TranslationRequest,
         cloudAllowed: Boolean,
@@ -162,11 +176,7 @@ class HybridTranslationEngine @Inject constructor(
                         } else {
                             null
                         }
-                    if (onlineFailure is QuotaExceededException ||
-                        onlineFailure is ProviderUnavailableException
-                    ) {
-                        onlineCooldownUntil.set(now() + cooldownMs)
-                    }
+                    coolDownOnlineIfNeeded(onlineFailure)
                     // Loser stops: an online win cancels local while it is
                     // still only waiting, so a fast online answer costs no
                     // on-device work at all.
@@ -185,14 +195,7 @@ class HybridTranslationEngine @Inject constructor(
                     onlineResult.fold(
                         onSuccess = { it },
                         onFailure = { onlineError ->
-                            if (onlineError is QuotaExceededException ||
-                                onlineError is ProviderUnavailableException
-                            ) {
-                                // Quota spent or provider down: skip the online
-                                // engine for a while instead of retrying it on
-                                // every subtitle line.
-                                onlineCooldownUntil.set(now() + cooldownMs)
-                            }
+                            coolDownOnlineIfNeeded(onlineError)
                             localDeferred.await().getOrThrow()
                         },
                     )
@@ -218,7 +221,9 @@ class HybridTranslationEngine @Inject constructor(
             } catch (error: Exception) {
                 if (!isTransient(error) || attempt >= maxRetries) throw error
                 attempt++
-                sleep(backoffMs)
+                // Full jitter on the backoff: after an outage, every queued
+                // subtitle retrying at the same instant re-hammers Gemini.
+                sleep(backoffMs + jitter(backoffMs))
                 backoffMs *= BACKOFF_MULTIPLIER
             }
         }

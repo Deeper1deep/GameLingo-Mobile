@@ -93,6 +93,9 @@ class ScreenCaptureService : Service() {
     private val stabilityTracker = TextStabilityTracker()
     private val deduplicator = Deduplicator()
     private val failureTracker = FailureTracker()
+
+    /** Separate, larger budget for display rebuilds (full-screen/rotation). */
+    private val rebuildFailureTracker = FailureTracker(maxConsecutiveFailures = REBUILD_MAX_FAILURES)
     private val blockDynamicsTracker = BlockDynamicsTracker()
 
     override fun onBind(intent: Intent?): IBinder? = null
@@ -101,7 +104,13 @@ class ScreenCaptureService : Service() {
         when (intent?.action) {
             ACTION_START -> startCapture(intent)
             ACTION_STOP -> stopCapture()
-            else -> stopSelf()
+            else -> {
+                // A stray or empty intent (system redelivery, a confused
+                // caller) must never end a running session. Only stop the
+                // service when nothing is capturing anyway.
+                Log.w(TAG, "unexpected intent action=${intent?.action}; ignoring")
+                if (mediaProjection == null) stopSelf()
+            }
         }
         return START_NOT_STICKY
     }
@@ -168,6 +177,13 @@ class ScreenCaptureService : Service() {
         projection.registerCallback(
             object : MediaProjection.Callback() {
                 override fun onStop() {
+                    // The system ended the projection: token expired or
+                    // consent revoked. That is a genuine expiry, so say why
+                    // the session ended - but never when WE stopped it (the
+                    // user's own Stop button stops the projection too).
+                    if (!stopping.get()) {
+                        TranslationSessionBus.onSessionError(SessionError.PROJECTION_ENDED)
+                    }
                     stopCapture()
                 }
             },
@@ -204,46 +220,66 @@ class ScreenCaptureService : Service() {
         val latest = latestGeometry()
         displayMutex.withLock {
             if (!DisplayGeometry.needsRebuild(currentGeometry, latest)) return
-            // Release the old surface before building the new one. A failed
-            // release must not skip or break the rebuild: the old objects are
-            // dropped regardless and replaced with fresh ones.
-            runCatching { virtualDisplay?.release() }
-            virtualDisplay = null
-            runCatching { imageReader?.close() }
-            imageReader = null
-            // Transient 0x0 metrics during a configuration change are real on
-            // some devices; ImageReader rejects zero dimensions.
-            val width = latest.width.coerceAtLeast(1)
-            val height = latest.height.coerceAtLeast(1)
-            val reader = ImageReader.newInstance(
-                width,
-                height,
-                PixelFormat.RGBA_8888,
-                2,
-            )
-            imageReader = reader
-            // If createVirtualDisplay throws, the loop's failure tracking
-            // retries on the next tick (the half-built reader is closed above)
-            // and surfaces a session error if the failure persists.
-            virtualDisplay = projection.createVirtualDisplay(
-                "gamelingo-capture",
-                width,
-                height,
-                resources.displayMetrics.densityDpi,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                reader.surface,
-                null,
-                null,
-            )
-            currentGeometry = latest
-            // The frame stream restarts: stale digests, half-stable lines and
-            // block-position history from the old geometry must not gate the
-            // new one.
-            frameChangeDetector.reset()
-            stabilityTracker.reset()
-            deduplicator.reset()
-            blockDynamicsTracker.reset()
+            try {
+                rebuildLocked(projection, latest)
+                rebuildFailureTracker.onSuccess()
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                // A full-screen or rotation switch can make the projection
+                // refuse a new VirtualDisplay for a moment. That transition
+                // must not eat the 5-failure session budget: rebuilds get
+                // their own, much larger budget (about 12 s of retries at the
+                // default capture interval) before the session is declared
+                // broken.
+                Log.w(TAG, "display rebuild failed; retrying next tick", error)
+                if (rebuildFailureTracker.onFailure()) {
+                    Log.e(TAG, "display rebuild keeps failing; stopping the session")
+                    TranslationSessionBus.onSessionError(SessionError.CAPTURE_PERSISTENT_FAILURE)
+                    stopCapture()
+                }
+            }
         }
+    }
+
+    /** Builds the capture surface for [latest]; old objects are dropped first. */
+    private fun rebuildLocked(projection: MediaProjection, latest: DisplayGeometry) {
+        // Release the old surface before building the new one. A failed
+        // release must not skip or break the rebuild: the old objects are
+        // dropped regardless and replaced with fresh ones.
+        runCatching { virtualDisplay?.release() }
+        virtualDisplay = null
+        runCatching { imageReader?.close() }
+        imageReader = null
+        // Transient 0x0 metrics during a configuration change are real on
+        // some devices; ImageReader rejects zero dimensions.
+        val width = latest.width.coerceAtLeast(1)
+        val height = latest.height.coerceAtLeast(1)
+        val reader = ImageReader.newInstance(
+            width,
+            height,
+            PixelFormat.RGBA_8888,
+            2,
+        )
+        imageReader = reader
+        virtualDisplay = projection.createVirtualDisplay(
+            "gamelingo-capture",
+            width,
+            height,
+            resources.displayMetrics.densityDpi,
+            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+            reader.surface,
+            null,
+            null,
+        )
+        currentGeometry = latest
+        // The frame stream restarts: stale digests, half-stable lines and
+        // block-position history from the old geometry must not gate the
+        // new one.
+        frameChangeDetector.reset()
+        stabilityTracker.reset()
+        deduplicator.reset()
+        blockDynamicsTracker.reset()
     }
 
     private suspend fun captureLoop() {
@@ -446,6 +482,7 @@ class ScreenCaptureService : Service() {
             stabilityTracker.reset()
             deduplicator.reset()
             failureTracker.reset()
+            rebuildFailureTracker.reset()
             blockDynamicsTracker.reset()
             TranslationSessionBus.onSessionStopped()
             runCatching { stopService(OverlayService.startIntent(this@ScreenCaptureService)) }
@@ -499,6 +536,9 @@ class ScreenCaptureService : Service() {
         const val EXTRA_RESULT_DATA = "extra_result_data"
         private const val TAG = "ScreenCapture"
         private const val CHANNEL_ID = "screen_capture"
+
+        /** About 12 s of rebuild retries at the default 600 ms interval. */
+        private const val REBUILD_MAX_FAILURES = 20
         private const val NOTIFICATION_ID = 1001
 
         fun startIntent(context: Context, resultCode: Int, data: Intent): Intent =

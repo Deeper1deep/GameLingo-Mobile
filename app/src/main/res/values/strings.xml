@@ -24,6 +24,7 @@
     <string name="session_error_settings_unavailable">إعدادات التطبيق مش قابلة للقراءة دلوقتي. اقفل التطبيق وافتحه من جديد.</string>
     <string name="session_error_overlay_permission">إذن الظهور فوق التطبيقات غير متاح أو اتسحب. فعّله من الإعدادات وابدأ الجلسة من جديد.</string>
     <string name="session_error_overlay_window">نافذة الترجمة معرفتش تظهر. تأكد من إذن الظهور فوق التطبيقات وابدأ من جديد.</string>
+    <string name="session_error_projection_ended">النظام أنهى إذن التقاط الشاشة (انتهت صلاحيته أو اتسحب). ابدأ الجلسة من جديد ووافق على الإذن.</string>
     <string name="home_stop">إيقاف الترجمة</string>
     <string name="home_capture_cancelled">تم إلغاء إذن التقاط الشاشة</string>
     <string name="home_translation_failed">تعذّرت ترجمة آخر جملة — هتتعاد مع الجملة الجاية</string>

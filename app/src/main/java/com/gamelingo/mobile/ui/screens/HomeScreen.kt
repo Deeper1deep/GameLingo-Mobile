@@ -189,6 +189,8 @@ fun HomeScreen(
                                         R.string.session_error_overlay_permission
                                     SessionError.OVERLAY_WINDOW_FAILED ->
                                         R.string.session_error_overlay_window
+                                    SessionError.PROJECTION_ENDED ->
+                                        R.string.session_error_projection_ended
                                 },
                             ),
                             style = MaterialTheme.typography.bodySmall,

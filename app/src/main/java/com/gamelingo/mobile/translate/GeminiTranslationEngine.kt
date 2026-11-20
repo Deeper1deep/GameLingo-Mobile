@@ -87,7 +87,10 @@ class GeminiTranslationEngine @Inject constructor(
         /** Maps an HTTP failure to the typed error the rest of the app understands. */
         private fun classifyHttpError(error: HttpException): IOException = when (error.code()) {
             HTTP_TOO_MANY_REQUESTS ->
-                QuotaExceededException("Gemini quota or rate limit hit (429)")
+                QuotaExceededException(
+                    "Gemini quota or rate limit hit (429)",
+                    retryAfterMs = parseRetryAfter(error),
+                )
             HTTP_BAD_REQUEST, HTTP_UNAUTHORIZED, HTTP_FORBIDDEN ->
                 ApiAuthException("Gemini rejected the API key (${error.code()})")
             in HTTP_SERVER_ERROR_START..HTTP_SERVER_ERROR_END ->
@@ -105,11 +108,27 @@ class GeminiTranslationEngine @Inject constructor(
             else -> IOException("Gemini API error $code: $message")
         }
 
+        /**
+         * Reads the Retry-After header (seconds) from a 429 response. Null
+         * when absent or unparsable: the default cooldown then applies.
+         */
+        private fun parseRetryAfter(error: HttpException): Long? =
+            error.response()?.headers()?.get("Retry-After")
+                ?.trim()
+                ?.toLongOrNull()
+                ?.takeIf { it in 0..MAX_RETRY_AFTER_SEC }
+                ?.let { it * MILLIS_PER_SECOND }
+
         private const val HTTP_BAD_REQUEST = 400
         private const val HTTP_UNAUTHORIZED = 401
         private const val HTTP_FORBIDDEN = 403
         private const val HTTP_TOO_MANY_REQUESTS = 429
         private const val HTTP_SERVER_ERROR_START = 500
         private const val HTTP_SERVER_ERROR_END = 599
+        private const val MILLIS_PER_SECOND = 1_000L
+
+        /** Caps a Retry-After hint at 10 minutes so a hostile or buggy
+         *  header cannot park the online engine for hours. */
+        private const val MAX_RETRY_AFTER_SEC = 600L
     }
 }

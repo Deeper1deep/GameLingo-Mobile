@@ -47,7 +47,10 @@ class HybridTranslationEngineTest {
                 cloudTranslationOptIn = optIn,
             ),
         )
-        return Triple(HybridTranslationEngine(online, local, settings), online, local)
+        val engine = HybridTranslationEngine(online, local, settings)
+        // Deterministic backoff: no random jitter in tests.
+        engine.jitter = { 0 }
+        return Triple(engine, online, local)
     }
 
     @Test
@@ -159,6 +162,30 @@ class HybridTranslationEngineTest {
         assertEquals("mlkit-ondevice", engine.plannedEngineId())
         clock += engine.cooldownMs + 1
         assertEquals("gemini-flash-lite", engine.plannedEngineId())
+    }
+
+    @Test
+    fun `AUTO honors Retry-After beyond the default cooldown`() = runTest {
+        var clock = 1_000L
+        val online = StubEngine(
+            "gemini-flash-lite",
+            failure = QuotaExceededException("429", retryAfterMs = 120_000L),
+        )
+        val (engine, _, local) = hybrid(AiMode.AUTO, online = online)
+        engine.now = { clock }
+
+        engine.translate(TranslationRequest(text = "one"))
+        assertEquals("mlkit-ondevice", engine.plannedEngineId())
+
+        // Past the default 60s cooldown but inside Retry-After: still local.
+        clock += engine.cooldownMs + 1
+        assertEquals("mlkit-ondevice", engine.plannedEngineId())
+
+        // Past the Retry-After hint: online is tried again.
+        clock = 1_000L + 120_001L
+        assertEquals("gemini-flash-lite", engine.plannedEngineId())
+        engine.translate(TranslationRequest(text = "two"))
+        assertTrue(local.calls >= 1)
     }
 
     @Test

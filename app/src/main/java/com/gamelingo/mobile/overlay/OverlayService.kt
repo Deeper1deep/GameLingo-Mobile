@@ -103,7 +103,15 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
                 WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
             PixelFormat.TRANSLUCENT,
-        )
+        ).apply {
+            // Full-screen video and games render into the display cutout;
+            // without this the window is laid out as if the cutout bars
+            // still existed and the bar lands off-centre or half-hidden.
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+                layoutInDisplayCutoutMode =
+                    WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES
+            }
+        }
         layoutParams = params
 
         val view = ComposeView(this)
