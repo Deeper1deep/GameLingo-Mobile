@@ -88,8 +88,12 @@ jobs:
           APK=app/build/outputs/apk/release/app-release.apk
           test -f "$APK"
           APKSIGNER=$(ls "$ANDROID_HOME"/build-tools/*/apksigner | sort -V | tail -1)
-          CERT=$("$APKSIGNER" verify --print-certs "$APK" | grep 'Signer #1 certificate SHA-256 digest')
-          echo "$CERT"
+          echo "apksigner binary: $APKSIGNER"
+          # Print the full verifier output: a silent assignment failure under
+          # bash -e hid the real error in earlier runs.
+          "$APKSIGNER" verify --print-certs "$APK" | tee certs.txt || true
+          CERT=$(grep 'Signer #1 certificate SHA-256 digest' certs.txt || true)
+          echo "CERT=$CERT"
           # apksigner prints the digest without colons; EXPECTED_CERT_SHA256 keeps
           # the colonated pinned form, so compare both sides colon-stripped.
           echo "$CERT" | tr -d ':' | grep -qi "$(echo "$EXPECTED_CERT_SHA256" | tr -d ':')" || { echo 'Certificate mismatch: refusing to publish'; exit 1; }
