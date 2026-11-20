@@ -92,6 +92,60 @@ class SubtitleBlockScorerTest {
     }
 
     @Test
+    fun `two stacked subtitle lines are merged top to bottom`() {
+        val dynamics = BlockDynamicsTracker()
+        val upper = RecognizedBlock("Joel: It is nice but I-", PixelRect(900, 920, 1500, 975))
+        val lower = RecognizedBlock("don't want to talk about it", PixelRect(880, 990, 1520, 1045))
+        val merged = SubtitleBlockScorer.selectSubtitle(
+            listOf(upper, lower),
+            frameWidth,
+            frameHeight,
+            dynamics,
+        )
+        assertEquals("Joel: It is nice but I- don't want to talk about it", merged)
+    }
+
+    @Test
+    fun `corner watermark is never merged into the subtitle`() {
+        val dynamics = BlockDynamicsTracker()
+        val merged = SubtitleBlockScorer.selectSubtitle(
+            listOf(watermark, subtitle("Joel: It is nice but I-")),
+            frameWidth,
+            frameHeight,
+            dynamics,
+        )
+        assertEquals("Joel: It is nice but I-", merged)
+    }
+
+    @Test
+    fun `unrelated text far above the winner is not merged`() {
+        val dynamics = BlockDynamicsTracker()
+        // Centered but far from the winner: a HUD label, not a wrapped line.
+        val hud = RecognizedBlock("MISSION 3 DAYS GONE", PixelRect(900, 700, 1500, 755))
+        val merged = SubtitleBlockScorer.selectSubtitle(
+            listOf(hud, subtitle("Joel: It is nice but I-")),
+            frameWidth,
+            frameHeight,
+            dynamics,
+        )
+        assertEquals("Joel: It is nice but I-", merged)
+    }
+
+    @Test
+    fun `select subtitle returns null when only a static watermark is visible`() {
+        val dynamics = BlockDynamicsTracker()
+        repeat(10) { dynamics.offer(listOf(watermark)) }
+        assertNull(
+            SubtitleBlockScorer.selectSubtitle(
+                listOf(watermark),
+                frameWidth,
+                frameHeight,
+                dynamics,
+            ),
+        )
+    }
+
+    @Test
     fun `corner watermark scores far below bottom center subtitle`() {
         val dynamics = BlockDynamicsTracker()
         val watermarkScore = SubtitleBlockScorer.score(watermark, frameWidth, frameHeight, dynamics)

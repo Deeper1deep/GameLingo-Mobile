@@ -43,7 +43,10 @@ data class TextRegionFractions(
  * UI sliders go through these clamps so an out-of-range value can never be stored.
  */
 object SettingsConstraints {
-    const val DEFAULT_CAPTURE_INTERVAL_MS = 1_000L
+    // 600ms keeps subtitles responsive: with the stability tracker asking for
+    // two similar reads, a new line reaches the translator about 1.2s after it
+    // appears, instead of 2s+ at the old 1s default.
+    const val DEFAULT_CAPTURE_INTERVAL_MS = 600L
     const val MIN_CAPTURE_INTERVAL_MS = 300L
     const val MAX_CAPTURE_INTERVAL_MS = 3_000L
 

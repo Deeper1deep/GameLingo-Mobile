@@ -77,6 +77,21 @@ class TextStabilityTrackerTest {
     }
 
     @Test
+    fun `single letter OCR flicker does not reset the streak`() {
+        val tracker = TextStabilityTracker(requiredReadings = 2)
+        tracker.offer("Joel: It is nice but I-")
+        assertTrue(tracker.offer("Joel: It is nlce but I-"))
+    }
+
+    @Test
+    fun `alternating flicker still stabilizes instead of never delivering`() {
+        val tracker = TextStabilityTracker(requiredReadings = 2)
+        assertFalse(tracker.offer("Joel: It is nice but I-"))
+        assertTrue(tracker.offer("Joel: It is nlce but I-"))
+        assertTrue(tracker.offer("Joel: It is nice but I-"))
+    }
+
+    @Test
     fun `empty input resets the tracker`() {
         val tracker = TextStabilityTracker(requiredReadings = 1)
         assertFalse(tracker.offer("   "))
@@ -110,6 +125,21 @@ class DeduplicatorTest {
         val dedup = Deduplicator()
         dedup.shouldDeliver("Wait, what?!")
         assertFalse(dedup.shouldDeliver("wait what"))
+    }
+
+    @Test
+    fun `single letter OCR flicker is still a duplicate`() {
+        val dedup = Deduplicator()
+        dedup.shouldDeliver("Joel: It is nice but I-")
+        assertFalse(dedup.shouldDeliver("Joel: It is nlce but I-"))
+    }
+
+    @Test
+    fun `flicker back to the original reading is still a duplicate`() {
+        val dedup = Deduplicator()
+        dedup.shouldDeliver("Joel: It is nice but I-")
+        dedup.shouldDeliver("Joel: It is nlce but I-")
+        assertFalse(dedup.shouldDeliver("Joel: It is nice but I-"))
     }
 
     @Test

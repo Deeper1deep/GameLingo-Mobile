@@ -275,20 +275,20 @@ class ScreenCaptureService : Service() {
 
         val rawText = if (settings.smartTextDetection) {
             // Smart mode: read positioned blocks, shift them into full-frame
-            // coordinates, and let the scorer pick the real subtitle line over
-            // static corner watermarks and HUD labels.
+            // coordinates, and let the scorer pick the real subtitle over
+            // static corner watermarks and HUD labels, merging wrapped lines.
             val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(ocrBitmap, 0))
             val shifted = blocks.map { block ->
                 block.copy(rect = block.rect.translated(0, cropTop))
             }
-            val winner = SubtitleBlockScorer.selectBest(
+            val subtitle = SubtitleBlockScorer.selectSubtitle(
                 blocks = shifted,
                 frameWidth = geometry.width,
                 frameHeight = geometry.height,
                 dynamics = blockDynamicsTracker,
             )
             blockDynamicsTracker.offer(shifted)
-            winner?.text.orEmpty()
+            subtitle.orEmpty()
         } else {
             recognizerEngine.recognize(InputImage.fromBitmap(ocrBitmap, 0))
         }
@@ -350,21 +350,30 @@ class ScreenCaptureService : Service() {
     private fun stopCapture() {
         captureJob?.cancel()
         captureJob = null
-        virtualDisplay?.release()
+        // Null the fields before releasing: when the system stops the
+        // projection on app close, MediaProjection.Callback.onStop calls us
+        // while onDestroy may follow right after. Every release step is
+        // guarded, because stopping an already-stopped projection or closing
+        // an already-released surface throws on the main thread and takes the
+        // whole app down exactly when the user is leaving it.
+        val display = virtualDisplay
         virtualDisplay = null
-        imageReader?.close()
+        val reader = imageReader
         imageReader = null
-        currentGeometry = null
-        mediaProjection?.stop()
+        val projection = mediaProjection
         mediaProjection = null
+        currentGeometry = null
+        runCatching { display?.release() }
+        runCatching { reader?.close() }
+        runCatching { projection?.stop() }
         frameChangeDetector.reset()
         stabilityTracker.reset()
         deduplicator.reset()
         failureTracker.reset()
         blockDynamicsTracker.reset()
         TranslationSessionBus.onSessionStopped()
-        stopService(OverlayService.startIntent(this))
-        stopForeground(STOP_FOREGROUND_REMOVE)
+        runCatching { stopService(OverlayService.startIntent(this)) }
+        runCatching { stopForeground(STOP_FOREGROUND_REMOVE) }
         stopSelf()
     }
 
@@ -396,10 +405,12 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onDestroy() {
-        captureJob?.cancel()
-        virtualDisplay?.release()
-        imageReader?.close()
-        mediaProjection?.stop()
+        // Same guarded teardown as stopCapture: either path can run after the
+        // other, and none of these components tolerate a second release.
+        runCatching { captureJob?.cancel() }
+        runCatching { virtualDisplay?.release() }
+        runCatching { imageReader?.close() }
+        runCatching { mediaProjection?.stop() }
         serviceScope.cancel()
         super.onDestroy()
     }
