@@ -32,6 +32,7 @@ import com.gamelingo.mobile.core.capture.RegionMapper
 import com.gamelingo.mobile.core.session.SessionError
 import com.gamelingo.mobile.core.session.TranslationSessionBus
 import com.gamelingo.mobile.core.text.Deduplicator
+import com.gamelingo.mobile.core.timing.PipelineTiming
 import com.gamelingo.mobile.core.text.TextNormalizer
 import com.gamelingo.mobile.core.text.TextStabilityTracker
 import com.gamelingo.mobile.data.settings.SettingsRepository
@@ -294,13 +295,17 @@ class ScreenCaptureService : Service() {
         geometry: DisplayGeometry,
         settings: com.gamelingo.mobile.data.settings.AppSettings,
     ) {
-        val fullBitmap = image.toBitmap(geometry.width, geometry.height)
+        val fullBitmap = PipelineTiming.timed("frame_decode") {
+            image.toBitmap(geometry.width, geometry.height)
+        }
         // Every bitmap this frame creates is released exactly once, whatever
         // happens below: the finally owns recycling, never the success path.
         var ocrBitmap: Bitmap? = null
         try {
             val shouldRunOcr = !settings.batterySaverEnabled ||
-                frameChangeDetector.hasChanged(fullBitmap.toDownsampledBytes())
+                PipelineTiming.timed("change_detect") {
+                    frameChangeDetector.hasChanged(fullBitmap.toDownsampledBytes())
+                }
             if (!shouldRunOcr) {
                 return
             }
@@ -321,6 +326,7 @@ class ScreenCaptureService : Service() {
                 fullBitmap
             }
 
+            val ocrStartNanos = System.nanoTime()
             val rawText = if (settings.smartTextDetection) {
             // Smart mode: read positioned blocks, shift them into full-frame
             // coordinates, and let the scorer pick the real subtitle over
@@ -341,6 +347,11 @@ class ScreenCaptureService : Service() {
                 recognizerEngine.recognize(InputImage.fromBitmap(workingBitmap, 0))
             }
 
+            PipelineTiming.mark(
+                "ocr",
+                (System.nanoTime() - ocrStartNanos) / 1_000_000L,
+                "smart=${settings.smartTextDetection}",
+            )
             val text = TextNormalizer.normalize(rawText)
             if (text.isEmpty()) return
 
@@ -351,6 +362,7 @@ class ScreenCaptureService : Service() {
                 text = text,
                 capturedAtMillis = System.currentTimeMillis(),
             )
+            PipelineTiming.mark("line_published", 0, "len=${text.length}")
         } finally {
             // Never recycle the same bitmap twice: the cropped bitmap may BE
             // the full bitmap when no region crop applies.
