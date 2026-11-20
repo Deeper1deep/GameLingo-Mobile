@@ -32,12 +32,16 @@ android {
     }
 
     signingConfigs {
+        // Read signing secrets from gradle properties (local dev) with an
+        // environment-variable fallback of the same name (CI passes env vars).
+        fun signingSecret(name: String): String? =
+            providers.gradleProperty(name).orNull ?: providers.environmentVariable(name).orNull
         if (releaseKeystoreFile.exists()) {
             create("release") {
                 storeFile = releaseKeystoreFile
-                storePassword = providers.gradleProperty("GAMELINGO_KEYSTORE_PASSWORD").orNull
-                keyAlias = providers.gradleProperty("GAMELINGO_KEY_ALIAS").orNull
-                keyPassword = providers.gradleProperty("GAMELINGO_KEY_PASSWORD").orNull
+                storePassword = signingSecret("GAMELINGO_KEYSTORE_PASSWORD")
+                keyAlias = signingSecret("GAMELINGO_KEY_ALIAS")
+                keyPassword = signingSecret("GAMELINGO_KEY_PASSWORD")
             }
         }
     }
