@@ -6,6 +6,8 @@ import com.gamelingo.mobile.data.local.GameLingoDatabase
 import com.gamelingo.mobile.data.local.TranslationHistoryDao
 import com.gamelingo.mobile.data.settings.DataStoreSettingsRepository
 import com.gamelingo.mobile.data.settings.SettingsRepository
+import com.gamelingo.mobile.ocr.MlKitTextRecognizerEngine
+import com.gamelingo.mobile.ocr.TextRecognizerEngine
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -33,4 +35,10 @@ object AppModule {
     fun provideSettingsRepository(
         impl: DataStoreSettingsRepository,
     ): SettingsRepository = impl
+
+    @Provides
+    @Singleton
+    fun provideTextRecognizerEngine(
+        impl: MlKitTextRecognizerEngine,
+    ): TextRecognizerEngine = impl
 }
