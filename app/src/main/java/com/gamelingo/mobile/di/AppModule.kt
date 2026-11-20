@@ -3,6 +3,7 @@ package com.gamelingo.mobile.di
 import android.content.Context
 import androidx.room.Room
 import com.gamelingo.mobile.data.local.GameLingoDatabase
+import com.gamelingo.mobile.data.local.Migrations
 import com.gamelingo.mobile.data.local.TranslationHistoryDao
 import com.gamelingo.mobile.data.settings.DataStoreSettingsRepository
 import com.gamelingo.mobile.data.settings.SettingsRepository
@@ -34,7 +35,10 @@ object AppModule {
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): GameLingoDatabase =
         Room.databaseBuilder(context, GameLingoDatabase::class.java, "gamelingo.db")
-            .fallbackToDestructiveMigration(dropAllTables = false)
+            // Never fallbackToDestructiveMigration: an upgrade must keep the
+            // user's translation history. Every schema change ships a real
+            // migration in Migrations plus a migration test.
+            .addMigrations(*Migrations.ALL)
             .build()
 
     @Provides
