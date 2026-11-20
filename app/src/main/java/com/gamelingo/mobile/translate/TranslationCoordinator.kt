@@ -3,6 +3,7 @@ package com.gamelingo.mobile.translate
 import com.gamelingo.mobile.core.context.ContextMemory
 import com.gamelingo.mobile.core.session.SessionNotice
 import com.gamelingo.mobile.core.session.TranslationSessionBus
+import com.gamelingo.mobile.core.timing.PipelineTiming
 import com.gamelingo.mobile.data.local.TranslationHistoryDao
 import com.gamelingo.mobile.data.local.TranslationHistoryEntity
 import com.gamelingo.mobile.data.settings.AiMode
@@ -90,6 +91,7 @@ class TranslationCoordinator @Inject constructor(
             }
         }
 
+        val engineStartNanos = System.nanoTime()
         runCatching {
             withTimeout(settings.requestTimeoutSec * MILLIS_PER_SECOND) {
                 hybridEngine.translate(
@@ -100,6 +102,12 @@ class TranslationCoordinator @Inject constructor(
                 )
             }
         }.onSuccess { result ->
+            PipelineTiming.mark(
+                "engine",
+                (System.nanoTime() - engineStartNanos) / NANOS_PER_MS,
+                result.engineId,
+            )
+            PipelineTiming.endToEnd("translated", capturedAtMillis)
             if (settings.cacheEnabled) {
                 cache.put(
                     text,
@@ -167,5 +175,6 @@ class TranslationCoordinator @Inject constructor(
     private companion object {
         const val MAX_CONTEXT_LINES = 20
         const val MILLIS_PER_SECOND = 1_000L
+        const val NANOS_PER_MS = 1_000_000L
     }
 }
