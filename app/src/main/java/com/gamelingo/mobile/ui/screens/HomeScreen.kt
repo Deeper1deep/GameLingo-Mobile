@@ -3,7 +3,9 @@ package com.gamelingo.mobile.ui.screens
 import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.app.Activity
 import android.content.pm.PackageManager
+import android.media.projection.MediaProjectionManager
 import android.net.Uri
 import android.os.Build
 import android.provider.Settings
@@ -22,6 +24,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Info
@@ -61,8 +64,11 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gamelingo.mobile.R
+import com.gamelingo.mobile.capture.ScreenCaptureService
+import com.gamelingo.mobile.core.session.SessionState
 import com.gamelingo.mobile.ui.navigation.GameLingoRoutes
 import com.gamelingo.mobile.ui.navigation.HistoryViewModel
+import com.gamelingo.mobile.ui.navigation.SessionViewModel
 import kotlinx.coroutines.launch
 
 private fun hasOverlayPermission(context: Context): Boolean =
@@ -79,11 +85,14 @@ private fun hasNotificationPermission(context: Context): Boolean =
 fun HomeScreen(
     onNavigate: (String) -> Unit,
     viewModel: HistoryViewModel = hiltViewModel(),
+    sessionViewModel: SessionViewModel = hiltViewModel(),
 ) {
     val historyCount by viewModel.historyCount.collectAsStateWithLifecycle()
+    val sessionState by sessionViewModel.sessionState.collectAsStateWithLifecycle()
+    val latestLine by sessionViewModel.latestLine.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
-    val startPendingMessage = stringResource(R.string.home_start_pending)
+    val captureCancelledMessage = stringResource(R.string.home_capture_cancelled)
     val context = LocalContext.current
 
     var overlayGranted by remember { mutableStateOf(hasOverlayPermission(context)) }
@@ -102,6 +111,21 @@ fun HomeScreen(
         }
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
+    val projectionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.StartActivityForResult(),
+    ) { result ->
+        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
+            val intent = ScreenCaptureService.startIntent(
+                context,
+                result.resultCode,
+                result.data!!,
+            )
+            ContextCompat.startForegroundService(context, intent)
+        } else {
+            scope.launch { snackbarHostState.showSnackbar(captureCancelledMessage) }
+        }
     }
 
     val notificationLauncher = rememberLauncherForActivityResult(
@@ -129,26 +153,38 @@ fun HomeScreen(
                     )
                     Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = stringResource(R.string.home_status_stopped),
+                        text = stringResource(
+                            when (sessionState) {
+                                SessionState.STOPPED -> R.string.home_status_stopped
+                                SessionState.RUNNING -> R.string.home_status_running
+                                SessionState.ERROR -> R.string.home_status_error
+                            },
+                        ),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(
-                        onClick = {
-                            scope.launch { snackbarHostState.showSnackbar(startPendingMessage) }
-                        },
-                        modifier = Modifier.fillMaxWidth(),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.PlayArrow,
-                            contentDescription = null,
-                        )
+                    if (sessionState == SessionState.RUNNING && latestLine != null) {
+                        Spacer(modifier = Modifier.height(8.dp))
                         Text(
-                            text = stringResource(R.string.home_start),
-                            modifier = Modifier.padding(start = 8.dp),
+                            text = stringResource(
+                                R.string.home_latest_ocr,
+                                latestLine!!.text,
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
                         )
                     }
+                    Spacer(modifier = Modifier.height(12.dp))
+                    SessionButton(
+                        sessionState = sessionState,
+                        onStart = {
+                            val projectionManager =
+                                context.getSystemService(MediaProjectionManager::class.java)
+                            projectionLauncher.launch(projectionManager.createScreenCaptureIntent())
+                        },
+                        onStop = {
+                            context.startService(ScreenCaptureService.stopIntent(context))
+                        },
+                    )
                 }
             }
 
@@ -322,5 +358,30 @@ private fun PermissionCard(
                 }
             }
         }
+    }
+}
+
+/** Start/stop button that follows the live session state. */
+@Composable
+private fun SessionButton(
+    sessionState: SessionState,
+    onStart: () -> Unit,
+    onStop: () -> Unit,
+) {
+    val running = sessionState == SessionState.RUNNING
+    Button(
+        onClick = if (running) onStop else onStart,
+        modifier = Modifier.fillMaxWidth(),
+    ) {
+        Icon(
+            imageVector = if (running) Icons.Filled.Close else Icons.Filled.PlayArrow,
+            contentDescription = null,
+        )
+        Text(
+            text = stringResource(
+                if (running) R.string.home_stop else R.string.home_start,
+            ),
+            modifier = Modifier.padding(start = 8.dp),
+        )
     }
 }
