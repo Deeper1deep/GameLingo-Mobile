@@ -19,6 +19,7 @@
     <string name="home_status_error">حالة الجلسة: حصلت مشكلة</string>
     <string name="home_stop">إيقاف الترجمة</string>
     <string name="home_capture_cancelled">تم إلغاء إذن التقاط الشاشة</string>
+    <string name="home_translation_failed">تعذّرت ترجمة آخر جملة — هتتعاد مع الجملة الجاية</string>
     <string name="home_latest_ocr">آخر نص مقروء: %1$s</string>
     <string name="notif_channel_capture">التقاط الشاشة</string>
     <string name="notif_capture_title">GameLingo شغال</string>
