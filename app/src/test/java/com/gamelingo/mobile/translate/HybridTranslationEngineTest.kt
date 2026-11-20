@@ -104,12 +104,59 @@ class HybridTranslationEngineTest {
     }
 
     @Test
-    fun `ONLINE without cloud opt-in never calls gemini`() = runTest {
+    fun `ONLINE without cloud opt-in never calls gemini and fails visibly`() = runTest {
         val (engine, online, local) = hybrid(AiMode.ONLINE, optIn = false)
-        val result = engine.translate(TranslationRequest(text = "hi"))
-        assertEquals("mlkit-ondevice", result.engineId)
+        val thrown = runCatching { engine.translate(TranslationRequest(text = "hi")) }
+            .exceptionOrNull()
+        assertTrue(thrown is OnlineNotConfiguredException)
         assertEquals(0, online.calls)
+        assertEquals(0, local.calls)
+    }
+
+    @Test
+    fun `ONLINE with opt-in but no key fails visibly instead of a silent local answer`() = runTest {
+        val (engine, online, local) = hybrid(AiMode.ONLINE, apiKey = "")
+        val thrown = runCatching { engine.translate(TranslationRequest(text = "hi")) }
+            .exceptionOrNull()
+        assertTrue(thrown is OnlineNotConfiguredException)
+        assertEquals(0, online.calls)
+        assertEquals(0, local.calls)
+    }
+
+    @Test
+    fun `AUTO skips the online engine during the cooldown after a quota failure`() = runTest {
+        var clock = 1_000L
+        val online = StubEngine("gemini-flash-lite", failure = QuotaExceededException("429"))
+        val (engine, _, local) = hybrid(AiMode.AUTO, online = online)
+        engine.now = { clock }
+
+        engine.translate(TranslationRequest(text = "one"))
+        assertEquals(1, online.calls)
         assertEquals(1, local.calls)
+
+        // Inside the cooldown the online engine is not even tried.
+        engine.translate(TranslationRequest(text = "two"))
+        assertEquals(1, online.calls)
+        assertEquals(2, local.calls)
+
+        // After the cooldown the online engine is tried again.
+        clock += engine.cooldownMs + 1
+        engine.translate(TranslationRequest(text = "three"))
+        assertEquals(2, online.calls)
+        assertEquals(3, local.calls)
+    }
+
+    @Test
+    fun `AUTO planned engine reports local while cooling down`() = runTest {
+        var clock = 1_000L
+        val online = StubEngine("gemini-flash-lite", failure = ProviderUnavailableException("503"))
+        val (engine, _, _) = hybrid(AiMode.AUTO, online = online)
+        engine.now = { clock }
+        assertEquals("gemini-flash-lite", engine.plannedEngineId())
+        engine.translate(TranslationRequest(text = "one"))
+        assertEquals("mlkit-ondevice", engine.plannedEngineId())
+        clock += engine.cooldownMs + 1
+        assertEquals("gemini-flash-lite", engine.plannedEngineId())
     }
 
     @Test
