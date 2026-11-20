@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -17,8 +18,12 @@ import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
 import android.os.IBinder
+import android.view.Display
+import android.view.Surface
 import androidx.core.app.NotificationCompat
 import com.gamelingo.mobile.R
+import com.gamelingo.mobile.core.capture.DisplayGeometry
+import com.gamelingo.mobile.core.capture.FailureTracker
 import com.gamelingo.mobile.core.capture.FrameChangeDetector
 import com.gamelingo.mobile.core.capture.RegionMapper
 import com.gamelingo.mobile.core.session.TranslationSessionBus
@@ -40,11 +45,19 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Foreground service that owns the MediaProjection, reads frames from a
  * VirtualDisplay, runs on-device OCR and publishes accepted lines to
  * [TranslationSessionBus]. Runs entirely on-device; no frame ever leaves it.
+ *
+ * The capture surface tracks the display: rotation or size changes (opening a
+ * fullscreen game/video after starting the session) rebuild the VirtualDisplay
+ * and ImageReader, otherwise the mirrored frame letterboxes into stale
+ * geometry and the OCR band lands on black bars. Repeated frame failures
+ * surface as a session error instead of spinning silently.
  */
 @AndroidEntryPoint
 class ScreenCaptureService : Service() {
@@ -59,9 +72,14 @@ class ScreenCaptureService : Service() {
     private var imageReader: ImageReader? = null
     private var captureJob: Job? = null
 
+    /** Guards VirtualDisplay/ImageReader rebuilds against in-flight frame reads. */
+    private val displayMutex = Mutex()
+    private var currentGeometry: DisplayGeometry? = null
+
     private val frameChangeDetector = FrameChangeDetector()
     private val stabilityTracker = TextStabilityTracker()
     private val deduplicator = Deduplicator()
+    private val failureTracker = FailureTracker()
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -72,6 +90,12 @@ class ScreenCaptureService : Service() {
             else -> stopSelf()
         }
         return START_NOT_STICKY
+    }
+
+    override fun onConfigurationChanged(newConfig: Configuration) {
+        super.onConfigurationChanged(newConfig)
+        // Rotation after the session started: rebuild the capture surface.
+        serviceScope.launch { rebuildDisplayIfNeeded() }
     }
 
     private fun startCapture(intent: Intent) {
@@ -111,39 +135,90 @@ class ScreenCaptureService : Service() {
         )
         mediaProjection = projection
 
-        val metrics = resources.displayMetrics
-        val width = metrics.widthPixels
-        val height = metrics.heightPixels
-        val reader = ImageReader.newInstance(width, height, PixelFormat.RGBA_8888, 2)
-        imageReader = reader
-        virtualDisplay = projection.createVirtualDisplay(
-            "gamelingo-capture",
-            width,
-            height,
-            metrics.densityDpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            reader.surface,
-            null,
-            null,
-        )
-
         TranslationSessionBus.onSessionStarted()
         startService(OverlayService.startIntent(this))
-        captureJob = serviceScope.launch { captureLoop(width, height) }
+        captureJob = serviceScope.launch { captureLoop() }
     }
 
-    private suspend fun captureLoop(width: Int, height: Int) {
+    /** The display facts the capture surface must match right now. */
+    private fun latestGeometry(): DisplayGeometry {
+        val metrics = resources.displayMetrics
+        val displayManager = getSystemService(DisplayManager::class.java)
+        val rotation = displayManager
+            ?.getDisplay(Display.DEFAULT_DISPLAY)
+            ?.rotation
+            ?: Surface.ROTATION_0
+        return DisplayGeometry(
+            width = metrics.widthPixels,
+            height = metrics.heightPixels,
+            rotation = rotation,
+        )
+    }
+
+    /**
+     * Rebuilds the ImageReader + VirtualDisplay when the display geometry has
+     * changed since the surface was created. The first call builds the surface.
+     */
+    private suspend fun rebuildDisplayIfNeeded() {
+        val projection = mediaProjection ?: return
+        val latest = latestGeometry()
+        displayMutex.withLock {
+            if (!DisplayGeometry.needsRebuild(currentGeometry, latest)) return
+            virtualDisplay?.release()
+            virtualDisplay = null
+            imageReader?.close()
+            imageReader = null
+            val reader = ImageReader.newInstance(
+                latest.width,
+                latest.height,
+                PixelFormat.RGBA_8888,
+                2,
+            )
+            imageReader = reader
+            virtualDisplay = projection.createVirtualDisplay(
+                "gamelingo-capture",
+                latest.width,
+                latest.height,
+                resources.displayMetrics.densityDpi,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                reader.surface,
+                null,
+                null,
+            )
+            currentGeometry = latest
+            // The frame stream restarts: stale digests and half-stable lines
+            // from the old geometry must not gate the new one.
+            frameChangeDetector.reset()
+            stabilityTracker.reset()
+            deduplicator.reset()
+        }
+    }
+
+    private suspend fun captureLoop() {
         while (serviceScope.isActive) {
             val settings = settingsRepository.settings.first()
             try {
-                val image = imageReader?.acquireLatestImage()
-                if (image != null) {
-                    image.use { processFrame(it, width, height, settings) }
+                rebuildDisplayIfNeeded()
+                val geometry = currentGeometry
+                if (geometry != null) {
+                    displayMutex.withLock {
+                        val image = imageReader?.acquireLatestImage()
+                        if (image != null) {
+                            image.use { processFrame(it, geometry, settings) }
+                        }
+                    }
                 }
+                failureTracker.onSuccess()
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (_: Exception) {
-                // A single bad frame or OCR failure must not kill the session.
+                // A single bad frame or OCR failure must not kill the session,
+                // but a persistent failure is a broken session: say so and stop.
+                if (failureTracker.onFailure()) {
+                    TranslationSessionBus.onSessionError()
+                    stopCapture()
+                    break
+                }
             }
             delay(settings.captureIntervalMs)
         }
@@ -151,11 +226,10 @@ class ScreenCaptureService : Service() {
 
     private suspend fun processFrame(
         image: Image,
-        width: Int,
-        height: Int,
+        geometry: DisplayGeometry,
         settings: com.gamelingo.mobile.data.settings.AppSettings,
     ) {
-        val fullBitmap = image.toBitmap(width, height)
+        val fullBitmap = image.toBitmap(geometry.width, geometry.height)
 
         val shouldRunOcr = !settings.batterySaverEnabled ||
             frameChangeDetector.hasChanged(fullBitmap.toDownsampledBytes())
@@ -169,8 +243,8 @@ class ScreenCaptureService : Service() {
             val rect = RegionMapper.mapToPixels(
                 topFraction = region.top,
                 bottomFraction = region.bottom,
-                frameWidth = width,
-                frameHeight = height,
+                frameWidth = geometry.width,
+                frameHeight = geometry.height,
             )
             Bitmap.createBitmap(fullBitmap, rect.left, rect.top, rect.width, rect.height)
         } else {
@@ -240,11 +314,13 @@ class ScreenCaptureService : Service() {
         virtualDisplay = null
         imageReader?.close()
         imageReader = null
+        currentGeometry = null
         mediaProjection?.stop()
         mediaProjection = null
         frameChangeDetector.reset()
         stabilityTracker.reset()
         deduplicator.reset()
+        failureTracker.reset()
         TranslationSessionBus.onSessionStopped()
         stopService(OverlayService.startIntent(this))
         stopForeground(STOP_FOREGROUND_REMOVE)

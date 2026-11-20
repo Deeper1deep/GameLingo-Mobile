@@ -24,6 +24,7 @@ data class OverlayUiState(
     val original: String? = null,
     val translated: String? = null,
     val failure: String? = null,
+    val sessionError: Boolean = false,
 )
 
 /**
@@ -54,6 +55,13 @@ fun OverlayContent(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         when {
+            state.sessionError -> Text(
+                text = stringResource(R.string.overlay_error),
+                color = textColor,
+                fontSize = (settings.overlayTextSizeSp - 4).coerceAtLeast(10).sp,
+                textAlign = TextAlign.Center,
+            )
+
             state.failure != null -> Text(
                 text = stringResource(R.string.home_translation_failed),
                 color = textColor,
