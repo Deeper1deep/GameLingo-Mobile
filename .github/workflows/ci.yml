@@ -45,15 +45,19 @@ jobs:
 
       - name: Upload debug APK
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
           name: gamelingo-debug-apk
           path: app/build/outputs/apk/debug/*.apk
+          retention-days: 7
           if-no-files-found: error
 
       - name: Upload test reports
         if: always()
         uses: actions/upload-artifact@v4
+        continue-on-error: true
         with:
+          retention-days: 7
           name: gamelingo-test-reports
           path: |
             app/build/reports/tests/
