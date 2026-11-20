@@ -27,6 +27,7 @@ import com.gamelingo.mobile.core.text.TextNormalizer
 import com.gamelingo.mobile.core.text.TextStabilityTracker
 import com.gamelingo.mobile.data.settings.SettingsRepository
 import com.gamelingo.mobile.ocr.TextRecognizerEngine
+import com.gamelingo.mobile.overlay.OverlayService
 import com.google.mlkit.vision.common.InputImage
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -127,6 +128,7 @@ class ScreenCaptureService : Service() {
         )
 
         TranslationSessionBus.onSessionStarted()
+        startService(OverlayService.startIntent(this))
         captureJob = serviceScope.launch { captureLoop(width, height) }
     }
 
@@ -244,6 +246,7 @@ class ScreenCaptureService : Service() {
         stabilityTracker.reset()
         deduplicator.reset()
         TranslationSessionBus.onSessionStopped()
+        stopService(OverlayService.startIntent(this))
         stopForeground(STOP_FOREGROUND_REMOVE)
         stopSelf()
     }

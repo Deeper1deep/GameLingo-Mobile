@@ -33,6 +33,11 @@
             android:name=".capture.ScreenCaptureService"
             android:exported="false"
             android:foregroundServiceType="mediaProjection" />
+
+        <!-- Floating translation window; starts and stops with the capture session. -->
+        <service
+            android:name=".overlay.OverlayService"
+            android:exported="false" />
     </application>
 
 </manifest>
