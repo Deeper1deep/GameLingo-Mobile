@@ -8,31 +8,38 @@ import com.gamelingo.mobile.data.settings.SettingsRepository
 import java.util.concurrent.atomic.AtomicBoolean
 import javax.inject.Inject
 import javax.inject.Singleton
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeout
 
 /**
  * Watches the session bus for accepted OCR lines, translates them with the
- * engine selected by the current settings, publishes the translation back to
- * the bus and records it in the Room history.
+ * hybrid engine, publishes the translation back to the bus and records it in
+ * the Room history.
  *
- * Phase 4 ships the on-device engine only; the online provider is wired in
- * Phase 5 once the user picks it, so AUTO/ONLINE currently resolve to the
- * on-device engine and the history entry says exactly what ran.
+ * Honours the user's settings on every line: AI mode and API key (inside the
+ * hybrid engine), request timeout, cache enablement and context line count.
+ * A newer line cancels the in-flight translation so a stale subtitle never
+ * replaces a fresher one; cancelled work is never shown as a failure.
  */
 @Singleton
 class TranslationCoordinator @Inject constructor(
-    private val localEngine: MlKitTranslationEngine,
+    private val hybridEngine: HybridTranslationEngine,
     private val settingsRepository: SettingsRepository,
     private val historyDao: TranslationHistoryDao,
+    private val cache: TranslationCache,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val started = AtomicBoolean(false)
     private val contextMemory = ContextMemory(maxLines = MAX_CONTEXT_LINES)
+    private var currentJob: Job? = null
 
     /** Idempotent: safe to call from every service start and app launch. */
     fun start() {
@@ -40,52 +47,92 @@ class TranslationCoordinator @Inject constructor(
         scope.launch {
             TranslationSessionBus.latestLine.collect { line ->
                 if (line == null) return@collect
-                translateLine(line.text, line.capturedAtMillis)
+                currentJob?.cancel()
+                currentJob = scope.launch {
+                    translateLine(line.text, line.capturedAtMillis)
+                }
             }
         }
     }
 
     private suspend fun translateLine(text: String, capturedAtMillis: Long) {
         val settings = settingsRepository.settings.first()
-        val engine = selectEngine()
+
+        if (settings.cacheEnabled) {
+            cache.get(text)?.let { hit ->
+                publish(
+                    original = text,
+                    result = TranslationResult(
+                        translatedText = hit.translatedText,
+                        engineId = hit.engineId,
+                        fromCache = true,
+                    ),
+                    capturedAtMillis = capturedAtMillis,
+                )
+                contextMemory.add(text)
+                return
+            }
+        }
+
         runCatching {
-            engine.translate(
-                TranslationRequest(
-                    text = text,
-                    contextLines = contextMemory.snapshot()
-                        .takeLast(settings.contextLines),
-                ),
-            )
+            withTimeout(settings.requestTimeoutSec * MILLIS_PER_SECOND) {
+                hybridEngine.translate(
+                    TranslationRequest(
+                        text = text,
+                        contextLines = contextMemory.snapshot()
+                            .takeLast(settings.contextLines),
+                    ),
+                )
+            }
         }.onSuccess { result ->
-            TranslationSessionBus.onTranslated(
-                original = text,
-                translated = result.translatedText,
-                engineId = result.engineId,
-                fromCache = result.fromCache,
-                capturedAtMillis = capturedAtMillis,
-            )
-            historyDao.insert(
-                TranslationHistoryEntity(
-                    sourceText = text,
-                    translatedText = result.translatedText,
-                    engine = result.engineId,
-                    wasCached = result.fromCache,
-                    createdAt = capturedAtMillis,
-                ),
-            )
+            if (settings.cacheEnabled) {
+                cache.put(
+                    text,
+                    CachedTranslation(
+                        translatedText = result.translatedText,
+                        engineId = result.engineId,
+                    ),
+                )
+            }
+            publish(text, result, capturedAtMillis)
             contextMemory.add(text)
-        }.onFailure {
-            TranslationSessionBus.onTranslationFailed(text)
+        }.onFailure { error ->
+            when (error) {
+                // The provider hit the user's timeout: a visible failure.
+                is TimeoutCancellationException ->
+                    TranslationSessionBus.onTranslationFailed(text)
+                // A newer line superseded this one: stay silent.
+                is CancellationException -> throw error
+                else -> TranslationSessionBus.onTranslationFailed(text)
+            }
         }
     }
 
-    /**
-     * The only engine available in Phase 4. Phase 5 returns the online engine
-     * here for ONLINE/AUTO when the user's key is configured.
-     */
-    private fun selectEngine(): TranslationEngine = localEngine
+    private suspend fun publish(
+        original: String,
+        result: TranslationResult,
+        capturedAtMillis: Long,
+    ) {
+        TranslationSessionBus.onTranslated(
+            original = original,
+            translated = result.translatedText,
+            engineId = result.engineId,
+            fromCache = result.fromCache,
+            capturedAtMillis = capturedAtMillis,
+        )
+        historyDao.insert(
+            TranslationHistoryEntity(
+                sourceText = original,
+                translatedText = result.translatedText,
+                engine = result.engineId,
+                wasCached = result.fromCache,
+                createdAt = capturedAtMillis,
+            ),
+        )
+    }
 
     private companion object {
         const val MAX_CONTEXT_LINES = 20
+        const val MILLIS_PER_SECOND = 1_000L
     }
 }
