@@ -2,6 +2,7 @@ package com.gamelingo.mobile.ui.navigation
 
 import androidx.lifecycle.ViewModel
 import com.gamelingo.mobile.core.session.OcrLine
+import com.gamelingo.mobile.core.session.SessionNotice
 import com.gamelingo.mobile.core.session.SessionState
 import com.gamelingo.mobile.core.session.TranslatedLine
 import com.gamelingo.mobile.core.session.TranslationSessionBus
@@ -16,4 +17,5 @@ class SessionViewModel @Inject constructor() : ViewModel() {
     val latestLine: StateFlow<OcrLine?> = TranslationSessionBus.latestLine
     val translatedLine: StateFlow<TranslatedLine?> = TranslationSessionBus.translatedLine
     val translationFailure: StateFlow<String?> = TranslationSessionBus.translationFailure
+    val notice: StateFlow<SessionNotice?> = TranslationSessionBus.notice
 }
