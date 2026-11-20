@@ -90,6 +90,7 @@
     <string name="ai_cloud_dialog_later">فضل محلي</string>
     <string name="ai_cloud_status_on">السحابة مفعّلة: نص الترجمة بيتبعت لـ Gemini وقت اللعب.</string>
     <string name="ai_cloud_status_off">السحابة مقفولة: كل الترجمة محلية على الجهاز، ومفيش أي نص بيطلع منه.</string>
+    <string name="overlay_waiting">بيسمع اللعبة… الترجمة هتظهر هنا</string>
     <string name="ai_quality_section">الجودة والسرعة</string>
     <string name="ai_cache">تخزين الترجمات مؤقتًا (Cache)</string>
     <string name="ai_cache_hint">نفس الجملة بتتجاب فورًا بدون طلب جديد</string>
