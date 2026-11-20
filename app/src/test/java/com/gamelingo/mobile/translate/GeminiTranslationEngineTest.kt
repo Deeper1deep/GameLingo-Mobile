@@ -5,6 +5,7 @@ import java.io.IOException
 import kotlinx.coroutines.test.runTest
 import kotlinx.serialization.json.Json
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -92,6 +93,24 @@ class GeminiTranslationEngineTest {
         }.exceptionOrNull()
         assertTrue(thrown is IOException)
         assertTrue(thrown!!.message!!.contains("429"))
+    }
+
+    @Test
+    fun `error messages never contain the api key`() = runTest {
+        val api = StubApi(
+            GeminiResponse(error = GeminiErrorBody(code = 400, message = "bad request")),
+        )
+        val secret = "AIzaSECRETKEY123"
+        val thrown = runCatching {
+            engine(secret, api).translate(TranslationRequest(text = "hi"))
+        }.exceptionOrNull()
+        assertNotNull(thrown)
+        assertFalse(thrown!!.message.orEmpty().contains(secret))
+
+        val missing = runCatching {
+            engine("   ", StubApi(GeminiResponse())).translate(TranslationRequest(text = "hi"))
+        }.exceptionOrNull()
+        assertFalse(missing!!.message.orEmpty().contains("AIza"))
     }
 
     @Test
