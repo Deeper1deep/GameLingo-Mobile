@@ -19,6 +19,12 @@ import kotlinx.coroutines.flow.first
  *   failure (no connection, quota, bad key) falls back to the on-device
  *   engine and the history entry keeps the real engine id. Cancellation is
  *   never treated as a failure: a newer subtitle line simply wins.
+ *
+ * Privacy gate: the online engine is only ever called when the user has both
+ * entered a key AND explicitly accepted the cloud explainer
+ * ([com.gamelingo.mobile.data.settings.AppSettings.cloudTranslationOptIn]).
+ * Until then every mode resolves to the on-device engine, so no recognized
+ * text can leave the device by accident.
  */
 @Singleton
 class HybridTranslationEngine @Inject constructor(
@@ -34,18 +40,25 @@ class HybridTranslationEngine @Inject constructor(
 
     override suspend fun translate(request: TranslationRequest): TranslationResult {
         val settings = settingsRepository.settings.first()
+        val cloudAllowed =
+            settings.cloudTranslationOptIn && settings.onlineApiKey.isNotBlank()
         return when (settings.aiMode) {
             AiMode.LOCAL -> localEngine.translate(request)
-            AiMode.ONLINE -> onlineEngine.translate(request)
-            AiMode.AUTO -> translateAuto(request, hasApiKey = settings.onlineApiKey.isNotBlank())
+            AiMode.ONLINE ->
+                if (cloudAllowed) {
+                    onlineEngine.translate(request)
+                } else {
+                    localEngine.translate(request)
+                }
+            AiMode.AUTO -> translateAuto(request, cloudAllowed = cloudAllowed)
         }
     }
 
     private suspend fun translateAuto(
         request: TranslationRequest,
-        hasApiKey: Boolean,
+        cloudAllowed: Boolean,
     ): TranslationResult {
-        if (!hasApiKey) return localEngine.translate(request)
+        if (!cloudAllowed) return localEngine.translate(request)
         return try {
             onlineEngine.translate(request)
         } catch (cancelled: CancellationException) {
