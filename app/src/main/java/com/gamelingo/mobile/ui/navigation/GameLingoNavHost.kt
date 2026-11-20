@@ -11,6 +11,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
@@ -18,6 +19,8 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.compose.rememberNavController
 import com.gamelingo.mobile.R
 import com.gamelingo.mobile.ui.screens.AboutScreen
@@ -28,6 +31,8 @@ import com.gamelingo.mobile.ui.screens.OcrSettingsScreen
 import com.gamelingo.mobile.ui.screens.OverlaySettingsScreen
 import com.gamelingo.mobile.ui.screens.TranslationSettingsScreen
 import com.gamelingo.mobile.ui.screens.VoiceTranslationScreen
+import com.gamelingo.mobile.ui.update.UpdateDialogHost
+import com.gamelingo.mobile.ui.update.UpdateViewModel
 
 object GameLingoRoutes {
     const val HOME = "home"
@@ -57,7 +62,13 @@ private val destinationMeta = listOf(
 @Composable
 fun GameLingoAppRoot(
     navController: NavHostController = rememberNavController(),
+    updateViewModel: UpdateViewModel = hiltViewModel(),
 ) {
+    // In-app updates: one check per app start; the dialog floats over any screen.
+    LaunchedEffect(Unit) { updateViewModel.checkOnAppOpen() }
+    val updateState by updateViewModel.state.collectAsStateWithLifecycle()
+    UpdateDialogHost(state = updateState, viewModel = updateViewModel)
+
     val backStackEntry by navController.currentBackStackEntryAsState()
     val currentRoute = backStackEntry?.destination?.route
     val titleRes = destinationMeta.firstOrNull { it.route == currentRoute }?.titleRes

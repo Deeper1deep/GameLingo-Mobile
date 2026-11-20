@@ -141,6 +141,29 @@
     <string name="voice_planned_2">تمرير النص لنفس محرك الترجمة الحالي.</string>
     <string name="voice_planned_3">عرض الترجمة في نفس النافذة العائمة.</string>
 
+    <!-- In-app updates (Phase 8) -->
+    <string name="update_available_title">تحديث جديد متاح</string>
+    <string name="update_mandatory_title">تحديث إجباري مطلوب</string>
+    <string name="update_version_line">الإصدار %1$s — %2$s</string>
+    <string name="update_size_line">الحجم: %1$s ميجابايت</string>
+    <string name="update_download_and_install">تحميل وتثبيت</string>
+    <string name="update_later">لاحقًا</string>
+    <string name="update_downloading_title">جاري تحميل التحديث…</string>
+    <string name="update_progress_line">%1$s من %2$s ميجابايت</string>
+    <string name="update_downloaded_line">تم تحميل %1$s ميجابايت</string>
+    <string name="update_ready_title">تم التحقق من التحديث</string>
+    <string name="update_ready_body">تم التحقق من سلامة الملف والتوقيع. أكّد التثبيت من نافذة النظام — بياناتك وإعداداتك بتفضل زي ما هي.</string>
+    <string name="update_ready_failed">اتحققنا من الملف، بس فتح المثبّت فشل. حاول تاني من الإشعار أو أعد التحميل.</string>
+    <string name="update_failed_title">التحديث فشل</string>
+    <string name="update_retry">إعادة المحاولة</string>
+    <string name="update_error_network">مفيش اتصال بالإنترنت أو الخادم مش راد. النسخة الحالية سليمة ولم يتغير شيء.</string>
+    <string name="update_error_metadata">بيانات التحديث غير مكتملة حاليًا. النسخة الحالية سليمة ولم يتغير شيء.</string>
+    <string name="update_error_checksum">الملف المحمّل مش مطابق للـ SHA-256 المعلن، فاتحذف فورًا. النسخة الحالية سليمة.</string>
+    <string name="update_error_signature">توقيع الملف المحمّل مختلف عن توقيع التطبيق، فاتحذف فورًا. النسخة الحالية سليمة.</string>
+    <string name="update_error_package">الملف المحمّل مش بتاع التطبيق ده، فاتحذف فورًا. النسخة الحالية سليمة.</string>
+    <string name="update_error_write">الملف المحمّل مش قابل للقراءة. النسخة الحالية سليمة ولم يتغير شيء.</string>
+    <string name="update_need_install_permission">محتاج إذن "تثبيت تطبيقات غير معروفة" للتطبيق ده. فتحنا صفحة الإعداد — فعّله وارجع.</string>
+
     <string name="back">رجوع</string>
     <string name="cancel">إلغاء</string>
 </resources>
