@@ -4,12 +4,14 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -38,6 +40,43 @@ fun AiSettingsScreen(
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     var keyVisible by remember { mutableStateOf(false) }
+    var showCloudExplainer by remember { mutableStateOf(false) }
+    var explainerShown by remember { mutableStateOf(false) }
+
+    // The moment a key first exists without cloud consent is the natural time
+    // for the one-time explainer: entering a key signals intent to go online.
+    LaunchedEffect(settings.onlineApiKey.isNotBlank(), settings.cloudTranslationOptIn) {
+        if (settings.onlineApiKey.isNotBlank() &&
+            !settings.cloudTranslationOptIn &&
+            !explainerShown
+        ) {
+            explainerShown = true
+            showCloudExplainer = true
+        }
+    }
+
+    if (showCloudExplainer) {
+        AlertDialog(
+            onDismissRequest = { showCloudExplainer = false },
+            title = { Text(stringResource(R.string.ai_cloud_dialog_title)) },
+            text = { Text(stringResource(R.string.ai_cloud_dialog_body)) },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.setCloudTranslationOptIn(true)
+                        showCloudExplainer = false
+                    },
+                ) {
+                    Text(stringResource(R.string.ai_cloud_dialog_accept))
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showCloudExplainer = false }) {
+                    Text(stringResource(R.string.ai_cloud_dialog_later))
+                }
+            },
+        )
+    }
 
     SettingsColumn {
         RadioGroupCard(
@@ -102,8 +141,32 @@ fun AiSettingsScreen(
                     text = stringResource(R.string.ai_api_key_hint),
                     style = MaterialTheme.typography.bodySmall,
                 )
+                Text(
+                    text = stringResource(
+                        if (settings.cloudTranslationOptIn) {
+                            R.string.ai_cloud_status_on
+                        } else {
+                            R.string.ai_cloud_status_off
+                        },
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    modifier = Modifier.padding(top = 8.dp),
+                )
             }
         }
+
+        SwitchCard(
+            title = stringResource(R.string.ai_cloud_switch_title),
+            subtitle = stringResource(R.string.ai_cloud_switch_subtitle),
+            checked = settings.cloudTranslationOptIn,
+            onCheckedChange = { enable ->
+                if (enable) {
+                    showCloudExplainer = true
+                } else {
+                    viewModel.setCloudTranslationOptIn(false)
+                }
+            },
+        )
 
         SliderCard(
             title = stringResource(R.string.ai_timeout),

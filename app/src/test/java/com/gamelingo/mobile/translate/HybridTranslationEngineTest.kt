@@ -34,11 +34,16 @@ class HybridTranslationEngineTest {
     private fun hybrid(
         mode: AiMode,
         apiKey: String = "key",
+        optIn: Boolean = true,
         online: StubEngine = StubEngine("gemini-flash-lite"),
         local: StubEngine = StubEngine("mlkit-ondevice"),
     ): Triple<HybridTranslationEngine, StubEngine, StubEngine> {
         val settings = FakeSettingsRepository(
-            AppSettings(aiMode = mode, onlineApiKey = apiKey),
+            AppSettings(
+                aiMode = mode,
+                onlineApiKey = apiKey,
+                cloudTranslationOptIn = optIn,
+            ),
         )
         return Triple(HybridTranslationEngine(online, local, settings), online, local)
     }
@@ -86,6 +91,24 @@ class HybridTranslationEngineTest {
         val (engine, _, local) = hybrid(AiMode.AUTO, online = online)
         val result = engine.translate(TranslationRequest(text = "hi"))
         assertEquals("mlkit-ondevice", result.engineId)
+        assertEquals(1, local.calls)
+    }
+
+    @Test
+    fun `AUTO with a key but without cloud opt-in stays on-device`() = runTest {
+        val (engine, online, local) = hybrid(AiMode.AUTO, optIn = false)
+        val result = engine.translate(TranslationRequest(text = "hi"))
+        assertEquals("mlkit-ondevice", result.engineId)
+        assertEquals(0, online.calls)
+        assertEquals(1, local.calls)
+    }
+
+    @Test
+    fun `ONLINE without cloud opt-in never calls gemini`() = runTest {
+        val (engine, online, local) = hybrid(AiMode.ONLINE, optIn = false)
+        val result = engine.translate(TranslationRequest(text = "hi"))
+        assertEquals("mlkit-ondevice", result.engineId)
+        assertEquals(0, online.calls)
         assertEquals(1, local.calls)
     }
 

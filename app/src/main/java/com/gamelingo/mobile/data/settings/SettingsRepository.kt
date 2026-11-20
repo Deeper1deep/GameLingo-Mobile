@@ -20,6 +20,12 @@ data class AppSettings(
     val aiMode: AiMode = AiMode.AUTO,
     /** User-supplied key for the online provider. Stored on-device only, never shipped in the APK. */
     val onlineApiKey: String = "",
+    /**
+     * Explicit consent to send recognized subtitle text (plus short context) to
+     * the cloud provider. False means every mode behaves as local: until the
+     * user accepts the in-app explainer, no OCR text ever leaves the device.
+     */
+    val cloudTranslationOptIn: Boolean = false,
     val requestTimeoutSec: Int = SettingsConstraints.DEFAULT_TIMEOUT_SEC,
     val cacheEnabled: Boolean = true,
     val contextLines: Int = SettingsConstraints.DEFAULT_CONTEXT_LINES,
@@ -55,6 +61,7 @@ interface SettingsRepository {
 
     suspend fun setAiMode(mode: AiMode)
     suspend fun setOnlineApiKey(key: String)
+    suspend fun setCloudTranslationOptIn(enabled: Boolean)
     suspend fun setRequestTimeoutSec(seconds: Int)
     suspend fun setCacheEnabled(enabled: Boolean)
     suspend fun setContextLines(lines: Int)
