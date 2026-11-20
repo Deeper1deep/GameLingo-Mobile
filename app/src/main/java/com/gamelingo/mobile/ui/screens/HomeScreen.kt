@@ -163,15 +163,44 @@ fun HomeScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    if (sessionState == SessionState.RUNNING && latestLine != null) {
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            text = stringResource(
-                                R.string.home_latest_ocr,
-                                latestLine!!.text,
-                            ),
-                            style = MaterialTheme.typography.bodySmall,
-                        )
+                    if (sessionState == SessionState.RUNNING) {
+                        val translated by sessionViewModel.translatedLine.collectAsStateWithLifecycle()
+                        val failure by sessionViewModel.translationFailure.collectAsStateWithLifecycle()
+                        when {
+                            translated != null -> {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = translated!!.translated,
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = MaterialTheme.colorScheme.primary,
+                                )
+                                Text(
+                                    text = stringResource(
+                                        R.string.home_latest_ocr,
+                                        translated!!.original,
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                            failure != null -> {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = stringResource(R.string.home_translation_failed),
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.error,
+                                )
+                            }
+                            latestLine != null -> {
+                                Spacer(modifier = Modifier.height(8.dp))
+                                Text(
+                                    text = stringResource(
+                                        R.string.home_latest_ocr,
+                                        latestLine!!.text,
+                                    ),
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
                     }
                     Spacer(modifier = Modifier.height(12.dp))
                     SessionButton(
