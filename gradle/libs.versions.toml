@@ -16,6 +16,7 @@ okhttp = "4.12.0"
 kotlinxSerialization = "1.12.0"
 coroutines = "1.11.0"
 mlkitTextRecognition = "16.0.1"
+mlkitTranslate = "17.0.3"
 junit = "4.13.2"
 
 [libraries]
@@ -47,6 +48,7 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitTextRecognition" }
+mlkit-translate = { group = "com.google.mlkit", name = "translate", version.ref = "mlkitTranslate" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
 
 [plugins]
