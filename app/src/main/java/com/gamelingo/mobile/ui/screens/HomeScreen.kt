@@ -65,6 +65,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gamelingo.mobile.R
 import com.gamelingo.mobile.capture.ScreenCaptureService
+import com.gamelingo.mobile.core.session.SessionError
 import com.gamelingo.mobile.core.session.SessionNotice
 import com.gamelingo.mobile.core.session.SessionState
 import com.gamelingo.mobile.ui.navigation.GameLingoRoutes
@@ -90,6 +91,7 @@ fun HomeScreen(
 ) {
     val historyCount by viewModel.historyCount.collectAsStateWithLifecycle()
     val sessionState by sessionViewModel.sessionState.collectAsStateWithLifecycle()
+    val sessionError by sessionViewModel.sessionError.collectAsStateWithLifecycle()
     val latestLine by sessionViewModel.latestLine.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
@@ -165,6 +167,34 @@ fun HomeScreen(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                    // The reason survives the session teardown: a failed
+                    // session settles back to STOPPED, but the user still
+                    // needs to know why it died until they start again.
+                    sessionError?.let { error ->
+                        Spacer(modifier = Modifier.height(8.dp))
+                        Text(
+                            text = stringResource(
+                                when (error) {
+                                    SessionError.MISSING_CONSENT_DATA ->
+                                        R.string.session_error_missing_consent
+                                    SessionError.FOREGROUND_START_FAILED ->
+                                        R.string.session_error_foreground_failed
+                                    SessionError.PROJECTION_REJECTED ->
+                                        R.string.session_error_projection_rejected
+                                    SessionError.CAPTURE_PERSISTENT_FAILURE ->
+                                        R.string.session_error_capture_persistent
+                                    SessionError.SETTINGS_UNAVAILABLE ->
+                                        R.string.session_error_settings_unavailable
+                                    SessionError.OVERLAY_PERMISSION_LOST ->
+                                        R.string.session_error_overlay_permission
+                                    SessionError.OVERLAY_WINDOW_FAILED ->
+                                        R.string.session_error_overlay_window
+                                },
+                            ),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.error,
+                        )
+                    }
                     if (sessionState == SessionState.RUNNING) {
                         val translated by sessionViewModel.translatedLine.collectAsStateWithLifecycle()
                         val failure by sessionViewModel.translationFailure.collectAsStateWithLifecycle()
