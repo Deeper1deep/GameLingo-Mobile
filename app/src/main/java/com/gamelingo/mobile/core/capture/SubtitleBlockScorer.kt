@@ -83,6 +83,63 @@ object SubtitleBlockScorer {
             )
             ?.first
 
+    /**
+     * @return the winning block's text merged with the lines that continue the
+     * same subtitle, top to bottom, or null when the frame has no plausible
+     * subtitle. Subtitles often wrap onto two stacked lines; selecting only the
+     * single best block used to silently drop the other line.
+     */
+    fun selectSubtitle(
+        blocks: List<RecognizedBlock>,
+        frameWidth: Int,
+        frameHeight: Int,
+        dynamics: BlockDynamicsTracker,
+    ): String? {
+        val winner = selectBest(blocks, frameWidth, frameHeight, dynamics) ?: return null
+        val group = mutableListOf(winner)
+        // Grow the group until nothing adjacent is left, so a rare three-line
+        // subtitle still comes through whole.
+        var grew = true
+        while (grew) {
+            grew = false
+            for (block in blocks) {
+                if (block in group || block.text.isBlank()) continue
+                if (group.any { continuesSameSubtitle(block, it) }) {
+                    group.add(block)
+                    grew = true
+                }
+            }
+        }
+        return group
+            .sortedBy { it.rect.top }
+            .joinToString(" ") { it.text.trim() }
+    }
+
+    /**
+     * A block continues the same subtitle when it sits directly above or below
+     * [line] (about one line gap at most), shares its horizontal center and has
+     * a comparable height. A corner watermark fails the alignment check even
+     * when it shares the subtitle's bottom band.
+     */
+    private fun continuesSameSubtitle(candidate: RecognizedBlock, line: RecognizedBlock): Boolean {
+        val candidateCx = candidate.rect.left + candidate.rect.width / 2f
+        val lineCx = line.rect.left + line.rect.width / 2f
+        val maxOffset = maxOf(candidate.rect.width, line.rect.width) / 2f
+        if (abs(candidateCx - lineCx) > maxOffset) return false
+
+        val heightRatio =
+            candidate.rect.height.toFloat() / line.rect.height.toFloat()
+        if (heightRatio < 0.5f || heightRatio > 2f) return false
+
+        val gap = maxOf(
+            candidate.rect.top - line.rect.bottom,
+            line.rect.top - candidate.rect.bottom,
+        )
+        // Small overlaps are fine (OCR boxes touch); a gap larger than one
+        // and a half line heights means a separate text block.
+        return gap <= line.rect.height * 1.5f
+    }
+
     /** Sentence-like text scores high; short ALL-CAPS tokens look like watermarks. */
     private fun shapeScore(text: String): Float {
         val words = text.trim().split(Regex("\\s+"))
