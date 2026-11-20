@@ -17,6 +17,7 @@ import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.gamelingo.mobile.core.overlay.OverlayLayout
+import com.gamelingo.mobile.core.session.SessionState
 import com.gamelingo.mobile.core.session.TranslationSessionBus
 import com.gamelingo.mobile.data.settings.AppSettings
 import com.gamelingo.mobile.data.settings.OverlayPosition
@@ -173,6 +174,13 @@ class OverlayService : Service() {
                 if (failure != null) {
                     uiState.value = uiState.value.copy(failure = failure)
                 }
+            }
+        }
+        serviceScope.launch {
+            TranslationSessionBus.state.collect { sessionState ->
+                uiState.value = uiState.value.copy(
+                    sessionError = sessionState == SessionState.ERROR,
+                )
             }
         }
     }
