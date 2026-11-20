@@ -62,6 +62,16 @@ class LatestReleaseTest {
     }
 
     @Test
+    fun `parses optional fileSizeBytes and defaults it to null`() {
+        assertEquals(null, LatestRelease.parse(sampleJson).fileSizeBytes)
+        val withSize = sampleJson.replace(
+            "\"mandatoryUpdate\": false",
+            "\"mandatoryUpdate\": false, \"fileSizeBytes\": 73400320",
+        )
+        assertEquals(73400320L, LatestRelease.parse(withSize).fileSizeBytes)
+    }
+
+    @Test
     fun `rejects schemas newer than the app understands`() {
         val future = sampleJson.replace("\"schemaVersion\": 1", "\"schemaVersion\": 99")
         val release = LatestRelease.parse(future)
