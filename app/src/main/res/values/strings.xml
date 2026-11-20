@@ -14,8 +14,15 @@
     <string name="home_headline">ترجمة نصوص الألعاب للعامية المصرية</string>
     <string name="home_description">شغّل أي فيديو لعبة، وابدأ التقاط الشاشة، والترجمة هتظهر فوق الفيديو في نافذة عائمة.</string>
     <string name="home_start">بدء الترجمة</string>
-    <string name="home_start_pending">بدء الالتقاط هيشتغل مع ميزة التقاط الشاشة (المرحلة الثالثة)</string>
     <string name="home_status_stopped">حالة الجلسة: متوقفة</string>
+    <string name="home_status_running">حالة الجلسة: شغالة — القراءة جارية</string>
+    <string name="home_status_error">حالة الجلسة: حصلت مشكلة</string>
+    <string name="home_stop">إيقاف الترجمة</string>
+    <string name="home_capture_cancelled">تم إلغاء إذن التقاط الشاشة</string>
+    <string name="home_latest_ocr">آخر نص مقروء: %1$s</string>
+    <string name="notif_channel_capture">التقاط الشاشة</string>
+    <string name="notif_capture_title">GameLingo شغال</string>
+    <string name="notif_capture_text">جاري قراءة النص الإنجليزي من الشاشة وترجمته على جهازك.</string>
     <string name="home_history_count">ترجمة محفوظة: %1$d</string>
     <string name="home_permissions_title">الأذونات المطلوبة</string>
     <string name="home_how_title">إزاي بيشتغل؟</string>
