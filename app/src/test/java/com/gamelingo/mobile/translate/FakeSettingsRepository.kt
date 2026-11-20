@@ -28,6 +28,10 @@ class FakeSettingsRepository(
         state.value = state.value.copy(restrictToTextRegion = restrict)
     }
 
+    override suspend fun setSmartTextDetection(enabled: Boolean) {
+        state.value = state.value.copy(smartTextDetection = enabled)
+    }
+
     override suspend fun setRegionPreset(preset: TextRegionPreset) {
         state.value = state.value.copy(regionPreset = preset)
     }
