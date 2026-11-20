@@ -82,6 +82,14 @@
     <string name="ai_key_hide">إخفاء</string>
     <string name="ai_timeout">مهلة الطلب</string>
     <string name="ai_timeout_value">%1$d ثانية</string>
+    <string name="ai_cloud_switch_title">الترجمة السحابية (Gemini)</string>
+    <string name="ai_cloud_switch_subtitle">بتبعت نص الترجمة فقط، ومش بتشتغل غير بعد موافقتك الصريحة</string>
+    <string name="ai_cloud_dialog_title">الترجمة السحابية (Gemini)</string>
+    <string name="ai_cloud_dialog_body">قبل ما تفعّل الترجمة الأونلاين، خد بالك:\n\n• اللي بيتبعت لجوجل هو النص بس: سطور الترجمة المقروءة من الشاشة وسياق قصير من السطور اللي قبلها. مفيش صور أو سكرين شوت بتطلع من جهازك أبدًا — قراءة النص (OCR) بتتم على الجهاز نفسه.\n\n• النسخة المجانية من Gemini API ممكن تستخدم البيانات المبعوتة لتحسين منتجات جوجل، وده ممكن يشمل مراجعة بشرية. عشان كده متلقطش أي محتوى حساس أو شخصي.\n\n• الأفضل تقصر الالتقاط على تطبيق اللعبة ومنطقة الترجمة (الكابشن) بس من إعدادات OCR.\n\n• الوضع المحلي مجاني بالكامل وهو الافتراضي: لو السحابة مقفولة، مفيش أي نص بيخرج من جهازك.</string>
+    <string name="ai_cloud_dialog_accept">تفعيل السحابة</string>
+    <string name="ai_cloud_dialog_later">فضل محلي</string>
+    <string name="ai_cloud_status_on">السحابة مفعّلة: نص الترجمة بيتبعت لـ Gemini وقت اللعب.</string>
+    <string name="ai_cloud_status_off">السحابة مقفولة: كل الترجمة محلية على الجهاز، ومفيش أي نص بيطلع منه.</string>
     <string name="ai_quality_section">الجودة والسرعة</string>
     <string name="ai_cache">تخزين الترجمات مؤقتًا (Cache)</string>
     <string name="ai_cache_hint">نفس الجملة بتتجاب فورًا بدون طلب جديد</string>
