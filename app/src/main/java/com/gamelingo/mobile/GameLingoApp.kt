@@ -1,6 +1,7 @@
 package com.gamelingo.mobile
 
 import android.app.Application
+import com.gamelingo.mobile.core.timing.PipelineTiming
 import com.gamelingo.mobile.data.settings.SettingsRepository
 import com.gamelingo.mobile.translate.TranslationCoordinator
 import dagger.hilt.android.HiltAndroidApp
@@ -23,6 +24,8 @@ class GameLingoApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // Per-stage latency logging stays silent in release builds.
+        PipelineTiming.enabled = BuildConfig.DEBUG
         // Starts listening for OCR lines so translations begin with the first capture.
         translationCoordinator.start()
         // One-time move of a legacy plaintext API key into encrypted storage.
