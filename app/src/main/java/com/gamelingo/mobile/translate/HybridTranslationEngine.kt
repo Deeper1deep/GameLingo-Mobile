@@ -8,7 +8,11 @@ import javax.inject.Inject
 import javax.inject.Named
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.selects.select
 
 /**
  * Routes translation between the online Gemini engine and the on-device ML
@@ -57,6 +61,15 @@ class HybridTranslationEngine @Inject constructor(
     var maxRetries: Int = DEFAULT_MAX_RETRIES
     var initialBackoffMs: Long = DEFAULT_INITIAL_BACKOFF_MS
     var sleep: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) }
+
+    /**
+     * AUTO mode only: how long the online engine gets to answer alone before
+     * the on-device engine starts in parallel and the first success wins. A
+     * slow network must not hold a live subtitle hostage to the full request
+     * timeout, and the local engine only burns cycles when the online path
+     * is genuinely slow. Injectable for tests.
+     */
+    var autoSoftTimeoutMs: Long = DEFAULT_AUTO_SOFT_TIMEOUT_MS
 
     /** Engines warm up lazily on first use. */
     override suspend fun ensureReady() = Unit
@@ -108,17 +121,83 @@ class HybridTranslationEngine @Inject constructor(
         cloudAllowed: Boolean,
     ): TranslationResult {
         if (!cloudAllowed || inCooldown()) return localEngine.translate(request)
-        return try {
-            translateOnlineWithRetry(request)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (error: Exception) {
-            if (error is QuotaExceededException || error is ProviderUnavailableException) {
-                // Quota spent or provider down: skip the online engine for a
-                // while instead of retrying it on every subtitle line.
-                onlineCooldownUntil.set(now() + cooldownMs)
+
+        // Online starts immediately; the local engine joins after the soft
+        // timeout and the first success wins. Online failures before that
+        // point fall back exactly like before. Cancellation of the whole
+        // scope (a newer subtitle line) cancels both engines at once.
+        return coroutineScope {
+            val onlineDeferred = async {
+                try {
+                    Result.success(translateOnlineWithRetry(request))
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Result.failure(error)
+                }
             }
-            localEngine.translate(request)
+            val localDeferred = async {
+                delay(autoSoftTimeoutMs)
+                try {
+                    Result.success(localEngine.translate(request))
+                } catch (cancelled: CancellationException) {
+                    throw cancelled
+                } catch (error: Exception) {
+                    Result.failure(error)
+                }
+            }
+
+            val first = select<Result<TranslationResult>> {
+                onlineDeferred.onAwait { it }
+                localDeferred.onAwait { it }
+            }
+            first.fold(
+                onSuccess = { winner ->
+                    // An online failure recorded before the local win still
+                    // counts: quota spent or provider down cools the online
+                    // engine down even though the line was served on-device.
+                    val onlineFailure =
+                        if (onlineDeferred.isCompleted) {
+                            onlineDeferred.getCompleted().exceptionOrNull()
+                        } else {
+                            null
+                        }
+                    if (onlineFailure is QuotaExceededException ||
+                        onlineFailure is ProviderUnavailableException
+                    ) {
+                        onlineCooldownUntil.set(now() + cooldownMs)
+                    }
+                    // Loser stops: an online win cancels local while it is
+                    // still only waiting, so a fast online answer costs no
+                    // on-device work at all.
+                    onlineDeferred.cancel()
+                    localDeferred.cancel()
+                    winner
+                },
+                onFailure = {
+                    // The first finisher failed: wait for the other engine.
+                    val onlineResult = if (onlineDeferred.isCompleted) {
+                        onlineDeferred.getCompleted()
+                    } else {
+                        localDeferred.cancel()
+                        onlineDeferred.await()
+                    }
+                    onlineResult.fold(
+                        onSuccess = { it },
+                        onFailure = { onlineError ->
+                            if (onlineError is QuotaExceededException ||
+                                onlineError is ProviderUnavailableException
+                            ) {
+                                // Quota spent or provider down: skip the online
+                                // engine for a while instead of retrying it on
+                                // every subtitle line.
+                                onlineCooldownUntil.set(now() + cooldownMs)
+                            }
+                            localDeferred.await().getOrThrow()
+                        },
+                    )
+                },
+            )
         }
     }
 
@@ -164,5 +243,6 @@ class HybridTranslationEngine @Inject constructor(
         const val DEFAULT_MAX_RETRIES = 2
         const val DEFAULT_INITIAL_BACKOFF_MS = 500L
         const val BACKOFF_MULTIPLIER = 2L
+        const val DEFAULT_AUTO_SOFT_TIMEOUT_MS = 1_500L
     }
 }
