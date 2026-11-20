@@ -99,16 +99,31 @@ jobs:
           echo "sha256=$(sha256sum "$APK" | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
           echo "size=$(stat -c%s "$APK")" >> "$GITHUB_OUTPUT"
 
+      # The signed APK is ~108 MB, over GitHub's 100 MB per-file push limit, so it
+      # ships as a GitHub Release asset on GameLingo-Updates (assets allow 2 GB);
+      # only the tiny latest.json is committed to the repo.
+      - name: Create GitHub Release with the signed APK
+        env:
+          GH_TOKEN: ${{ secrets.UPDATES_REPO_TOKEN }}
+          VERSION_NAME: ${{ inputs.versionName }}
+          CHANGELOG_TEXT: ${{ inputs.changelog }}
+        run: |
+          APK_NAME="gamelingo-${VERSION_NAME}.apk"
+          cp app/build/outputs/apk/release/app-release.apk "$APK_NAME"
+          gh release create "v${VERSION_NAME}" \
+            --repo Deeper1deep/GameLingo-Updates \
+            --title "GameLingo Mobile v${VERSION_NAME}" \
+            --notes "$CHANGELOG_TEXT" \
+            "$APK_NAME"
+
       - name: Clone GameLingo-Updates
         run: |
           git clone "https://x-access-token:${{ secrets.UPDATES_REPO_TOKEN }}@github.com/Deeper1deep/GameLingo-Updates.git" updates-repo
 
-      - name: Publish APK and latest.json
+      - name: Publish latest.json
         run: |
           set -e
           APK_NAME="gamelingo-${{ inputs.versionName }}.apk"
-          mkdir -p updates-repo/apk
-          cp app/build/outputs/apk/release/app-release.apk "updates-repo/apk/${APK_NAME}"
           APK_SHA="${{ steps.apk.outputs.sha256 }}"
           APK_SIZE="${{ steps.apk.outputs.size }}"
           VERSION_CODE="${{ steps.version.outputs.code }}"
@@ -128,7 +143,7 @@ jobs:
               "minimumSupportedVersionCode": int(os.environ["MIN_CODE"]),
               "releaseDate": os.environ["RELEASE_DATE"],
               "changelog": os.environ["CHANGELOG_TEXT"],
-              "downloadUrl": "https://raw.githubusercontent.com/Deeper1deep/GameLingo-Updates/main/apk/" + os.environ["APK_NAME"],
+              "downloadUrl": "https://github.com/Deeper1deep/GameLingo-Updates/releases/download/v" + os.environ["VERSION_NAME"] + "/" + os.environ["APK_NAME"],
               "sha256": os.environ["APK_SHA"],
               "mandatoryUpdate": os.environ["MANDATORY"].lower() == "true",
               "fileSizeBytes": int(os.environ["APK_SIZE"]),
@@ -138,12 +153,12 @@ jobs:
               f.write("\n")
           PYJSON
 
-      - name: Commit and push to GameLingo-Updates
+      - name: Commit and push latest.json to GameLingo-Updates
         run: |
           cd updates-repo
           git config user.name "gamelingo-publish[bot]"
           git config user.email "gamelingo-publish[bot]@users.noreply.github.com"
-          git add "apk/gamelingo-${{ inputs.versionName }}.apk" latest.json
+          git add latest.json
           git commit -m "release: v${{ inputs.versionName }} (versionCode ${{ steps.version.outputs.code }})"
           git push origin main
 
