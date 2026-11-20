@@ -160,6 +160,64 @@ class HybridTranslationEngineTest {
     }
 
     @Test
+    fun `ONLINE retries a transient failure with exponential backoff`() = runTest {
+        val online = StubEngine("gemini-flash-lite", failure = ProviderUnavailableException("503"))
+        val (engine, _, _) = hybrid(AiMode.ONLINE, online = online)
+        val backoffs = mutableListOf<Long>()
+        engine.sleep = { backoffs += it }
+        val thrown = runCatching { engine.translate(TranslationRequest(text = "hi")) }
+            .exceptionOrNull()
+        // 1 initial attempt + 2 retries, then the failure surfaces.
+        assertTrue(thrown is ProviderUnavailableException)
+        assertEquals(3, online.calls)
+        assertEquals(listOf(500L, 1_000L), backoffs)
+    }
+
+    @Test
+    fun `ONLINE succeeds when a retry heals the transient failure`() = runTest {
+        val online = StubEngine("gemini-flash-lite", failure = ProviderUnavailableException("503"))
+        val (engine, _, _) = hybrid(AiMode.ONLINE, online = online)
+        engine.sleep = { }
+        var attempt = 0
+        val healed = object : TranslationEngine by online {
+            override suspend fun translate(request: TranslationRequest): TranslationResult {
+                attempt++
+                if (attempt == 1) throw ProviderUnavailableException("503")
+                return TranslationResult(translatedText = "ترجمة", engineId = engineId)
+            }
+        }
+        val settings = FakeSettingsRepository(
+            AppSettings(aiMode = AiMode.ONLINE, onlineApiKey = "key", cloudTranslationOptIn = true),
+        )
+        val engine2 = HybridTranslationEngine(healed, StubEngine("mlkit-ondevice"), settings)
+        engine2.sleep = { }
+        val result = engine2.translate(TranslationRequest(text = "hi"))
+        assertEquals("gemini-flash-lite", result.engineId)
+    }
+
+    @Test
+    fun `quota and key failures are never retried`() = runTest {
+        for (failure in listOf(QuotaExceededException("429"), ApiAuthException("403"))) {
+            val online = StubEngine("gemini-flash-lite", failure = failure)
+            val (engine, _, _) = hybrid(AiMode.ONLINE, online = online)
+            engine.sleep = { }
+            runCatching { engine.translate(TranslationRequest(text = "hi")) }
+            assertEquals(1, online.calls)
+        }
+    }
+
+    @Test
+    fun `AUTO falls back to local only after the retries are exhausted`() = runTest {
+        val online = StubEngine("gemini-flash-lite", failure = java.io.IOException("no internet"))
+        val (engine, _, local) = hybrid(AiMode.AUTO, online = online)
+        engine.sleep = { }
+        val result = engine.translate(TranslationRequest(text = "hi"))
+        assertEquals("mlkit-ondevice", result.engineId)
+        assertEquals(3, online.calls)
+        assertEquals(1, local.calls)
+    }
+
+    @Test
     fun `AUTO never swallows cancellation`() = runTest {
         val online = StubEngine("gemini-flash-lite", failure = CancellationException("stale"))
         val (engine, _, local) = hybrid(AiMode.AUTO, online = online)
