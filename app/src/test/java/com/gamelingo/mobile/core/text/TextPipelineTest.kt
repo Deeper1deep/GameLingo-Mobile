@@ -86,9 +86,24 @@ class TextStabilityTrackerTest {
     @Test
     fun `alternating flicker still stabilizes instead of never delivering`() {
         val tracker = TextStabilityTracker(requiredReadings = 2)
-        assertFalse(tracker.offer("Joel: It is nice but I-"))
-        assertTrue(tracker.offer("Joel: It is nlce but I-"))
-        assertTrue(tracker.offer("Joel: It is nice but I-"))
+        assertFalse(tracker.offer("It is nice"))
+        assertTrue(tracker.offer("It is nlce"))
+        assertTrue(tracker.offer("It is nice"))
+    }
+
+    @Test
+    fun `a full subtitle line is accepted on its first reading`() {
+        // Long lines are almost never OCR noise; waiting a whole extra
+        // capture interval was the biggest start-of-translation delay.
+        val tracker = TextStabilityTracker()
+        assertTrue(tracker.offer("Joel: We need to get out of here now"))
+    }
+
+    @Test
+    fun `a short fragment still needs two sightings`() {
+        val tracker = TextStabilityTracker()
+        assertFalse(tracker.offer("Run!"))
+        assertTrue(tracker.offer("Run!"))
     }
 
     @Test
