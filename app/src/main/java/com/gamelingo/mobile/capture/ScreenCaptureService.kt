@@ -7,7 +7,6 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
-import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.PixelFormat
 import android.hardware.display.DisplayManager
@@ -36,6 +35,7 @@ import com.gamelingo.mobile.overlay.OverlayService
 import com.google.mlkit.vision.common.InputImage
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
+import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -65,7 +65,11 @@ class ScreenCaptureService : Service() {
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var recognizerEngine: TextRecognizerEngine
 
-    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
+    // A stray async exception must never reach the default uncaught handler:
+    // that kills the whole app. The capture loop handles its own failures and
+    // reports persistent ones to the user; anything else is logged and dropped.
+    private val exceptionHandler = CoroutineExceptionHandler { _, _ -> }
+    private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + exceptionHandler)
 
     private var mediaProjection: MediaProjection? = null
     private var virtualDisplay: VirtualDisplay? = null
@@ -92,11 +96,11 @@ class ScreenCaptureService : Service() {
         return START_NOT_STICKY
     }
 
-    override fun onConfigurationChanged(newConfig: Configuration) {
-        super.onConfigurationChanged(newConfig)
-        // Rotation after the session started: rebuild the capture surface.
-        serviceScope.launch { rebuildDisplayIfNeeded() }
-    }
+    // No onConfigurationChanged hook: rebuilding the capture surface from the
+    // config-change callback races in-flight frame reads, and any exception
+    // thrown there crashes the process. The capture loop already re-checks the
+    // display geometry every tick and rebuilds under its own error handling,
+    // at most one capture interval after rotation.
 
     private fun startCapture(intent: Intent) {
         if (mediaProjection != null) return // already running
@@ -164,21 +168,31 @@ class ScreenCaptureService : Service() {
         val latest = latestGeometry()
         displayMutex.withLock {
             if (!DisplayGeometry.needsRebuild(currentGeometry, latest)) return
-            virtualDisplay?.release()
+            // Release the old surface before building the new one. A failed
+            // release must not skip or break the rebuild: the old objects are
+            // dropped regardless and replaced with fresh ones.
+            runCatching { virtualDisplay?.release() }
             virtualDisplay = null
-            imageReader?.close()
+            runCatching { imageReader?.close() }
             imageReader = null
+            // Transient 0x0 metrics during a configuration change are real on
+            // some devices; ImageReader rejects zero dimensions.
+            val width = latest.width.coerceAtLeast(1)
+            val height = latest.height.coerceAtLeast(1)
             val reader = ImageReader.newInstance(
-                latest.width,
-                latest.height,
+                width,
+                height,
                 PixelFormat.RGBA_8888,
                 2,
             )
             imageReader = reader
+            // If createVirtualDisplay throws, the loop's failure tracking
+            // retries on the next tick (the half-built reader is closed above)
+            // and surfaces a session error if the failure persists.
             virtualDisplay = projection.createVirtualDisplay(
                 "gamelingo-capture",
-                latest.width,
-                latest.height,
+                width,
+                height,
                 resources.displayMetrics.densityDpi,
                 DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
                 reader.surface,
