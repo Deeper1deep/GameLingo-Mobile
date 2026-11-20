@@ -47,6 +47,17 @@ class HybridTranslationEngine @Inject constructor(
     /** Injectable for tests. */
     var cooldownMs: Long = DEFAULT_COOLDOWN_MS
 
+    /**
+     * Bounded retry for transient online failures (network drops, 5xx): a
+     * short burst of subtitles must not lose lines to one flaky moment, and
+     * a dead provider must not be hammered either. Quota (429) and key (401/
+     * 403) failures never retry: waiting cannot fix them. Injectable for
+     * tests.
+     */
+    var maxRetries: Int = DEFAULT_MAX_RETRIES
+    var initialBackoffMs: Long = DEFAULT_INITIAL_BACKOFF_MS
+    var sleep: suspend (Long) -> Unit = { kotlinx.coroutines.delay(it) }
+
     /** Engines warm up lazily on first use. */
     override suspend fun ensureReady() = Unit
 
@@ -58,7 +69,7 @@ class HybridTranslationEngine @Inject constructor(
             AiMode.LOCAL -> localEngine.translate(request)
             AiMode.ONLINE ->
                 if (cloudAllowed) {
-                    onlineEngine.translate(request)
+                    translateOnlineWithRetry(request)
                 } else {
                     throw OnlineNotConfiguredException()
                 }
@@ -98,7 +109,7 @@ class HybridTranslationEngine @Inject constructor(
     ): TranslationResult {
         if (!cloudAllowed || inCooldown()) return localEngine.translate(request)
         return try {
-            onlineEngine.translate(request)
+            translateOnlineWithRetry(request)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (error: Exception) {
@@ -111,6 +122,37 @@ class HybridTranslationEngine @Inject constructor(
         }
     }
 
+    /**
+     * Runs the online engine with bounded exponential backoff for transient
+     * failures only. Cancellation always propagates untouched, so a newer
+     * subtitle line still wins instantly and is never misreported as a
+     * network error.
+     */
+    private suspend fun translateOnlineWithRetry(request: TranslationRequest): TranslationResult {
+        var attempt = 0
+        var backoffMs = initialBackoffMs
+        while (true) {
+            try {
+                return onlineEngine.translate(request)
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (!isTransient(error) || attempt >= maxRetries) throw error
+                attempt++
+                sleep(backoffMs)
+                backoffMs *= BACKOFF_MULTIPLIER
+            }
+        }
+    }
+
+    /** Quota and key errors are final; network and 5xx errors can heal. */
+    private fun isTransient(error: Exception): Boolean = when (error) {
+        is QuotaExceededException, is ApiAuthException, is OnlineNotConfiguredException -> false
+        is ProviderUnavailableException -> true
+        is java.io.IOException -> true
+        else -> false
+    }
+
     override fun close() {
         onlineEngine.close()
         localEngine.close()
@@ -119,5 +161,8 @@ class HybridTranslationEngine @Inject constructor(
     companion object {
         const val ENGINE_ID = "hybrid"
         const val DEFAULT_COOLDOWN_MS = 60_000L
+        const val DEFAULT_MAX_RETRIES = 2
+        const val DEFAULT_INITIAL_BACKOFF_MS = 500L
+        const val BACKOFF_MULTIPLIER = 2L
     }
 }
