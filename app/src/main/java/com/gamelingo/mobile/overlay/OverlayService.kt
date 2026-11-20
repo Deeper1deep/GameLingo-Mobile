@@ -19,6 +19,7 @@ import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.gamelingo.mobile.core.overlay.OverlayLayout
 import com.gamelingo.mobile.core.session.SessionError
 import com.gamelingo.mobile.core.session.SessionState
+import com.gamelingo.mobile.core.timing.PipelineTiming
 import com.gamelingo.mobile.core.session.TranslationSessionBus
 import com.gamelingo.mobile.data.settings.AppSettings
 import com.gamelingo.mobile.data.settings.OverlayPosition
@@ -216,6 +217,7 @@ class OverlayService : Service() {
                         original = line.original,
                         translated = line.translated,
                     )
+                    PipelineTiming.endToEnd("overlay_displayed", line.capturedAtMillis)
                 }
             }
         }
