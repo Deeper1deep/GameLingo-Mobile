@@ -31,6 +31,9 @@ class SettingsViewModel @Inject constructor(
     fun setRestrictToTextRegion(restrict: Boolean) =
         viewModelScope.launch { repository.setRestrictToTextRegion(restrict) }
 
+    fun setSmartTextDetection(enabled: Boolean) =
+        viewModelScope.launch { repository.setSmartTextDetection(enabled) }
+
     fun setRegionPreset(preset: TextRegionPreset) =
         viewModelScope.launch { repository.setRegionPreset(preset) }
 
