@@ -48,6 +48,7 @@ class TranslationCoordinator @Inject constructor(
     private val cache: TranslationCache,
     private val modelManager: com.gamelingo.mobile.translate.local.LocalModelManager,
     private val dictionaryHolder: com.gamelingo.mobile.translate.local.EgyptianDictionaryHolder,
+    private val understandingHolder: com.gamelingo.mobile.core.understanding.EnglishUnderstandingHolder,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -116,6 +117,7 @@ class TranslationCoordinator @Inject constructor(
             // input; key on both so an update never serves pre-update entries.
             modelVersion = installedVersionFor(plannedEngine),
             dictionaryVersion = dictionaryHolder.get().version,
+            understandingVersion = understandingHolder.get().version,
         )
 
         if (settings.cacheEnabled) {
@@ -130,7 +132,7 @@ class TranslationCoordinator @Inject constructor(
                     ),
                     capturedAtMillis = request.capturedAtMillis,
                 )
-                contextMemory.add(request.text)
+                contextMemory.add(request.text, request.capturedAtMillis)
                 return ProcessorOutcome(
                     engineId = hit.engineId,
                     usedLocalFallback = isLocalFallback(settings.aiMode, hit.engineId),
@@ -152,13 +154,31 @@ class TranslationCoordinator @Inject constructor(
                         // vice versa.
                         glossary = dictionaryHolder.get().glossaryTerms(request.text, arabicMode),
                         arabicMode = arabicMode,
+                        // Non-literal expressions as meaning hints for
+                        // prompt-capable engines; empty for plain lines.
+                        understandingHints = understandingHolder.get()
+                            .promptHints(request.text, arabicMode),
                     ),
                 )
+            }
+            // Post-engine quality gate: pure string heuristics, no model
+            // calls, no retranslation loop. Locally correctable issues (a
+            // lost question mark) are fixed and tagged "+qc"; anything else
+            // publishes once exactly as the engine produced it.
+            val inspection = com.gamelingo.mobile.core.quality.TranslationQualityGate
+                .inspect(request.text, result.translatedText)
+            val finalResult = if (inspection.corrected) {
+                result.copy(
+                    translatedText = inspection.text,
+                    engineId = "${result.engineId}+qc",
+                )
+            } else {
+                result
             }
             PipelineTiming.mark(
                 "engine",
                 (System.nanoTime() - engineStartNanos) / NANOS_PER_MS,
-                result.engineId,
+                finalResult.engineId,
             )
             PipelineTiming.endToEnd("translated", request.capturedAtMillis)
             if (settings.cacheEnabled) {
@@ -166,8 +186,8 @@ class TranslationCoordinator @Inject constructor(
                     request.text,
                     cacheContext,
                     CachedTranslation(
-                        translatedText = result.translatedText,
-                        engineId = result.engineId,
+                        translatedText = finalResult.translatedText,
+                        engineId = finalResult.engineId,
                     ),
                 )
             }
@@ -176,13 +196,13 @@ class TranslationCoordinator @Inject constructor(
             // over the new mode. The cache entry is still stored (keyed by
             // mode, so it only ever serves the mode it belongs to).
             if (isPublishableNow(generation, arabicMode)) {
-                publish(request.text, result, request.capturedAtMillis)
-                contextMemory.add(request.text)
-                publishEngineNotice(settings.aiMode, result.engineId)
+                publish(request.text, finalResult, request.capturedAtMillis)
+                contextMemory.add(request.text, request.capturedAtMillis)
+                publishEngineNotice(settings.aiMode, finalResult.engineId)
             }
             return ProcessorOutcome(
-                engineId = result.engineId,
-                usedLocalFallback = isLocalFallback(settings.aiMode, result.engineId),
+                engineId = finalResult.engineId,
+                usedLocalFallback = isLocalFallback(settings.aiMode, finalResult.engineId),
             )
         } catch (timeout: TimeoutCancellationException) {
             // The provider hit the user's timeout: a visible failure. The
@@ -272,6 +292,36 @@ class TranslationCoordinator @Inject constructor(
                 ),
             )
         }
+    }
+
+    /**
+     * Bundled dictionary terms found in this line, overlaid with the user's
+     * own pinned terms: a user term WINS over the bundled rendering of the
+     * same source term, because a name the user pinned is a promise.
+     */
+    private fun mergedGlossary(
+        text: String,
+        mode: com.gamelingo.mobile.data.settings.ArabicTranslationMode,
+        settings: com.gamelingo.mobile.data.settings.AppSettings,
+    ): Map<String, String> {
+        val bundled = dictionaryHolder.get().glossaryTerms(text, mode)
+        if (settings.userGlossaryTerms.isEmpty()) return bundled
+        val dictionary = dictionaryHolder.get()
+        val normalized = com.gamelingo.mobile.translate.local.EgyptianDictionary
+            .normalizeEn(text)
+        val merged = LinkedHashMap(bundled)
+        for (term in settings.userGlossaryTerms) {
+            val key = term.en.trim()
+            if (key.isEmpty()) continue
+            if (dictionary.containsEnPhrase(
+                    normalized,
+                    com.gamelingo.mobile.translate.local.EgyptianDictionary.normalizeEn(key),
+                )
+            ) {
+                merged[key] = term.ar.trim()
+            }
+        }
+        return merged
     }
 
     internal companion object {
