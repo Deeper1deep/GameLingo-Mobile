@@ -25,10 +25,17 @@ data class GeminiGenerationConfig(
 )
 
 @Serializable
+data class GeminiSafetySetting(
+    val category: String,
+    val threshold: String,
+)
+
+@Serializable
 data class GeminiRequest(
     val systemInstruction: GeminiContent? = null,
     val contents: List<GeminiContent>,
     val generationConfig: GeminiGenerationConfig? = null,
+    val safetySettings: List<GeminiSafetySetting>? = null,
 )
 
 @Serializable
