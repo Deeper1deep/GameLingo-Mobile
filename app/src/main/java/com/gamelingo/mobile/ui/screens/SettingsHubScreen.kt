@@ -10,6 +10,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Create
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Info
@@ -181,6 +182,12 @@ fun SettingsHubScreen(
             title = stringResource(R.string.nav_update_center),
             subtitle = stringResource(R.string.settings_updates_sub, BuildConfig.VERSION_NAME),
             onClick = { onNavigate(GameLingoRoutes.UPDATES) },
+        )
+        GlNavRow(
+            icon = Icons.Filled.Build,
+            title = stringResource(R.string.nav_diagnostics),
+            subtitle = stringResource(R.string.settings_diagnostics_sub),
+            onClick = { onNavigate(GameLingoRoutes.DIAGNOSTICS) },
         )
         GlNavRow(
             icon = Icons.Filled.Info,
