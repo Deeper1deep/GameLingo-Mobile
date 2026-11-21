@@ -1,7 +1,9 @@
 package com.gamelingo.mobile.ui.screens
 
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -15,6 +17,7 @@ import com.gamelingo.mobile.ui.components.SettingsColumn
 import com.gamelingo.mobile.ui.components.SliderCard
 import com.gamelingo.mobile.ui.components.SwitchCard
 import com.gamelingo.mobile.ui.navigation.SettingsViewModel
+import com.gamelingo.mobile.ui.theme.GlSpacing
 
 @Composable
 fun TranslationSettingsScreen(
@@ -32,11 +35,39 @@ fun TranslationSettingsScreen(
                 label = stringResource(R.string.tr_target),
                 value = stringResource(R.string.tr_target_value),
             )
-            InfoRow(
-                label = stringResource(R.string.translation_target_dialect),
-                value = stringResource(R.string.translation_dialect_egyptian),
-            )
             HintText(stringResource(R.string.tr_fixed_hint))
+        }
+
+        // Arabic style: one persisted choice, applied to every engine and
+        // fallback, effective on the next line even mid-session.
+        SectionHeader(stringResource(R.string.arabic_style_title))
+        GlCard {
+            com.gamelingo.mobile.ui.components.SegmentedSelector(
+                options = com.gamelingo.mobile.data.settings.ArabicTranslationMode.entries,
+                selected = settings.arabicTranslationMode,
+                optionLabel = { mode ->
+                    stringResource(
+                        when (mode) {
+                            com.gamelingo.mobile.data.settings.ArabicTranslationMode.MODERN_STANDARD_ARABIC ->
+                                R.string.arabic_style_msa_short
+                            com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC ->
+                                R.string.arabic_style_egy_short
+                        },
+                    )
+                },
+                onSelect = viewModel::setArabicTranslationMode,
+            )
+            HintText(
+                text = stringResource(
+                    when (settings.arabicTranslationMode) {
+                        com.gamelingo.mobile.data.settings.ArabicTranslationMode.MODERN_STANDARD_ARABIC ->
+                            R.string.arabic_style_msa_desc
+                        com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC ->
+                            R.string.arabic_style_egy_desc
+                    },
+                ),
+                modifier = Modifier.padding(top = GlSpacing.md),
+            )
         }
 
         SectionHeader(stringResource(R.string.translation_style_title))

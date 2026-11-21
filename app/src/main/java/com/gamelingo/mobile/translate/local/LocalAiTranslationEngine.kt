@@ -93,9 +93,13 @@ class LocalAiTranslationEngine @Inject constructor(
 
     override suspend fun translate(request: TranslationRequest): TranslationResult {
         ensureReady()
-        // Stock lines the dictionary owns outright (rapid commands, interjections).
-        dictionary.get().overrideFor(request.text)?.let { override ->
-            return TranslationResult(translatedText = override, engineId = "$ENGINE_ID+dict")
+        // Stock lines the dictionary owns outright (rapid commands,
+        // interjections). These are Egyptian renderings: Egyptian mode only,
+        // never leaked into an MSA answer.
+        if (request.arabicMode == com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC) {
+            dictionary.get().overrideFor(request.text)?.let { override ->
+                return TranslationResult(translatedText = override, engineId = "$ENGINE_ID+dict")
+            }
         }
         val localTokenizer = tokenizer ?: throw ModelNotInstalledException()
         val localRunner = runner ?: throw ModelNotInstalledException()
@@ -125,12 +129,21 @@ class LocalAiTranslationEngine @Inject constructor(
                 if (msa.isBlank()) {
                     throw EmptyModelOutputException()
                 }
-                val egyptian = dictionary.get().toEgyptian(request.text, msa)
+                // Marian speaks MSA natively. Egyptian mode gets the
+                // dictionary MSA->Egyptian pass; MSA mode keeps the model's
+                // own output untouched (no Egyptian term can leak in, and
+                // the brief forbids claiming a prompt-less model changed
+                // register - the dictionary pass IS the Egyptian layer).
+                val out = if (request.arabicMode == com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC) {
+                    dictionary.get().toEgyptian(request.text, msa)
+                } else {
+                    msa
+                }
                 // Honest engine id, same convention as the ML Kit fallback:
                 // when the dictionary pass rewrote the wording the tag says
                 // so instead of claiming pure model output.
-                val tag = if (egyptian == msa) ENGINE_ID else "$ENGINE_ID+dict"
-                TranslationResult(translatedText = egyptian, engineId = tag)
+                val tag = if (out == msa) ENGINE_ID else "$ENGINE_ID+dict"
+                TranslationResult(translatedText = out, engineId = tag)
             }
         }
     }
@@ -181,6 +194,24 @@ class EgyptianDictionaryHolder @Inject constructor(
     fun update(jsonText: String) {
         val candidate = EgyptianDictionary.load(jsonText)
         if (candidate.version > (dictionaryOverride ?: active).version) active = candidate
+    }
+
+    /**
+     * Verified local dictionary update: the payload must parse, its SHA-256
+     * must equal [expectedSha256Hex], and its version must be newer than the
+     * active one. Returns true only when the swap happened; any mismatch is
+     * a silent no-op (the caller reports the failed check, the old
+     * dictionary keeps serving).
+     */
+    fun updateVerified(jsonText: String, expectedSha256Hex: String): Boolean {
+        val digest = java.security.MessageDigest.getInstance("SHA-256")
+            .digest(jsonText.toByteArray(Charsets.UTF_8))
+        val actual = digest.joinToString("") { "%02x".format(it) }
+        if (!actual.equals(expectedSha256Hex.trim().lowercase(), ignoreCase = false)) return false
+        val candidate = runCatching { EgyptianDictionary.load(jsonText) }.getOrNull() ?: return false
+        if (candidate.version <= (dictionaryOverride ?: active).version) return false
+        active = candidate
+        return true
     }
 
     private fun loadBundled(context: android.content.Context): EgyptianDictionary {

@@ -82,6 +82,10 @@ class FakeSettingsRepository(
         state.value = state.value.copy(gemmaHdOptIn = enabled)
     }
 
+    override suspend fun setArabicTranslationMode(mode: com.gamelingo.mobile.data.settings.ArabicTranslationMode) {
+        state.value = state.value.copy(arabicTranslationMode = mode)
+    }
+
     override suspend fun setRequestTimeoutSec(seconds: Int) {
         state.value = state.value.copy(requestTimeoutSec = seconds)
     }

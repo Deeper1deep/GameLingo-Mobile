@@ -1,5 +1,20 @@
 package com.gamelingo.mobile.data.settings
 
+/**
+ * Arabic style every translation targets. One setting, read once per
+ * request by the coordinator, honored by every engine and fallback:
+ * prompt-capable engines get a mode-appropriate prompt, on-device engines
+ * get the matching post-processing, and the cache keys on it so the two
+ * modes never share an entry.
+ */
+enum class ArabicTranslationMode {
+    /** Modern Standard Arabic: natural, correct, clear; no Egyptian colloquialisms. */
+    MODERN_STANDARD_ARABIC,
+
+    /** Natural spoken Egyptian (the project's original behavior; the default). */
+    EGYPTIAN_ARABIC,
+}
+
 /** Engine selection for the hybrid translator. */
 enum class AiMode {
     /** Try the online provider first, fall back to the local engine. */

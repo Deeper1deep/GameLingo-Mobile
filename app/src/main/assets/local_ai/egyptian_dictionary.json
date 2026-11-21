@@ -1,169 +1,886 @@
 {
-  "version": 1,
-  "notes": "GameLingo Egyptian game dictionary v1. line_overrides fire on normalized whole-line matches. terms feed glossary consistency and term spotting. msa_map rewrites known MSA renderings to Egyptian with Arabic word boundaries. profanity_upgrades fire ONLY when the English source actually contains the marker (never invent profanity).",
+  "version": 2,
+  "notes": "GameLingo Egyptian game dictionary v1. line_overrides fire on normalized whole-line matches. terms feed glossary consistency and term spotting. msa_map rewrites known MSA renderings to Egyptian with Arabic word boundaries. profanity_upgrades fire ONLY when the English source actually contains the marker (never invent profanity). v2: layered glossaries for dual Arabic modes (common/msa/egyptian/gaming/names); legacy terms act as the shared Egyptian-mode layer.",
   "line_overrides": [
-    {"en": "holy shit!", "ar": "يا نهار ابيض!"},
-    {"en": "holy shit", "ar": "يا نهار ابيض"},
-    {"en": "go, go, go!", "ar": "اجري اجري اجري!"},
-    {"en": "get down!", "ar": "انبطح!"},
-    {"en": "get down", "ar": "انبطح"},
-    {"en": "fuck you!", "ar": "انيك!"},
-    {"en": "fuck you", "ar": "انيك"},
-    {"en": "fuck you, asshole!", "ar": "انيك يا ابن المتناكة!"},
-    {"en": "shut up!", "ar": "اخرس!"},
-    {"en": "shut the fuck up!", "ar": "اخرس خالص!"},
-    {"en": "damn it!", "ar": "خرا!"},
-    {"en": "damn it", "ar": "خرا"},
-    {"en": "what the fuck?", "ar": "إيه الخرا ده؟"},
-    {"en": "what the hell?", "ar": "إيه ده بس؟"},
-    {"en": "let's go!", "ar": "يلا بينا!"},
-    {"en": "let's go", "ar": "يلا بينا"},
-    {"en": "come on!", "ar": "يلا يا عم!"},
-    {"en": "oh shit", "ar": "يا خرا"},
-    {"en": "oh shit!", "ar": "يا خرا!"},
-    {"en": "son of a bitch!", "ar": "يا ابن الوسخة!"},
-    {"en": "you good?", "ar": "كويس؟"},
-    {"en": "what's up?", "ar": "عامل إيه؟"},
-    {"en": "i'm in", "ar": "أنا معاك"},
-    {"en": "i'm out", "ar": "أنا خارج"},
-    {"en": "run!", "ar": "اجري!"},
-    {"en": "move!", "ar": "اتحرك!"},
-    {"en": "reload!", "ar": "عدّي الخزنة!"},
-    {"en": "behind you!", "ar": "وراك!"},
-    {"en": "watch out!", "ar": "خد بالك!"},
-    {"en": "get in!", "ar": "اركب!"},
-    {"en": "get out!", "ar": "انزل!"},
-    {"en": "drive!", "ar": "اسوق!"},
-    {"en": "now!", "ar": "دلوقتي!"}
+    {
+      "en": "holy shit!",
+      "ar": "يا نهار ابيض!"
+    },
+    {
+      "en": "holy shit",
+      "ar": "يا نهار ابيض"
+    },
+    {
+      "en": "go, go, go!",
+      "ar": "اجري اجري اجري!"
+    },
+    {
+      "en": "get down!",
+      "ar": "انبطح!"
+    },
+    {
+      "en": "get down",
+      "ar": "انبطح"
+    },
+    {
+      "en": "fuck you!",
+      "ar": "انيك!"
+    },
+    {
+      "en": "fuck you",
+      "ar": "انيك"
+    },
+    {
+      "en": "fuck you, asshole!",
+      "ar": "انيك يا ابن المتناكة!"
+    },
+    {
+      "en": "shut up!",
+      "ar": "اخرس!"
+    },
+    {
+      "en": "shut the fuck up!",
+      "ar": "اخرس خالص!"
+    },
+    {
+      "en": "damn it!",
+      "ar": "خرا!"
+    },
+    {
+      "en": "damn it",
+      "ar": "خرا"
+    },
+    {
+      "en": "what the fuck?",
+      "ar": "إيه الخرا ده؟"
+    },
+    {
+      "en": "what the hell?",
+      "ar": "إيه ده بس؟"
+    },
+    {
+      "en": "let's go!",
+      "ar": "يلا بينا!"
+    },
+    {
+      "en": "let's go",
+      "ar": "يلا بينا"
+    },
+    {
+      "en": "come on!",
+      "ar": "يلا يا عم!"
+    },
+    {
+      "en": "oh shit",
+      "ar": "يا خرا"
+    },
+    {
+      "en": "oh shit!",
+      "ar": "يا خرا!"
+    },
+    {
+      "en": "son of a bitch!",
+      "ar": "يا ابن الوسخة!"
+    },
+    {
+      "en": "you good?",
+      "ar": "كويس؟"
+    },
+    {
+      "en": "what's up?",
+      "ar": "عامل إيه؟"
+    },
+    {
+      "en": "i'm in",
+      "ar": "أنا معاك"
+    },
+    {
+      "en": "i'm out",
+      "ar": "أنا خارج"
+    },
+    {
+      "en": "run!",
+      "ar": "اجري!"
+    },
+    {
+      "en": "move!",
+      "ar": "اتحرك!"
+    },
+    {
+      "en": "reload!",
+      "ar": "عدّي الخزنة!"
+    },
+    {
+      "en": "behind you!",
+      "ar": "وراك!"
+    },
+    {
+      "en": "watch out!",
+      "ar": "خد بالك!"
+    },
+    {
+      "en": "get in!",
+      "ar": "اركب!"
+    },
+    {
+      "en": "get out!",
+      "ar": "انزل!"
+    },
+    {
+      "en": "drive!",
+      "ar": "اسوق!"
+    },
+    {
+      "en": "now!",
+      "ar": "دلوقتي!"
+    }
   ],
   "terms": [
-    {"en": "cops", "ar": "البوليس", "tags": ["gta"]},
-    {"en": "the cops", "ar": "البوليس", "tags": ["gta"]},
-    {"en": "police", "ar": "البوليس", "tags": ["gta"]},
-    {"en": "feds", "ar": "الفيدراليين", "tags": ["gta"]},
-    {"en": "wanted level", "ar": "مستوى المطاردة", "tags": ["gta"]},
-    {"en": "safehouse", "ar": "المخبأ", "tags": ["gta"]},
-    {"en": "heist", "ar": "العملية", "tags": ["gta"]},
-    {"en": "crew", "ar": "الكرو", "tags": ["gta"]},
-    {"en": "ride", "ar": "عربية", "tags": ["gta"]},
-    {"en": "whip", "ar": "عربية", "tags": ["slang"]},
-    {"en": "bike", "ar": "موتوسيكل", "tags": ["gta"]},
-    {"en": "chopper", "ar": "هليكوبتر", "tags": ["gta"]},
-    {"en": "heat", "ar": "البوليس", "tags": ["slang", "gta"], "context": "police pressure"},
-    {"en": "crib", "ar": "البيت", "tags": ["slang"]},
-    {"en": "the spot", "ar": "المكان", "tags": ["slang"]},
-    {"en": "cash", "ar": "الفلوس", "tags": ["slang"]},
-    {"en": "money", "ar": "الفلوس", "tags": ["slang"]},
-    {"en": "grand", "ar": "ألف", "tags": ["slang", "money"]},
-    {"en": "gun", "ar": "مسدس", "tags": ["weapon"]},
-    {"en": "ak", "ar": "كلاشن", "tags": ["weapon"]},
-    {"en": "ak-47", "ar": "كلاشنكوف", "tags": ["weapon"]},
-    {"en": "trunk", "ar": "الشنطة", "tags": ["vehicle"]},
-    {"en": "alley", "ar": "الزقاق", "tags": ["place"]},
-    {"en": "docks", "ar": "المينا", "tags": ["place"]},
-    {"en": "warehouse", "ar": "المخزن", "tags": ["place"]},
-    {"en": "job", "ar": "الشغلانة", "tags": ["slang"]},
-    {"en": "mission", "ar": "المهمة", "tags": ["gta"]},
-    {"en": "deal", "ar": "الاتفاق", "tags": ["slang"]},
-    {"en": "cargo", "ar": "البضاعة", "tags": ["gta"]},
-    {"en": "snake", "ar": "أفاعي", "tags": ["insult"]},
-    {"en": "rat", "ar": "فأر", "tags": ["insult"]},
-    {"en": "coward", "ar": "جبان", "tags": ["insult"]},
-    {"en": "asshole", "ar": "ابن المتناكة", "tags": ["profanity_strong"]},
-    {"en": "bastard", "ar": "ابن الوسخة", "tags": ["profanity_strong"]},
-    {"en": "son of a bitch", "ar": "ابن الوسخة", "tags": ["profanity_strong"]},
-    {"en": "motherfucker", "ar": "ابن المتناكة", "tags": ["profanity_strong"]},
-    {"en": "dude", "ar": "معلم", "tags": ["slang"]},
-    {"en": "bro", "ar": "عم", "tags": ["slang"]},
-    {"en": "man", "ar": "يا راجل", "tags": ["slang"], "context": "address"},
-    {"en": "buddy", "ar": "صاحبي", "tags": ["slang"]},
-    {"en": "homie", "ar": "صاحبي", "tags": ["slang"]},
-    {"en": "bounce", "ar": "نصرف", "tags": ["slang", "idiom"]},
-    {"en": "floor it", "ar": "دوس بنزين", "tags": ["idiom", "gta"]},
-    {"en": "piece of cake", "ar": "سهلة جدًا", "tags": ["idiom"]},
-    {"en": "sell me out", "ar": "تبيعني", "tags": ["idiom"]},
-    {"en": "set me up", "ar": "بيعتني", "tags": ["idiom"]},
-    {"en": "double-cross", "ar": "يغدر بـ", "tags": ["idiom"]},
-    {"en": "outsmart", "ar": "يضحك على", "tags": ["idiom"]},
-    {"en": "go sideways", "ar": "تخرب", "tags": ["idiom"]},
-    {"en": "easy money", "ar": "فلوس سهلة", "tags": ["idiom"]},
-    {"en": "dead man", "ar": "راجل ميت", "tags": ["idiom", "threat"]},
-    {"en": "counting bodies", "ar": "أعد الجثث", "tags": ["idiom", "threat"]},
-    {"en": "outrun", "ar": "تسبق", "tags": ["idiom", "gta"]},
-    {"en": "gonna", "ar": "هـ", "tags": ["abbreviation"], "context": "future prefix"},
-    {"en": "wanna", "ar": "عايز", "tags": ["abbreviation"]},
-    {"en": "gotta", "ar": "لازم", "tags": ["abbreviation"]},
-    {"en": "aight", "ar": "تمام", "tags": ["slang"]},
-    {"en": "bet", "ar": "اتفقنا", "tags": ["slang"]},
-    {"en": "yo", "ar": "يا", "tags": ["slang"]},
-    {"en": "los santos", "ar": "لوس سانتوس", "tags": ["name", "gta"]},
-    {"en": "michael", "ar": "مايكل", "tags": ["name"]},
-    {"en": "trevor", "ar": "تريفور", "tags": ["name"]},
-    {"en": "fib", "ar": "الـ FIB", "tags": ["name", "gta"]}
+    {
+      "en": "cops",
+      "ar": "البوليس",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "the cops",
+      "ar": "البوليس",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "police",
+      "ar": "البوليس",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "feds",
+      "ar": "الفيدراليين",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "wanted level",
+      "ar": "مستوى المطاردة",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "safehouse",
+      "ar": "المخبأ",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "heist",
+      "ar": "العملية",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "crew",
+      "ar": "الكرو",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "ride",
+      "ar": "عربية",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "whip",
+      "ar": "عربية",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "bike",
+      "ar": "موتوسيكل",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "chopper",
+      "ar": "هليكوبتر",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "heat",
+      "ar": "البوليس",
+      "tags": [
+        "slang",
+        "gta"
+      ],
+      "context": "police pressure"
+    },
+    {
+      "en": "crib",
+      "ar": "البيت",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "the spot",
+      "ar": "المكان",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "cash",
+      "ar": "الفلوس",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "money",
+      "ar": "الفلوس",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "grand",
+      "ar": "ألف",
+      "tags": [
+        "slang",
+        "money"
+      ]
+    },
+    {
+      "en": "gun",
+      "ar": "مسدس",
+      "tags": [
+        "weapon"
+      ]
+    },
+    {
+      "en": "ak",
+      "ar": "كلاشن",
+      "tags": [
+        "weapon"
+      ]
+    },
+    {
+      "en": "ak-47",
+      "ar": "كلاشنكوف",
+      "tags": [
+        "weapon"
+      ]
+    },
+    {
+      "en": "trunk",
+      "ar": "الشنطة",
+      "tags": [
+        "vehicle"
+      ]
+    },
+    {
+      "en": "alley",
+      "ar": "الزقاق",
+      "tags": [
+        "place"
+      ]
+    },
+    {
+      "en": "docks",
+      "ar": "المينا",
+      "tags": [
+        "place"
+      ]
+    },
+    {
+      "en": "warehouse",
+      "ar": "المخزن",
+      "tags": [
+        "place"
+      ]
+    },
+    {
+      "en": "job",
+      "ar": "الشغلانة",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "mission",
+      "ar": "المهمة",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "deal",
+      "ar": "الاتفاق",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "cargo",
+      "ar": "البضاعة",
+      "tags": [
+        "gta"
+      ]
+    },
+    {
+      "en": "snake",
+      "ar": "أفاعي",
+      "tags": [
+        "insult"
+      ]
+    },
+    {
+      "en": "rat",
+      "ar": "فأر",
+      "tags": [
+        "insult"
+      ]
+    },
+    {
+      "en": "coward",
+      "ar": "جبان",
+      "tags": [
+        "insult"
+      ]
+    },
+    {
+      "en": "asshole",
+      "ar": "ابن المتناكة",
+      "tags": [
+        "profanity_strong"
+      ]
+    },
+    {
+      "en": "bastard",
+      "ar": "ابن الوسخة",
+      "tags": [
+        "profanity_strong"
+      ]
+    },
+    {
+      "en": "son of a bitch",
+      "ar": "ابن الوسخة",
+      "tags": [
+        "profanity_strong"
+      ]
+    },
+    {
+      "en": "motherfucker",
+      "ar": "ابن المتناكة",
+      "tags": [
+        "profanity_strong"
+      ]
+    },
+    {
+      "en": "dude",
+      "ar": "معلم",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "bro",
+      "ar": "عم",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "man",
+      "ar": "يا راجل",
+      "tags": [
+        "slang"
+      ],
+      "context": "address"
+    },
+    {
+      "en": "buddy",
+      "ar": "صاحبي",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "homie",
+      "ar": "صاحبي",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "bounce",
+      "ar": "نصرف",
+      "tags": [
+        "slang",
+        "idiom"
+      ]
+    },
+    {
+      "en": "floor it",
+      "ar": "دوس بنزين",
+      "tags": [
+        "idiom",
+        "gta"
+      ]
+    },
+    {
+      "en": "piece of cake",
+      "ar": "سهلة جدًا",
+      "tags": [
+        "idiom"
+      ]
+    },
+    {
+      "en": "sell me out",
+      "ar": "تبيعني",
+      "tags": [
+        "idiom"
+      ]
+    },
+    {
+      "en": "set me up",
+      "ar": "بيعتني",
+      "tags": [
+        "idiom"
+      ]
+    },
+    {
+      "en": "double-cross",
+      "ar": "يغدر بـ",
+      "tags": [
+        "idiom"
+      ]
+    },
+    {
+      "en": "outsmart",
+      "ar": "يضحك على",
+      "tags": [
+        "idiom"
+      ]
+    },
+    {
+      "en": "go sideways",
+      "ar": "تخرب",
+      "tags": [
+        "idiom"
+      ]
+    },
+    {
+      "en": "easy money",
+      "ar": "فلوس سهلة",
+      "tags": [
+        "idiom"
+      ]
+    },
+    {
+      "en": "dead man",
+      "ar": "راجل ميت",
+      "tags": [
+        "idiom",
+        "threat"
+      ]
+    },
+    {
+      "en": "counting bodies",
+      "ar": "أعد الجثث",
+      "tags": [
+        "idiom",
+        "threat"
+      ]
+    },
+    {
+      "en": "outrun",
+      "ar": "تسبق",
+      "tags": [
+        "idiom",
+        "gta"
+      ]
+    },
+    {
+      "en": "gonna",
+      "ar": "هـ",
+      "tags": [
+        "abbreviation"
+      ],
+      "context": "future prefix"
+    },
+    {
+      "en": "wanna",
+      "ar": "عايز",
+      "tags": [
+        "abbreviation"
+      ]
+    },
+    {
+      "en": "gotta",
+      "ar": "لازم",
+      "tags": [
+        "abbreviation"
+      ]
+    },
+    {
+      "en": "aight",
+      "ar": "تمام",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "bet",
+      "ar": "اتفقنا",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "yo",
+      "ar": "يا",
+      "tags": [
+        "slang"
+      ]
+    },
+    {
+      "en": "los santos",
+      "ar": "لوس سانتوس",
+      "tags": [
+        "name",
+        "gta"
+      ]
+    },
+    {
+      "en": "michael",
+      "ar": "مايكل",
+      "tags": [
+        "name"
+      ]
+    },
+    {
+      "en": "trevor",
+      "ar": "تريفور",
+      "tags": [
+        "name"
+      ]
+    },
+    {
+      "en": "fib",
+      "ar": "الـ FIB",
+      "tags": [
+        "name",
+        "gta"
+      ]
+    }
   ],
   "msa_map": [
-    {"msa": "الشرطة", "egy": "البوليس"},
-    {"msa": "رجال الشرطة", "egy": "البوليس"},
-    {"msa": "سيارة", "egy": "عربية"},
-    {"msa": "سيارتي", "egy": "عربيتي"},
-    {"msa": "سيارتك", "egy": "عربيتك"},
-    {"msa": "المال", "egy": "الفلوس"},
-    {"msa": "دراجة نارية", "egy": "موتوسيكل"},
-    {"msa": "دراجة", "egy": "موتوسيكل", "context": "vehicle"},
-    {"msa": "مروحية", "egy": "هليكوبتر"},
-    {"msa": "الآن", "egy": "دلوقتي"},
-    {"msa": "ليس", "egy": "مش"},
-    {"msa": "ليست", "egy": "مش"},
-    {"msa": "لا تقلق", "egy": "متقلقش"},
-    {"msa": "أريد", "egy": "عايز"},
-    {"msa": "تريد", "egy": "عايز"},
-    {"msa": "يريد", "egy": "عايز"},
-    {"msa": "ماذا", "egy": "إيه"},
-    {"msa": "هيا بنا", "egy": "يلا بينا"},
-    {"msa": "جيد", "egy": "كويس"},
-    {"msa": "حسناً", "egy": "تمام"},
-    {"msa": "حسنا", "egy": "تمام"},
-    {"msa": "عظيم", "egy": "تمام", "context": "ack"},
-    {"msa": "أيها الأحمق", "egy": "يا مغفل"},
-    {"msa": "الأحمق", "egy": "المغفل"},
-    {"msa": "غبي", "egy": "غبي"},
-    {"msa": "المسدس", "egy": "المسدس"},
-    {"msa": "السلاح", "egy": "السلاح"},
-    {"msa": "صندوق السيارة", "egy": "الشنطة"},
-    {"msa": "زقاق", "egy": "الزقاق"},
-    {"msa": "اركض", "egy": "اجري"},
-    {"msa": "اهرب", "egy": "اجري"},
-    {"msa": "توقف", "egy": "قِف"},
-    {"msa": "انتظر", "egy": "استنى"},
-    {"msa": "انظر", "egy": "بص"},
-    {"msa": "اسمع", "egy": "اسمع"},
-    {"msa": "صديقي", "egy": "صاحبي"},
-    {"msa": "يا صديقي", "egy": "يا صاحبي"},
-    {"msa": "الليلة", "egy": "النهاردة بالليل"},
-    {"msa": "اليوم", "egy": "النهاردة"},
-    {"msa": "هنا", "egy": "هنا"},
-    {"msa": "مكان", "egy": "مكان"},
-    {"msa": "المنزل", "egy": "البيت"},
-    {"msa": "الوظيفة", "egy": "الشغلانة"},
-    {"msa": "عملية سطو", "egy": "عملية"},
-    {"msa": "السرقة", "egy": "العملية", "context": "heist"},
-    {"msa": "الجرذ", "egy": "الفأر"},
-    {"msa": "جرذ", "egy": "فأر"},
-    {"msa": "الثعبان", "egy": "الأفاعي"},
-    {"msa": "أغلق فمك", "egy": "اخرس"},
-    {"msa": "اخرس", "egy": "اخرس"}
+    {
+      "msa": "الشرطة",
+      "egy": "البوليس"
+    },
+    {
+      "msa": "رجال الشرطة",
+      "egy": "البوليس"
+    },
+    {
+      "msa": "سيارة",
+      "egy": "عربية"
+    },
+    {
+      "msa": "سيارتي",
+      "egy": "عربيتي"
+    },
+    {
+      "msa": "سيارتك",
+      "egy": "عربيتك"
+    },
+    {
+      "msa": "المال",
+      "egy": "الفلوس"
+    },
+    {
+      "msa": "دراجة نارية",
+      "egy": "موتوسيكل"
+    },
+    {
+      "msa": "دراجة",
+      "egy": "موتوسيكل",
+      "context": "vehicle"
+    },
+    {
+      "msa": "مروحية",
+      "egy": "هليكوبتر"
+    },
+    {
+      "msa": "الآن",
+      "egy": "دلوقتي"
+    },
+    {
+      "msa": "ليس",
+      "egy": "مش"
+    },
+    {
+      "msa": "ليست",
+      "egy": "مش"
+    },
+    {
+      "msa": "لا تقلق",
+      "egy": "متقلقش"
+    },
+    {
+      "msa": "أريد",
+      "egy": "عايز"
+    },
+    {
+      "msa": "تريد",
+      "egy": "عايز"
+    },
+    {
+      "msa": "يريد",
+      "egy": "عايز"
+    },
+    {
+      "msa": "ماذا",
+      "egy": "إيه"
+    },
+    {
+      "msa": "هيا بنا",
+      "egy": "يلا بينا"
+    },
+    {
+      "msa": "جيد",
+      "egy": "كويس"
+    },
+    {
+      "msa": "حسناً",
+      "egy": "تمام"
+    },
+    {
+      "msa": "حسنا",
+      "egy": "تمام"
+    },
+    {
+      "msa": "عظيم",
+      "egy": "تمام",
+      "context": "ack"
+    },
+    {
+      "msa": "أيها الأحمق",
+      "egy": "يا مغفل"
+    },
+    {
+      "msa": "الأحمق",
+      "egy": "المغفل"
+    },
+    {
+      "msa": "غبي",
+      "egy": "غبي"
+    },
+    {
+      "msa": "المسدس",
+      "egy": "المسدس"
+    },
+    {
+      "msa": "السلاح",
+      "egy": "السلاح"
+    },
+    {
+      "msa": "صندوق السيارة",
+      "egy": "الشنطة"
+    },
+    {
+      "msa": "زقاق",
+      "egy": "الزقاق"
+    },
+    {
+      "msa": "اركض",
+      "egy": "اجري"
+    },
+    {
+      "msa": "اهرب",
+      "egy": "اجري"
+    },
+    {
+      "msa": "توقف",
+      "egy": "قِف"
+    },
+    {
+      "msa": "انتظر",
+      "egy": "استنى"
+    },
+    {
+      "msa": "انظر",
+      "egy": "بص"
+    },
+    {
+      "msa": "اسمع",
+      "egy": "اسمع"
+    },
+    {
+      "msa": "صديقي",
+      "egy": "صاحبي"
+    },
+    {
+      "msa": "يا صديقي",
+      "egy": "يا صاحبي"
+    },
+    {
+      "msa": "الليلة",
+      "egy": "النهاردة بالليل"
+    },
+    {
+      "msa": "اليوم",
+      "egy": "النهاردة"
+    },
+    {
+      "msa": "هنا",
+      "egy": "هنا"
+    },
+    {
+      "msa": "مكان",
+      "egy": "مكان"
+    },
+    {
+      "msa": "المنزل",
+      "egy": "البيت"
+    },
+    {
+      "msa": "الوظيفة",
+      "egy": "الشغلانة"
+    },
+    {
+      "msa": "عملية سطو",
+      "egy": "عملية"
+    },
+    {
+      "msa": "السرقة",
+      "egy": "العملية",
+      "context": "heist"
+    },
+    {
+      "msa": "الجرذ",
+      "egy": "الفأر"
+    },
+    {
+      "msa": "جرذ",
+      "egy": "فأر"
+    },
+    {
+      "msa": "الثعبان",
+      "egy": "الأفاعي"
+    },
+    {
+      "msa": "أغلق فمك",
+      "egy": "اخرس"
+    },
+    {
+      "msa": "اخرس",
+      "egy": "اخرس"
+    }
   ],
   "profanity_upgrades": [
-    {"marker": "fuck", "msa": "تباً", "egy": "خرا"},
-    {"marker": "fucking", "msa": "تباً", "egy": "خرا"},
-    {"marker": "shit", "msa": "تباً", "egy": "خرا"},
-    {"marker": "shit", "msa": "اللعنة", "egy": "خرا"},
-    {"marker": "damn", "msa": "اللعنة", "egy": "خرا"},
-    {"marker": "damn", "msa": "تباً", "egy": "خرا"},
-    {"marker": "fuck you", "msa": "تباً لك", "egy": "انيك"},
-    {"marker": "asshole", "msa": "الأحمق", "egy": "ابن المتناكة"},
-    {"marker": "bitch", "msa": "الوغد", "egy": "ابن الوسخة"},
-    {"marker": "son of a bitch", "msa": "الوغد", "egy": "ابن الوسخة"},
-    {"marker": "bastard", "msa": "الوغد", "egy": "ابن الوسخة"}
-  ]
+    {
+      "marker": "fuck",
+      "msa": "تباً",
+      "egy": "خرا"
+    },
+    {
+      "marker": "fucking",
+      "msa": "تباً",
+      "egy": "خرا"
+    },
+    {
+      "marker": "shit",
+      "msa": "تباً",
+      "egy": "خرا"
+    },
+    {
+      "marker": "shit",
+      "msa": "اللعنة",
+      "egy": "خرا"
+    },
+    {
+      "marker": "damn",
+      "msa": "اللعنة",
+      "egy": "خرا"
+    },
+    {
+      "marker": "damn",
+      "msa": "تباً",
+      "egy": "خرا"
+    },
+    {
+      "marker": "fuck you",
+      "msa": "تباً لك",
+      "egy": "انيك"
+    },
+    {
+      "marker": "asshole",
+      "msa": "الأحمق",
+      "egy": "ابن المتناكة"
+    },
+    {
+      "marker": "bitch",
+      "msa": "الوغد",
+      "egy": "ابن الوسخة"
+    },
+    {
+      "marker": "son of a bitch",
+      "msa": "الوغد",
+      "egy": "ابن الوسخة"
+    },
+    {
+      "marker": "bastard",
+      "msa": "الوغد",
+      "egy": "ابن الوسخة"
+    }
+  ],
+  "common_glossary": [],
+  "msa_glossary": [
+    {
+      "en": "police",
+      "ar": "الشرطة",
+      "tags": [
+        "msa"
+      ],
+      "context": ""
+    },
+    {
+      "en": "car",
+      "ar": "سيارة",
+      "tags": [
+        "msa"
+      ],
+      "context": ""
+    },
+    {
+      "en": "money",
+      "ar": "المال",
+      "tags": [
+        "msa"
+      ],
+      "context": ""
+    }
+  ],
+  "egyptian_glossary": [],
+  "gaming_slang": [],
+  "character_names": [],
+  "location_names": []
 }

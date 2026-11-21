@@ -27,6 +27,12 @@ class EgyptianDictionary private constructor(
     private val msaMap: List<MsaEntry>,
     private val profanityUpgrades: List<ProfanityUpgrade>,
     private val profanityMarkers: List<String>,
+    private val commonGlossary: List<Term> = emptyList(),
+    private val msaGlossary: List<Term> = emptyList(),
+    private val egyptianGlossary: List<Term> = emptyList(),
+    private val gamingSlang: List<Term> = emptyList(),
+    private val characterNames: List<Term> = emptyList(),
+    private val locationNames: List<Term> = emptyList(),
 ) {
 
     @Serializable
@@ -48,6 +54,15 @@ class EgyptianDictionary private constructor(
         val terms: List<Term> = emptyList(),
         val msa_map: List<MsaEntry> = emptyList(),
         val profanity_upgrades: List<ProfanityUpgrade> = emptyList(),
+        // Layered glossaries (dual-mode support): a term lands in the
+        // mode(s) it belongs to, so an Egyptian rendering can never leak
+        // into an MSA prompt and MSA phrasing never waters down Egyptian.
+        val common_glossary: List<Term> = emptyList(),
+        val msa_glossary: List<Term> = emptyList(),
+        val egyptian_glossary: List<Term> = emptyList(),
+        val gaming_slang: List<Term> = emptyList(),
+        val character_names: List<Term> = emptyList(),
+        val location_names: List<Term> = emptyList(),
     )
 
     companion object {
@@ -65,6 +80,12 @@ class EgyptianDictionary private constructor(
                 msaMap = data.msa_map.sortedByDescending { it.msa.length },
                 profanityUpgrades = data.profanity_upgrades,
                 profanityMarkers = markers,
+                commonGlossary = data.common_glossary,
+                msaGlossary = data.msa_glossary,
+                egyptianGlossary = data.egyptian_glossary,
+                gamingSlang = data.gaming_slang,
+                characterNames = data.character_names,
+                locationNames = data.location_names,
             )
         }
 
@@ -83,11 +104,43 @@ class EgyptianDictionary private constructor(
     /** Full-line override for a stock game line, or null when no override exists. */
     fun overrideFor(englishSource: String): String? = lineOverrides[normalizeEn(englishSource)]
 
-    /** Egyptian renderings of dictionary terms found in [englishSource] (word-boundary match). */
-    fun glossaryTerms(englishSource: String): Map<String, String> {
+    /** Renderings of dictionary terms found in [englishSource] (word-boundary match). */
+    fun glossaryTerms(englishSource: String): Map<String, String> =
+        glossaryTerms(
+            englishSource,
+            com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC,
+        )
+
+    /**
+     * Mode-aware glossary: legacy terms plus the layers valid for [mode].
+     * Common, gaming, and name layers serve both modes; the Egyptian layer
+     * serves only Egyptian mode and the MSA layer only MSA mode, so neither
+     * register can leak into the other's prompt.
+     */
+    fun glossaryTerms(
+        englishSource: String,
+        mode: com.gamelingo.mobile.data.settings.ArabicTranslationMode,
+    ): Map<String, String> {
         val normalized = normalizeEn(englishSource)
         val found = LinkedHashMap<String, String>()
-        for (term in terms) {
+        val layers = buildList {
+            // Shared layers serve both modes.
+            addAll(commonGlossary)
+            addAll(gamingSlang)
+            addAll(characterNames)
+            addAll(locationNames)
+            when (mode) {
+                // Legacy terms are Egyptian renderings: Egyptian mode only,
+                // so a فصحى prompt never receives عامية wording.
+                com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC -> {
+                    addAll(terms)
+                    addAll(egyptianGlossary)
+                }
+                com.gamelingo.mobile.data.settings.ArabicTranslationMode.MODERN_STANDARD_ARABIC ->
+                    addAll(msaGlossary)
+            }
+        }
+        for (term in layers) {
             if (containsEnPhrase(normalized, normalizeEn(term.en))) found[term.en] = term.ar
         }
         return found

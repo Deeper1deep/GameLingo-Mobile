@@ -29,19 +29,22 @@ class TranslationCache @Inject constructor() {
         val context: CacheContext,
     )
 
-    private val entries = object : LinkedHashMap<String, Entry>(
+    // Keyed by text AND context: the same sentence in MSA and Egyptian (or
+    // under different prompt versions or dialogue context) are independent
+    // entries; a later put in one mode must never evict the other's answer.
+    private val entries = object : LinkedHashMap<Pair<String, CacheContext>, Entry>(
         MAX_ENTRIES,
         0.75f,
         true,
     ) {
         override fun removeEldestEntry(
-            eldest: MutableMap.MutableEntry<String, Entry>?,
+            eldest: MutableMap.MutableEntry<Pair<String, CacheContext>, Entry>?,
         ): Boolean = size > MAX_ENTRIES
     }
 
     fun get(text: String, context: CacheContext): CachedTranslation? = synchronized(entries) {
-        val entry = entries[normalize(text)] ?: return null
-        if (entry.context != context || !context.accepts(entry.translation.engineId)) {
+        val entry = entries[normalize(text) to context] ?: return null
+        if (!context.accepts(entry.translation.engineId)) {
             return null
         }
         entry.translation
@@ -49,7 +52,7 @@ class TranslationCache @Inject constructor() {
 
     fun put(text: String, context: CacheContext, translation: CachedTranslation) {
         synchronized(entries) {
-            entries[normalize(text)] = Entry(translation, context)
+            entries[normalize(text) to context] = Entry(translation, context)
         }
     }
 

@@ -7,8 +7,16 @@ data class TranslationRequest(
     val contextLines: List<String> = emptyList(),
     /** Character names seen so far, kept consistent across translations. */
     val characterNames: List<String> = emptyList(),
-    /** Gaming terms with their established Egyptian renderings. */
+    /** Gaming terms with their established renderings for the target mode. */
     val glossary: Map<String, String> = emptyMap(),
+    /**
+     * The Arabic style this line must land in. Carried on the request (not
+     * read from settings inside engines) so a fallback to another engine
+     * can never silently switch styles, and so a mode change mid-session
+     * only affects lines built after it.
+     */
+    val arabicMode: com.gamelingo.mobile.data.settings.ArabicTranslationMode =
+        com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC,
 )
 
 /** The engine's answer for one line. */
