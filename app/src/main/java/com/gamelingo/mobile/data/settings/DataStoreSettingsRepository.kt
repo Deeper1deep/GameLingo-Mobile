@@ -64,6 +64,7 @@ class DataStoreSettingsRepository @Inject constructor(
             cloudTranslationOptIn = prefs[KEY_CLOUD_OPT_IN] ?: false,
             autoOnlineFallback = prefs[KEY_AUTO_ONLINE_FALLBACK] ?: false,
             localAiWifiOnly = prefs[KEY_LOCAL_AI_WIFI_ONLY] ?: true,
+            gemmaHdOptIn = prefs[KEY_GEMMA_HD_OPT_IN] ?: false,
             requestTimeoutSec = SettingsConstraints.clampTimeoutSec(
                 prefs[KEY_TIMEOUT_SEC] ?: SettingsConstraints.DEFAULT_TIMEOUT_SEC,
             ),
@@ -204,6 +205,10 @@ class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { it[KEY_LOCAL_AI_WIFI_ONLY] = enabled }
     }
 
+    override suspend fun setGemmaHdOptIn(enabled: Boolean) {
+        dataStore.edit { it[KEY_GEMMA_HD_OPT_IN] = enabled }
+    }
+
     override suspend fun setRequestTimeoutSec(seconds: Int) {
         dataStore.edit { it[KEY_TIMEOUT_SEC] = SettingsConstraints.clampTimeoutSec(seconds) }
     }
@@ -255,6 +260,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val KEY_CLOUD_OPT_IN = booleanPreferencesKey("cloud_translation_opt_in")
         val KEY_AUTO_ONLINE_FALLBACK = booleanPreferencesKey("auto_online_fallback")
         val KEY_LOCAL_AI_WIFI_ONLY = booleanPreferencesKey("local_ai_wifi_only")
+        val KEY_GEMMA_HD_OPT_IN = booleanPreferencesKey("gemma_hd_opt_in")
         val KEY_TIMEOUT_SEC = intPreferencesKey("request_timeout_sec")
         val KEY_CACHE_ENABLED = booleanPreferencesKey("cache_enabled")
         val KEY_CONTEXT_LINES = intPreferencesKey("context_lines")
