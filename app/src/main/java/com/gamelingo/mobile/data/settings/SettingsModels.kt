@@ -133,3 +133,14 @@ inline fun <reified T : Enum<T>> parseEnumOrDefault(name: String?, default: T): 
     name
         ?.let { stored -> runCatching { enumValueOf<T>(stored) }.getOrNull() }
         ?: default
+
+private val userGlossaryParser = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
+
+/** Corrupt or legacy payloads degrade to an empty user glossary, never a crash. */
+internal fun parseUserGlossary(raw: String?): List<UserGlossaryTerm> {
+    if (raw.isNullOrBlank()) return emptyList()
+    return runCatching {
+        userGlossaryParser.decodeFromString<List<UserGlossaryTerm>>(raw)
+            .filter { it.en.isNotBlank() && it.ar.isNotBlank() }
+    }.getOrDefault(emptyList())
+}
