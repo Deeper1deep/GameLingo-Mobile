@@ -18,6 +18,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -90,6 +91,24 @@ class SettingsViewModel @Inject constructor(
 
     fun setArabicTranslationMode(mode: com.gamelingo.mobile.data.settings.ArabicTranslationMode) =
         viewModelScope.launch { repository.setArabicTranslationMode(mode) }
+
+    /** Pin a term the user wants rendered their way (wins over the bundled dictionary). */
+    fun addUserGlossaryTerm(en: String, ar: String) = viewModelScope.launch {
+        val source = en.trim()
+        val rendering = ar.trim()
+        if (source.isEmpty() || rendering.isEmpty()) return@launch
+        val current = repository.settings.first().userGlossaryTerms
+            .filterNot { it.en.equals(source, ignoreCase = true) }
+        repository.setUserGlossaryTerms(
+            current + com.gamelingo.mobile.data.settings.UserGlossaryTerm(source, rendering),
+        )
+    }
+
+    fun removeUserGlossaryTerm(en: String) = viewModelScope.launch {
+        val current = repository.settings.first().userGlossaryTerms
+            .filterNot { it.en.equals(en, ignoreCase = true) }
+        repository.setUserGlossaryTerms(current)
+    }
 
     // ---- Local AI engine section ----
 
