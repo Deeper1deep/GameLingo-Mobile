@@ -62,7 +62,19 @@ class SentencePieceTokenizerTest {
         @JvmStatic
         @BeforeClass
         fun loadTokenizer() {
-            tokenizer = SentencePieceTokenizer.load(resourceText("enar_tokenizer.json"))
+            // The tokenizer JSON exceeds the web-commit size cap, so the repo
+            // stores it as ordered parts the test concatenates back together.
+            val sb = StringBuilder()
+            var part = 1
+            while (true) {
+                val name = "enar_tokenizer.part%02d".format(part)
+                val stream = SentencePieceTokenizerTest::class.java.classLoader
+                    ?.getResourceAsStream(name) ?: break
+                sb.append(BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() })
+                part++
+            }
+            assertTrue("tokenizer parts missing from test resources", part > 1)
+            tokenizer = SentencePieceTokenizer.load(sb.toString())
         }
 
         private fun referenceCases(): List<ReferenceCase> {
