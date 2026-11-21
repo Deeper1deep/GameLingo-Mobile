@@ -63,16 +63,29 @@ class LocalAiTranslationEngine @Inject constructor(
                 ?: throw ModelNotInstalledException()
             val tokenizerFile = modelManager.modelFile(LocalModelManager.MODEL_MARIAN, TOKENIZER_FILE)
                 ?: throw ModelNotInstalledException()
-            withContext(Dispatchers.IO) {
-                tokenizer = SentencePieceTokenizer.load(tokenizerFile.readText())
-            }
-            withContext(Dispatchers.Default) {
-                val newRunner = OrtOnnxRunner(
-                    encoderFile = java.io.File(dir, ENCODER_FILE),
-                    decoderFile = java.io.File(dir, DECODER_FILE),
-                )
-                newRunner.open()
-                runner = newRunner
+            // Throwable containment: native init failures (linkage, OOM) surface
+            // as Errors; wrap them so the chain degrades visibly to the next
+            // engine instead of letting the process die.
+            try {
+                withContext(Dispatchers.IO) {
+                    tokenizer = SentencePieceTokenizer.load(tokenizerFile.readText())
+                }
+                withContext(Dispatchers.Default) {
+                    val newRunner = OrtOnnxRunner(
+                        encoderFile = java.io.File(dir, ENCODER_FILE),
+                        decoderFile = java.io.File(dir, DECODER_FILE),
+                    )
+                    newRunner.open()
+                    runner = newRunner
+                }
+            } catch (cancelled: CancellationException) {
+                runner = null
+                tokenizer = null
+                throw cancelled
+            } catch (failure: Throwable) {
+                runner = null
+                tokenizer = null
+                throw EngineInitException(failure)
             }
         }
     }
@@ -120,6 +133,9 @@ class LocalAiTranslationEngine @Inject constructor(
 
     /** Model produced an empty/blank decode: a visible failure, not a silent pass. */
     class EmptyModelOutputException : Exception("empty_model_output")
+
+    /** Native model load failed; wrapped as an Exception so callers degrade. */
+    class EngineInitException(cause: Throwable) : Exception("local_engine_init_failed", cause)
 
     companion object {
         const val ENGINE_ID = "local-ai-v1"
