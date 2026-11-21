@@ -143,6 +143,10 @@ class TranslationCoordinator @Inject constructor(
                     TranslationRequest(
                         text = request.text,
                         contextLines = contextLines,
+                        // Feed the terminology layer: prompt-capable engines
+                        // (Gemini) render the established Egyptian gaming
+                        // terms into the prompt instead of guessing them.
+                        glossary = dictionaryHolder.get().glossaryTerms(request.text),
                     ),
                 )
             }
