@@ -155,7 +155,6 @@ text = when {
                                     },
                                 )
                             else -> phaseDescription(current)
-                        }
                         },
                         style = MaterialTheme.typography.bodyLarge,
                         color = GlColors.TextPrimary,
