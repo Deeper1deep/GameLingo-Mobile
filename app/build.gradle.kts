@@ -89,6 +89,13 @@ android {
         }
     }
 
+    // Unit tests read the SHIPPED understanding dataset, not a copy that can drift.
+    sourceSets {
+        getByName("test") {
+            resources.srcDir("src/main/assets/understanding")
+        }
+    }
+
     packaging {
         resources {
             excludes += setOf(
