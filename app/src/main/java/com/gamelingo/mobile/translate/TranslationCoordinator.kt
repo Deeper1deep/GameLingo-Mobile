@@ -63,8 +63,11 @@ class TranslationCoordinator @Inject constructor(
         worker = translationWorker
         translationWorker.start()
         scope.launch {
-            TranslationSessionBus.latestLine.collect { line ->
-                if (line == null) return@collect
+            // The lossless worker stream, NOT latestLine: a StateFlow
+            // conflates, so collecting latestLine here silently dropped
+            // subtitle lines under fast dialogue. The UI keeps latestLine;
+            // the pipeline gets every line.
+            TranslationSessionBus.ocrLines.collect { line ->
                 translationWorker.enqueue(line.text, line.capturedAtMillis)
             }
         }
@@ -93,6 +96,10 @@ class TranslationCoordinator @Inject constructor(
      * a cancellation (session stop or worker recovery) always propagates.
      */
     private suspend fun processRequest(request: QueuedRequest): ProcessorOutcome {
+        // Session generation guard: if the session stops or restarts while
+        // this request is in flight, its result belongs to the old session
+        // and must not be published into the new one.
+        val generation = TranslationSessionBus.currentGeneration()
         val settings = settingsRepository.settings.first()
         val contextLines = contextMemory.snapshot().takeLast(settings.contextLines)
         val cacheContext = CacheContext(
@@ -104,6 +111,7 @@ class TranslationCoordinator @Inject constructor(
 
         if (settings.cacheEnabled) {
             cache.get(request.text, cacheContext)?.let { hit ->
+                if (isStale(generation)) return ProcessorOutcome(hit.engineId, false)
                 publish(
                     original = request.text,
                     result = TranslationResult(
@@ -147,9 +155,11 @@ class TranslationCoordinator @Inject constructor(
                     ),
                 )
             }
-            publish(request.text, result, request.capturedAtMillis)
-            contextMemory.add(request.text)
-            publishEngineNotice(settings.aiMode, result.engineId)
+            if (!isStale(generation)) {
+                publish(request.text, result, request.capturedAtMillis)
+                contextMemory.add(request.text)
+                publishEngineNotice(settings.aiMode, result.engineId)
+            }
             return ProcessorOutcome(
                 engineId = result.engineId,
                 usedLocalFallback = isLocalFallback(settings.aiMode, result.engineId),
@@ -157,7 +167,7 @@ class TranslationCoordinator @Inject constructor(
         } catch (timeout: TimeoutCancellationException) {
             // The provider hit the user's timeout: a visible failure. The
             // worker classifies the state; checked before CancellationException.
-            TranslationSessionBus.onTranslationFailed(request.text)
+            if (!isStale(generation)) TranslationSessionBus.onTranslationFailed(request.text)
             throw timeout
         } catch (cancelled: CancellationException) {
             // Session stop or worker recovery: never misreport as a failure.
@@ -170,10 +180,19 @@ class TranslationCoordinator @Inject constructor(
                     TranslationSessionBus.onNotice(SessionNotice.ONLINE_NOT_CONFIGURED)
                 else -> Unit
             }
-            TranslationSessionBus.onTranslationFailed(request.text)
+            if (!isStale(generation)) TranslationSessionBus.onTranslationFailed(request.text)
             throw error
         }
     }
+
+    /**
+     * True when the session that queued this request is no longer the
+     * running one: its results and failures must not reach the overlay or
+     * the failure banner of the new session.
+     */
+    private fun isStale(generation: Long): Boolean =
+        TranslationSessionBus.state.value != SessionState.RUNNING ||
+            TranslationSessionBus.currentGeneration() != generation
 
     private fun isLocalFallback(mode: AiMode, actualEngineId: String): Boolean =
         mode != AiMode.LOCAL && actualEngineId == MlKitTranslationEngine.ENGINE_ID
