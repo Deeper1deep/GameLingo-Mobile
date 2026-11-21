@@ -14,7 +14,14 @@ data class CacheContext(
     val aiMode: AiMode,
     /** The engine the request would run on right now (after privacy gating). */
     val plannedEngineId: String,
-    /** EgyptianDialectPrompt.PROMPT_VERSION at request time. */
+    /**
+     * Arabic style of the request. The same sentence in MSA and in Egyptian
+     * are two independent cache entries; one mode's result is never served
+     * for the other.
+     */
+    val arabicMode: com.gamelingo.mobile.data.settings.ArabicTranslationMode =
+        com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC,
+    /** Prompt wording version for the request's mode at request time. */
     val promptVersion: Int,
     /** Hash of the context lines actually sent; 0 when context is disabled. */
     val contextSignature: Long,
