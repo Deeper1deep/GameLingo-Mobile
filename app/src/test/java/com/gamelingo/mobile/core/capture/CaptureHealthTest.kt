@@ -26,6 +26,8 @@ class CaptureHealthTest {
         assertEquals(0L, snapshot.lastLinePublishedAt)
         assertEquals(0L, snapshot.lastDisplayRebuildAt)
         assertNull(snapshot.lastError)
+        assertNull(snapshot.lastStopReason)
+        assertEquals(0L, snapshot.lastStopAt)
     }
 
     @Test
@@ -63,5 +65,24 @@ class CaptureHealthTest {
         assertEquals(500L, snapshot.sessionStartedAt)
         assertEquals(0L, snapshot.lastFrameAcquiredAt)
         assertNull(snapshot.lastError)
+    }
+
+    @Test
+    fun `the stop reason is recorded with its timestamp`() {
+        CaptureHealth.onSessionStopped(CaptureHealth.StopReasons.USER_BUTTON, now = 60L)
+
+        val snapshot = CaptureHealth.snapshot()
+        assertEquals(CaptureHealth.StopReasons.USER_BUTTON, snapshot.lastStopReason)
+        assertEquals(60L, snapshot.lastStopAt)
+    }
+
+    @Test
+    fun `a new session clears the previous stop reason`() {
+        CaptureHealth.onSessionStopped(CaptureHealth.StopReasons.PROJECTION_ENDED, now = 70L)
+        CaptureHealth.onSessionStarted(now = 80L)
+
+        val snapshot = CaptureHealth.snapshot()
+        assertNull(snapshot.lastStopReason)
+        assertEquals(0L, snapshot.lastStopAt)
     }
 }

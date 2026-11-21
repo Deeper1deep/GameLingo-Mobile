@@ -1,7 +1,8 @@
 package com.gamelingo.mobile.overlay
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -9,6 +10,11 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalTextStyle
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -23,6 +29,7 @@ import com.gamelingo.mobile.R
 import com.gamelingo.mobile.core.overlay.OverlayLayout
 import com.gamelingo.mobile.core.session.SessionNotice
 import com.gamelingo.mobile.data.settings.AppSettings
+import kotlinx.coroutines.delay
 
 /** What the floating window is showing right now. */
 data class OverlayUiState(
@@ -44,6 +51,7 @@ data class OverlayUiState(
  * overlay settings. Width wraps the content up to a screen fraction so the
  * window never claims the whole screen without need.
  */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OverlayContent(
     state: OverlayUiState,
@@ -68,18 +76,33 @@ fun OverlayContent(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // In-session stop affordance: without it the user must leave the game
-        // and find the app's stop button to end a session.
+        // and find the app's stop button to end a session. It needs a long
+        // press, not one tap: stray gameplay touches reach this bar, and one
+        // tap ending the session is exactly how accidental stops happen. A
+        // short tap only explains the gesture.
         if (state.sessionRunning && onStopSession != null) {
+            var showStopHint by remember { mutableStateOf(false) }
+            if (showStopHint) {
+                LaunchedEffect(Unit) {
+                    delay(STOP_HINT_MILLIS)
+                    showStopHint = false
+                }
+            }
             Text(
-                text = stringResource(R.string.overlay_stop),
+                text = stringResource(
+                    if (showStopHint) R.string.overlay_stop_hint else R.string.overlay_stop,
+                ),
                 color = textColor.copy(alpha = 0.8f),
                 fontSize = (settings.overlayTextSizeSp - 6).coerceAtLeast(9).sp,
                 textAlign = TextAlign.Center,
                 modifier = Modifier
                     .align(Alignment.End)
-                    .clickable(onClickLabel = stringResource(R.string.overlay_stop_cd)) {
-                        onStopSession()
-                    }
+                    .combinedClickable(
+                        onClickLabel = stringResource(R.string.overlay_stop_hint_cd),
+                        onLongClickLabel = stringResource(R.string.overlay_stop_cd),
+                        onLongClick = { onStopSession() },
+                        onClick = { showStopHint = true },
+                    )
                     .padding(bottom = 2.dp),
             )
         }
@@ -153,3 +176,4 @@ fun OverlayContent(
 }
 
 private const val MAX_WIDTH_FRACTION = 0.92f
+private const val STOP_HINT_MILLIS = 2_500L
