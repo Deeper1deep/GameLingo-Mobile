@@ -2,14 +2,19 @@ package com.gamelingo.mobile.ocr
 
 import com.gamelingo.mobile.core.capture.PixelRect
 import com.gamelingo.mobile.core.capture.RecognizedBlock
+import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.common.InputImage
+import com.google.mlkit.vision.text.Text
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
 import javax.inject.Inject
 import javax.inject.Singleton
 import kotlin.coroutines.resume
 import kotlin.coroutines.resumeWithException
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlinx.coroutines.withContext
 
 /** ML Kit Latin text recognizer: fully on-device, no model download at runtime. */
 @Singleton
@@ -18,27 +23,54 @@ class MlKitTextRecognizerEngine @Inject constructor() : TextRecognizerEngine {
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
     override suspend fun recognize(image: InputImage): String =
-        suspendCancellableCoroutine { continuation ->
-            recognizer.process(image)
-                .addOnSuccessListener { result -> continuation.resume(result.text) }
-                .addOnFailureListener { error -> continuation.resumeWithException(error) }
-        }
+        processSafely(image) { it.text }
 
     override suspend fun recognizeBlocks(image: InputImage): List<RecognizedBlock> =
-        suspendCancellableCoroutine { continuation ->
-            recognizer.process(image)
-                .addOnSuccessListener { result ->
-                    continuation.resume(
-                        result.textBlocks.mapNotNull { block ->
-                            val box = block.boundingBox ?: return@mapNotNull null
-                            RecognizedBlock(
-                                text = block.text,
-                                rect = PixelRect(box.left, box.top, box.right, box.bottom),
-                            )
-                        },
+        processSafely(image) { result ->
+            result.textBlocks.mapNotNull { block ->
+                val box = block.boundingBox ?: return@mapNotNull null
+                RecognizedBlock(
+                    text = block.text,
+                    rect = PixelRect(box.left, box.top, box.right, box.bottom),
+                )
+            }
+        }
+
+    /**
+     * Awaits the ML Kit task to full completion, even when the caller is
+     * cancelled mid-flight. The native task may still be reading the image's
+     * bitmap after the coroutine resumes; returning early lets the caller
+     * recycle that bitmap while ML Kit reads it, which is a native
+     * use-after-free. So on cancellation we first wait (uncancellably) for
+     * the task to settle, then rethrow the cancellation.
+     */
+    private suspend fun <T> processSafely(image: InputImage, map: (Text) -> T): T {
+        val task = recognizer.process(image)
+        val result = try {
+            suspendCancellableCoroutine<Result<T>> { continuation ->
+                task.addOnSuccessListener { value ->
+                    continuation.resume(Result.success(map(value)))
+                }
+                task.addOnFailureListener { error ->
+                    continuation.resume(Result.failure(error))
+                }
+                task.addOnCanceledListener {
+                    continuation.resumeWithException(
+                        CancellationException("recognition task cancelled"),
                     )
                 }
-                .addOnFailureListener { error -> continuation.resumeWithException(error) }
+            }
+        } catch (cancelled: CancellationException) {
+            withContext(NonCancellable) { task.awaitSettled() }
+            throw cancelled
+        }
+        return result.getOrThrow()
+    }
+
+    /** Resumes once the task has finished in any state (immediate when already done). */
+    private suspend fun Task<*>.awaitSettled() =
+        suspendCancellableCoroutine<Unit> { continuation ->
+            addOnCompleteListener { continuation.resume(Unit) }
         }
 
     override fun close() {
