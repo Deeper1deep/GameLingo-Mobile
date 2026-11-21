@@ -29,14 +29,23 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gamelingo.mobile.R
+import com.gamelingo.mobile.core.session.ResumeRequest
 import com.gamelingo.mobile.core.session.SessionError
 import com.gamelingo.mobile.core.session.SessionNotice
 import com.gamelingo.mobile.core.session.SessionState
@@ -84,6 +93,25 @@ fun HomeScreen(
     val history by historyViewModel.history.collectAsStateWithLifecycle()
     val controller = rememberSessionController()
 
+    // A tap on the "translation stopped - resume" notification re-asks capture
+    // consent immediately; the banner below covers opening the app by hand.
+    LaunchedEffect(Unit) {
+        if (ResumeRequest.consumeAutoResume()) {
+            controller.start()
+        }
+    }
+    var resumeOffered by remember { mutableStateOf(ResumeRequest.interrupted) }
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                resumeOffered = ResumeRequest.interrupted
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
+
     val phase = resolveSessionPhase(sessionState, latestLine, translated, failure)
     val running = sessionState == SessionState.RUNNING
     val readiness = resolveEngineReadiness(
@@ -113,6 +141,36 @@ fun HomeScreen(
                     style = MaterialTheme.typography.bodyMedium,
                     color = GlColors.TextSecondary,
                 )
+            }
+        }
+
+        // The system ended screen sharing mid-game: offer a one-tap resume.
+        if (resumeOffered && !running) {
+            GlCard {
+                Column(verticalArrangement = Arrangement.spacedBy(GlSpacing.sm)) {
+                    Text(
+                        text = stringResource(R.string.resume_banner_text),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = GlColors.TextPrimary,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(GlSpacing.md)) {
+                        GlButton(
+                            text = stringResource(R.string.resume_action),
+                            onClick = {
+                                ResumeRequest.dismiss()
+                                resumeOffered = false
+                                controller.start()
+                            },
+                        )
+                        GlTextButton(
+                            text = stringResource(R.string.resume_dismiss),
+                            onClick = {
+                                ResumeRequest.dismiss()
+                                resumeOffered = false
+                            },
+                        )
+                    }
+                }
             }
         }
 
