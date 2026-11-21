@@ -23,6 +23,8 @@ import javax.inject.Named
 import javax.inject.Singleton
 import kotlinx.serialization.json.Json
 import okhttp3.MediaType.Companion.toMediaType
+import com.gamelingo.mobile.translate.local.LocalAiRouter
+import com.gamelingo.mobile.translate.local.LocalEngineChain
 import okhttp3.OkHttpClient
 import retrofit2.Retrofit
 import retrofit2.converter.kotlinx.serialization.asConverterFactory
@@ -96,6 +98,17 @@ object AppModule {
     @Singleton
     @Named("local")
     fun provideLocalEngine(impl: MlKitTranslationEngine): TranslationEngine = impl
+
+    /** The same ML Kit engine under the name the local engine chain consumes. */
+    @Provides
+    @Singleton
+    @Named("mlkit")
+    fun provideMlKitEngine(impl: MlKitTranslationEngine): TranslationEngine = impl
+
+    /** The local chain as the offline-first routing surface the hybrid engine consumes. */
+    @Provides
+    @Singleton
+    fun provideLocalAiRouter(impl: LocalEngineChain): LocalAiRouter = impl
 
     private const val GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/"
     private const val JSON_MEDIA_TYPE = "application/json"
