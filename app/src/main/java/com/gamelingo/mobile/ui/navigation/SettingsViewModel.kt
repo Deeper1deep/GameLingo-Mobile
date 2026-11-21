@@ -132,7 +132,9 @@ class SettingsViewModel @Inject constructor(
                 localEngineChain.translate(
                     TranslationRequest(text = "The heist went sideways, grab the money and run."),
                 )
-            } catch (error: Exception) {
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Throwable) {
                 _localTestResult.value = LocalTestResult(
                     translatedText = "",
                     engineId = "none",
