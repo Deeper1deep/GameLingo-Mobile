@@ -39,13 +39,16 @@ class GeminiTranslationEngine @Inject constructor(
                 model = MODEL,
                 apiKey = apiKey,
                 request = GeminiRequest(
+                    // Mode-appropriate mandate: the request carries the
+                    // user's Arabic style (MSA or Egyptian); the profanity
+                    // policy is identical in both.
                     systemInstruction = GeminiContent(
-                        parts = listOf(GeminiPart(EgyptianDialectPrompt.SYSTEM_PROMPT)),
+                        parts = listOf(GeminiPart(ArabicStylePrompt.systemPromptFor(request.arabicMode))),
                     ),
                     contents = listOf(
                         GeminiContent(
                             role = "user",
-                            parts = listOf(GeminiPart(EgyptianDialectPrompt.buildUserPrompt(request))),
+                            parts = listOf(GeminiPart(ArabicStylePrompt.buildUserPrompt(request))),
                         ),
                     ),
                     generationConfig = GeminiGenerationConfig(
