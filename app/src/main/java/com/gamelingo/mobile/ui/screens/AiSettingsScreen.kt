@@ -342,6 +342,12 @@ private fun LocalAiSection(viewModel: SettingsViewModel) {
         checked = settings.autoOnlineFallback,
         onCheckedChange = viewModel::setAutoOnlineFallback,
     )
+    SwitchCard(
+        title = stringResource(R.string.local_ai_gemma_hd),
+        subtitle = stringResource(R.string.local_ai_gemma_hd_hint),
+        checked = settings.gemmaHdOptIn,
+        onCheckedChange = viewModel::setGemmaHdOptIn,
+    )
 
     for (spec in viewModel.localModelSpecs()) {
         LocalModelCard(
