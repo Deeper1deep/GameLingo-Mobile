@@ -1,5 +1,7 @@
 package com.gamelingo.mobile.translate.local
 
+import android.app.ActivityManager
+import android.content.Context
 import com.gamelingo.mobile.translate.TranslationEngine
 import com.gamelingo.mobile.translate.TranslationRequest
 import com.gamelingo.mobile.translate.TranslationResult
@@ -38,9 +40,13 @@ import kotlinx.coroutines.withContext
 class TranslateGemmaEngine @Inject constructor(
     private val modelManager: LocalModelManager,
     private val dictionary: EgyptianDictionaryHolder,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: Context,
 ) : LocalAiCandidate {
 
     class ModelNotInstalledException : Exception("translategemma_not_installed")
+
+    /** Not enough free RAM to load a ~2GB model safely; refuse instead of dying. */
+    class InsufficientMemoryException : Exception("translategemma_low_memory")
 
     override val engineId: String = ENGINE_ID
 
@@ -58,6 +64,13 @@ class TranslateGemmaEngine @Inject constructor(
             if (engine != null) return
             val modelFile = modelManager.modelFile(LocalModelManager.MODEL_TRANSLATEGEMMA, MODEL_FILE)
                 ?: throw ModelNotInstalledException()
+            // Pre-flight memory gate: loading a ~2GB model when the device cannot
+            // spare it is a blind attempt at a guaranteed native OOM kill (the
+            // kernel SIGKILLs the app; no Kotlin catch can stop that). Refuse
+            // honestly instead and let the chain degrade to Marian.
+            if (!hasEnoughMemory(availableMemoryBytes(), modelFile.length())) {
+                throw InsufficientMemoryException()
+            }
             withContext(Dispatchers.Default) {
                 val config = EngineConfig(
                     modelPath = modelFile.absolutePath,
@@ -65,12 +78,32 @@ class TranslateGemmaEngine @Inject constructor(
                     // CPU first, try GPU on-device later and report honestly.
                     backend = Backend.CPU(),
                 )
-                val newEngine = Engine(config)
-                newEngine.initialize()
+                // Throwable containment: LiteRT-LM init failures surface as
+                // Errors (linkage, native checks), which the chain turns into a
+                // visible degrade instead of a process crash.
+                val newEngine = try {
+                    val created = Engine(config)
+                    created.initialize()
+                    created
+                } catch (cancelled: Throwable) {
+                    engine = null
+                    if (cancelled is kotlinx.coroutines.CancellationException) throw cancelled
+                    throw EngineInitException(cancelled)
+                }
                 engine = newEngine
             }
         }
     }
+
+    private fun availableMemoryBytes(): Long {
+        val am = context.getSystemService(Context.ACTIVITY_SERVICE) as ActivityManager
+        val info = ActivityManager.MemoryInfo()
+        am.getMemoryInfo(info)
+        return info.availMem
+    }
+
+    /** Engine load failed at native level; surfaced as an Exception so callers degrade. */
+    class EngineInitException(cause: Throwable) : Exception("translategemma_init_failed", cause)
 
     override suspend fun translate(request: TranslationRequest): TranslationResult {
         ensureReady()
@@ -123,6 +156,16 @@ class TranslateGemmaEngine @Inject constructor(
     companion object {
         const val ENGINE_ID = "translategemma-4b-v1"
         private const val MODEL_FILE = "model.litertlm"
+
+        /**
+         * Free RAM the device must keep beyond the model file itself: runtime
+         * activations + the game + the OS. 1.2 GB is deliberately conservative.
+         */
+        internal const val MIN_FREE_HEADROOM_BYTES = 1_200_000_000L
+
+        /** Pure gate, unit-tested: enough free RAM to load modelBytes safely? */
+        internal fun hasEnoughMemory(availMemBytes: Long, modelBytes: Long): Boolean =
+            availMemBytes >= modelBytes + MIN_FREE_HEADROOM_BYTES
 
         /**
          * Dialect mandate: natural spoken Egyptian, preserve profanity intensity,
