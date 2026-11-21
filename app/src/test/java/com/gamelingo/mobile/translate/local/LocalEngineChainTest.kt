@@ -287,3 +287,88 @@ class LocalEngineChainTest {
         assertFalse(TranslateGemmaEngine.hasEnoughMemory(0L, model))
     }
 }
+
+class LiteralIdiomCorrectionTest {
+
+    private fun understanding() = com.gamelingo.mobile.core.understanding.EnglishUnderstanding.load(
+        """
+        {"version": 1, "idioms": [
+          {"en": "see you around", "meaning_en": "goodbye", "ar_msa": "أراك لاحقًا", "ar_egy": "أشوفك على خير"}
+        ]}
+        """.trimIndent(),
+    )
+
+    private fun chain(
+        gemma: LocalAiCandidate,
+        marian: LocalAiCandidate,
+        mlKit: TranslationEngine,
+    ) = LocalEngineChain(
+        gemma, marian, mlKit,
+        gemmaOptIn = { true }, thermalHot = { false },
+        understanding = ::understanding,
+    )
+
+    private class Fixed(
+        override val engineId: String,
+        private val available: Boolean,
+        private val answer: String,
+    ) : LocalAiCandidate {
+        override fun isAvailable(): Boolean = available
+        override suspend fun ensureReady() = Unit
+        override suspend fun translate(request: TranslationRequest) =
+            TranslationResult(translatedText = answer, engineId = engineId)
+        override fun close() = Unit
+    }
+
+    @Test
+    fun `marian literal idiom output is replaced by the established rendering`() = runTest {
+        val chain = chain(
+            Fixed("gemma", available = false, answer = "x"),
+            Fixed("marian", available = true, answer = "أراك حولها"),
+            Fixed("mlkit", available = true, answer = "y"),
+        )
+        val result = chain.translate(
+            TranslationRequest(
+                text = "See you around.",
+                arabicMode = com.gamelingo.mobile.data.settings.ArabicTranslationMode.MODERN_STANDARD_ARABIC,
+            ),
+        )
+        assertEquals("أراك لاحقًا", result.translatedText)
+        assertEquals("marian+idiom", result.engineId)
+    }
+
+    @Test
+    fun `mlkit literal idiom output is replaced and honestly tagged`() = runTest {
+        val chain = chain(
+            Fixed("gemma", available = false, answer = "x"),
+            Fixed("marian", available = false, answer = "x"),
+            Fixed("mlkit", available = true, answer = "أراك حولها"),
+        )
+        val result = chain.translate(TranslationRequest(text = "See you around."))
+        assertTrue(result.engineId.endsWith("+idiom"))
+    }
+
+    @Test
+    fun `promptable gemma output is never second-guessed by the correction`() = runTest {
+        val chain = chain(
+            Fixed("gemma", available = true, answer = "أشوفك على خير"),
+            Fixed("marian", available = true, answer = "x"),
+            Fixed("mlkit", available = true, answer = "y"),
+        )
+        val result = chain.translate(TranslationRequest(text = "See you around."))
+        assertEquals("gemma", result.engineId)
+        assertEquals("أشوفك على خير", result.translatedText)
+    }
+
+    @Test
+    fun `a line containing an idiom inside a sentence keeps the engine output`() = runTest {
+        val chain = chain(
+            Fixed("gemma", available = false, answer = "x"),
+            Fixed("marian", available = true, answer = "حسنًا أراك قريبًا"),
+            Fixed("mlkit", available = true, answer = "y"),
+        )
+        val result = chain.translate(TranslationRequest(text = "Yeah, see you around."))
+        assertEquals("حسنًا أراك قريبًا", result.translatedText)
+        assertEquals("marian", result.engineId)
+    }
+}
