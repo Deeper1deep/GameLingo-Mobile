@@ -126,7 +126,6 @@ object TranslationSessionBus {
     private val _notice = MutableStateFlow<SessionNotice?>(null)
     val notice: StateFlow<SessionNotice?> = _notice.asStateFlow()
 
-<<<<<<< redesign/premium-ui
     /** Wall-clock start of the running session, or null when stopped. UI-only statistic. */
     private val _startedAtMillis = MutableStateFlow<Long?>(null)
     val startedAtMillis: StateFlow<Long?> = _startedAtMillis.asStateFlow()
@@ -135,12 +134,6 @@ object TranslationSessionBus {
     private val _translatedCount = MutableStateFlow(0)
     val translatedCount: StateFlow<Int> = _translatedCount.asStateFlow()
 
-    fun onSessionStarted() {
-        if (_state.value != SessionState.RUNNING) {
-            _startedAtMillis.value = System.currentTimeMillis()
-            _translatedCount.value = 0
-        }
-=======
     /**
      * Why the session last failed, or null. Survives [onSessionStopped]: the
      * teardown after a failure must not erase the explanation the user needs.
@@ -151,7 +144,10 @@ object TranslationSessionBus {
 
     fun onSessionStarted() {
         _error.value = null
->>>>>>> main
+        if (_state.value != SessionState.RUNNING) {
+            _startedAtMillis.value = System.currentTimeMillis()
+            _translatedCount.value = 0
+        }
         _state.value = SessionState.RUNNING
     }
 
