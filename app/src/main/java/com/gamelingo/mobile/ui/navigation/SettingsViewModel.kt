@@ -7,16 +7,34 @@ import com.gamelingo.mobile.data.settings.AppSettings
 import com.gamelingo.mobile.data.settings.OverlayPosition
 import com.gamelingo.mobile.data.settings.SettingsRepository
 import com.gamelingo.mobile.data.settings.TextRegionPreset
+import com.gamelingo.mobile.translate.TranslationRequest
+import com.gamelingo.mobile.translate.local.EgyptianDictionaryHolder
+import com.gamelingo.mobile.translate.local.LocalAiModelState
+import com.gamelingo.mobile.translate.local.LocalEngineChain
+import com.gamelingo.mobile.translate.local.LocalModelManager
 import dagger.hilt.android.lifecycle.HiltViewModel
 import javax.inject.Inject
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+
+/** Outcome of the settings-screen local translation test. */
+data class LocalTestResult(
+    val translatedText: String,
+    val engineId: String,
+    val elapsedMs: Long,
+    val error: String? = null,
+)
 
 @HiltViewModel
 class SettingsViewModel @Inject constructor(
     private val repository: SettingsRepository,
+    private val localModelManager: LocalModelManager,
+    private val localEngineChain: LocalEngineChain,
+    private val dictionaryHolder: EgyptianDictionaryHolder,
 ) : ViewModel() {
 
     val settings: StateFlow<AppSettings> = repository.settings
@@ -60,6 +78,78 @@ class SettingsViewModel @Inject constructor(
 
     fun setCloudTranslationOptIn(enabled: Boolean) =
         viewModelScope.launch { repository.setCloudTranslationOptIn(enabled) }
+
+    fun setAutoOnlineFallback(enabled: Boolean) =
+        viewModelScope.launch { repository.setAutoOnlineFallback(enabled) }
+
+    fun setLocalAiWifiOnly(enabled: Boolean) =
+        viewModelScope.launch { repository.setLocalAiWifiOnly(enabled) }
+
+    // ---- Local AI engine section ----
+
+    /** Per-model download/install state for the local AI cards. */
+    val localAiStates: StateFlow<Map<String, LocalAiModelState>> = localModelManager.states
+
+    /** Models known to the bundled manifest, in display order. */
+    fun localModelSpecs(): List<LocalModelManager.ModelSpec> = localModelManager.specs()
+
+    /** Version of the active Egyptian dictionary. */
+    fun dictionaryVersion(): Int = dictionaryHolder.get().version
+
+    fun refreshLocalAiStates() = localModelManager.refreshStates()
+
+    /** Starts a consented model download; Wi-Fi preference comes from settings. */
+    fun downloadLocalModel(modelId: String) = viewModelScope.launch {
+        val wifiOnly = repository.settings.stateIn(viewModelScope).value.localAiWifiOnly
+        runCatching { localModelManager.download(modelId, preferWifi = wifiOnly) }
+        // Failures surface through localAiStates (Failed with the reason).
+    }
+
+    fun deleteLocalModel(modelId: String) = viewModelScope.launch {
+        localModelManager.deleteModel(modelId)
+    }
+
+    private val _localTestResult = MutableStateFlow<LocalTestResult?>(null)
+
+    /** Result of the last settings-screen local translation test, if any. */
+    val localTestResult: StateFlow<LocalTestResult?> = _localTestResult.asStateFlow()
+
+    private val _localTestRunning = MutableStateFlow(false)
+    val localTestRunning: StateFlow<Boolean> = _localTestRunning.asStateFlow()
+
+    /**
+     * Runs one fixed game line through the local chain and reports the real
+     * engine id and wall-clock time, so the user can see both quality and speed
+     * of what is actually installed. Never fakes a working local engine: with
+     * no model installed the error says so plainly.
+     */
+    fun testLocalTranslation() = viewModelScope.launch {
+        if (_localTestRunning.value) return@launch
+        _localTestRunning.value = true
+        try {
+            val start = System.currentTimeMillis()
+            val result = try {
+                localEngineChain.translate(
+                    TranslationRequest(text = "The heist went sideways, grab the money and run."),
+                )
+            } catch (error: Exception) {
+                _localTestResult.value = LocalTestResult(
+                    translatedText = "",
+                    engineId = "none",
+                    elapsedMs = System.currentTimeMillis() - start,
+                    error = error.message ?: error.javaClass.simpleName,
+                )
+                return@launch
+            }
+            _localTestResult.value = LocalTestResult(
+                translatedText = result.translatedText,
+                engineId = result.engineId,
+                elapsedMs = System.currentTimeMillis() - start,
+            )
+        } finally {
+            _localTestRunning.value = false
+        }
+    }
 
     fun setRequestTimeoutSec(seconds: Int) =
         viewModelScope.launch { repository.setRequestTimeoutSec(seconds) }
