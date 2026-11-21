@@ -124,12 +124,17 @@ class LocalEngineChain internal constructor(
     }
 
     /**
-     * The ML Kit fallback answers in generic/MSA Arabic. Run the safe
-     * dictionary pass over it so the fallback keeps as much of the Egyptian
-     * style as the terminology layer guarantees, and mark the engine id
-     * honestly ("+dict") when the pass changed the wording.
+     * The ML Kit fallback answers in generic/MSA Arabic. In Egyptian mode,
+     * run the safe dictionary pass over it so the fallback keeps as much of
+     * the Egyptian style as the terminology layer guarantees, and mark the
+     * engine id honestly ("+dict") when the pass changed the wording. In MSA
+     * mode the generic output already matches the requested register, so it
+     * passes through untouched - no Egyptian term can leak into it.
      */
     private fun polishMlKit(request: TranslationRequest, result: TranslationResult): TranslationResult {
+        if (request.arabicMode != com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC) {
+            return result
+        }
         val holder = dictionaryHolder ?: return result
         val polished = runCatching {
             holder.get().toEgyptian(request.text, result.translatedText)
