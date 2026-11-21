@@ -85,6 +85,9 @@ class SettingsViewModel @Inject constructor(
     fun setLocalAiWifiOnly(enabled: Boolean) =
         viewModelScope.launch { repository.setLocalAiWifiOnly(enabled) }
 
+    fun setGemmaHdOptIn(enabled: Boolean) =
+        viewModelScope.launch { repository.setGemmaHdOptIn(enabled) }
+
     // ---- Local AI engine section ----
 
     /** Per-model download/install state for the local AI cards. */
