@@ -107,15 +107,19 @@ class TranslateGemmaEngine @Inject constructor(
 
     override suspend fun translate(request: TranslationRequest): TranslationResult {
         ensureReady()
-        dictionary.get().overrideFor(request.text)?.let { override ->
-            return TranslationResult(translatedText = override, engineId = "$ENGINE_ID+dict")
+        // Dictionary line overrides are Egyptian stock renderings: they
+        // belong to Egyptian mode only and must never leak into MSA output.
+        if (request.arabicMode == com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC) {
+            dictionary.get().overrideFor(request.text)?.let { override ->
+                return TranslationResult(translatedText = override, engineId = "$ENGINE_ID+dict")
+            }
         }
         val localEngine = engine ?: throw ModelNotInstalledException()
         return withContext(Dispatchers.Default) {
             inferenceMutex.withLock {
                 val conversation = localEngine.createConversation(
                     ConversationConfig(
-                        systemInstruction = Contents.of(SYSTEM_INSTRUCTION),
+                        systemInstruction = Contents.of(systemInstructionFor(request.arabicMode)),
                         samplerConfig = SamplerConfig(topK = 40, topP = 0.9, temperature = 0.2),
                     ),
                 )
@@ -135,9 +139,15 @@ class TranslateGemmaEngine @Inject constructor(
                         .toString()
                         .trim()
                     if (sb.isEmpty()) throw GenerationFailedException("empty output")
-                    // Light dictionary pass: glossary consistency + known-term fixes.
-                    // The LLM owns style; the dictionary only corrects what it knows.
-                    val polished = dictionary.get().toEgyptian(request.text, sb)
+                    // Light dictionary pass in Egyptian mode only: glossary
+                    // consistency + known-term fixes. The LLM owns style; the
+                    // dictionary only corrects what it knows, and its
+                    // Egyptian renderings must never touch MSA output.
+                    val polished = if (request.arabicMode == com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC) {
+                        dictionary.get().toEgyptian(request.text, sb)
+                    } else {
+                        sb
+                    }
                     TranslationResult(translatedText = polished, engineId = ENGINE_ID)
                 } finally {
                     conversation.close()
@@ -181,6 +191,29 @@ class TranslateGemmaEngine @Inject constructor(
                 "natural; translate idioms by meaning, never word-for-word; never omit any part of the line. " +
                 "Output ONLY the translated line, with no explanations, no notes, no quotes."
 
+        /**
+         * MSA mandate: contemporary Modern Standard Arabic, natural and
+         * correct, no colloquialisms; the profanity policy is identical to
+         * the Egyptian one (preserve intensity, never soften, never invent).
+         */
+        private const val SYSTEM_INSTRUCTION_MSA =
+            "You are a professional English to Modern Standard Arabic translator for video game subtitles. " +
+                "Translate into contemporary Modern Standard Arabic (العربية الفصحى المعاصرة): natural, " +
+                "grammatically sound, clear phrasing, never stiff word-for-word rendering, and never " +
+                "Egyptian or other colloquial expressions. Rules: keep the exact profanity intensity " +
+                "of the source (never soften or delete profanity, never add profanity that is not there); keep " +
+                "sarcasm and tone; keep character names transliterated in Arabic letters; keep gaming terms " +
+                "natural; translate idioms by meaning, never word-for-word; never omit any part of the line. " +
+                "Output ONLY the translated line, with no explanations, no notes, no quotes."
+
+        internal fun systemInstructionFor(
+            mode: com.gamelingo.mobile.data.settings.ArabicTranslationMode,
+        ): String = when (mode) {
+            com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC -> SYSTEM_INSTRUCTION
+            com.gamelingo.mobile.data.settings.ArabicTranslationMode.MODERN_STANDARD_ARABIC ->
+                SYSTEM_INSTRUCTION_MSA
+        }
+
         private fun buildPrompt(request: TranslationRequest): String {
             val sb = StringBuilder()
             if (request.glossary.isNotEmpty()) {
@@ -197,7 +230,13 @@ class TranslateGemmaEngine @Inject constructor(
                 sb.append("Previous lines (context only, do not translate):\n")
                 request.contextLines.takeLast(3).forEach { sb.append("- ").append(it).append('\n') }
             }
-            sb.append("Translate this line into Egyptian Arabic:\n").append(request.text)
+            val target = when (request.arabicMode) {
+                com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC ->
+                    "Egyptian Arabic"
+                com.gamelingo.mobile.data.settings.ArabicTranslationMode.MODERN_STANDARD_ARABIC ->
+                    "Modern Standard Arabic"
+            }
+            sb.append("Translate this line into ").append(target).append(":\n").append(request.text)
             return sb.toString()
         }
     }
