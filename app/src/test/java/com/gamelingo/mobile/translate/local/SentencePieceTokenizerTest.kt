@@ -70,7 +70,13 @@ class SentencePieceTokenizerTest {
                 val name = "enar_tokenizer.part%02d".format(part)
                 val stream = SentencePieceTokenizerTest::class.java.classLoader
                     ?.getResourceAsStream(name) ?: break
-                sb.append(BufferedReader(InputStreamReader(stream, Charsets.UTF_8)).use { it.readText() })
+                // GitHub's web editor appends a trailing newline to each committed
+                // part; the minified JSON contains no whitespace, so strip it.
+                sb.append(
+                    BufferedReader(InputStreamReader(stream, Charsets.UTF_8))
+                        .use { it.readText() }
+                        .trimEnd('\n'),
+                )
                 part++
             }
             assertTrue("tokenizer parts missing from test resources", part > 1)
