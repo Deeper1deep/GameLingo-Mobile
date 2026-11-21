@@ -140,7 +140,7 @@ class ScreenCaptureService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         when (intent?.action) {
             ACTION_START -> startCapture(intent)
-            ACTION_STOP -> stopCapture()
+            ACTION_STOP -> stopCapture(CaptureHealth.StopReasons.USER_BUTTON)
             else -> {
                 // A stray or empty intent (system redelivery, a confused
                 // caller) must never end a running session. Only stop the
@@ -170,7 +170,7 @@ class ScreenCaptureService : Service() {
         if (resultData == null) {
             Log.e(TAG, "startCapture without consent data")
             TranslationSessionBus.onSessionError(SessionError.MISSING_CONSENT_DATA)
-            stopCapture()
+            stopCapture(CaptureHealth.StopReasons.MISSING_CONSENT_DATA)
             return
         }
 
@@ -182,7 +182,7 @@ class ScreenCaptureService : Service() {
             .onFailure {
                 Log.e(TAG, "startForeground failed", it)
                 TranslationSessionBus.onSessionError(SessionError.FOREGROUND_START_FAILED)
-                stopCapture()
+                stopCapture(CaptureHealth.StopReasons.FOREGROUND_START_FAILED)
                 return
             }
 
@@ -201,7 +201,7 @@ class ScreenCaptureService : Service() {
         }
         if (projection == null) {
             TranslationSessionBus.onSessionError(SessionError.PROJECTION_REJECTED)
-            stopCapture()
+            stopCapture(CaptureHealth.StopReasons.PROJECTION_REJECTED)
             return
         }
 
@@ -215,7 +215,7 @@ class ScreenCaptureService : Service() {
                     if (!stopping.get()) {
                         TranslationSessionBus.onSessionError(SessionError.PROJECTION_ENDED)
                     }
-                    stopCapture()
+                    stopCapture(CaptureHealth.StopReasons.PROJECTION_ENDED)
                 }
             },
             null,
@@ -237,7 +237,7 @@ class ScreenCaptureService : Service() {
                 Log.e(TAG, "settings collection failed", error)
                 CaptureHealth.onError("settings collection: ${error.javaClass.simpleName}")
                 TranslationSessionBus.onSessionError(SessionError.SETTINGS_UNAVAILABLE)
-                stopCapture()
+                stopCapture(CaptureHealth.StopReasons.SETTINGS_UNAVAILABLE)
             }
         }
 
@@ -298,7 +298,7 @@ class ScreenCaptureService : Service() {
                 if (rebuildFailureTracker.onFailure()) {
                     Log.e(TAG, "display rebuild keeps failing; stopping the session")
                     TranslationSessionBus.onSessionError(SessionError.CAPTURE_PERSISTENT_FAILURE)
-                    stopCapture()
+                    stopCapture(CaptureHealth.StopReasons.CAPTURE_PERSISTENT_FAILURE)
                 }
             }
         }
@@ -369,7 +369,7 @@ class ScreenCaptureService : Service() {
             } catch (error: Exception) {
                 Log.e(TAG, "settings read failed inside the capture loop", error)
                 TranslationSessionBus.onSessionError(SessionError.SETTINGS_UNAVAILABLE)
-                stopCapture()
+                stopCapture(CaptureHealth.StopReasons.SETTINGS_UNAVAILABLE)
                 break
             }
             try {
@@ -395,7 +395,7 @@ class ScreenCaptureService : Service() {
                 if (failureTracker.onFailure()) {
                     Log.e(TAG, "frame processing keeps failing; stopping the session")
                     TranslationSessionBus.onSessionError(SessionError.CAPTURE_PERSISTENT_FAILURE)
-                    stopCapture()
+                    stopCapture(CaptureHealth.StopReasons.CAPTURE_PERSISTENT_FAILURE)
                     break
                 }
             }
@@ -559,11 +559,13 @@ class ScreenCaptureService : Service() {
         return bytes
     }
 
-    private fun stopCapture() {
+    private fun stopCapture(reason: String) {
         // Re-entry is expected: the stop button, the projection callback, an
         // OCR failure and onDestroy can all arrive together. Only the first
-        // caller runs teardown.
+        // caller runs teardown, so the first caller's reason is the one kept.
         if (!stopping.compareAndSet(false, true)) return
+        CaptureHealth.onSessionStopped(reason)
+        Log.i(TAG, "stopCapture: tearing down (reason=$reason)")
         captureJob?.cancel()
         captureJob = null
         settingsJob?.cancel()
@@ -636,6 +638,11 @@ class ScreenCaptureService : Service() {
     }
 
     override fun onDestroy() {
+        // System kill or normal shutdown without a prior stopCapture: record it
+        // so diagnostics can tell "service destroyed" apart from a user stop.
+        if (stopping.compareAndSet(false, true)) {
+            CaptureHealth.onSessionStopped(CaptureHealth.StopReasons.SERVICE_DESTROYED)
+        }
         // Same guarded teardown as stopCapture: either path can run after the
         // other, and none of these components tolerate a second release.
         runCatching { captureJob?.cancel() }
