@@ -86,6 +86,10 @@ class FakeSettingsRepository(
         state.value = state.value.copy(arabicTranslationMode = mode)
     }
 
+    override suspend fun setUserGlossaryTerms(terms: List<com.gamelingo.mobile.data.settings.UserGlossaryTerm>) {
+        state.value = state.value.copy(userGlossaryTerms = terms)
+    }
+
     override suspend fun setRequestTimeoutSec(seconds: Int) {
         state.value = state.value.copy(requestTimeoutSec = seconds)
     }
