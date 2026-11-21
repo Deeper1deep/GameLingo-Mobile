@@ -61,6 +61,12 @@ object EgyptianDialectPrompt {
             }
         }
 
+        // Understanding hints: non-literal expressions with their established
+        // meaning, so the model renders the idiom, never the words.
+        if (request.understandingHints.isNotEmpty()) {
+            builder.append(request.understandingHints).append('\n')
+        }
+
         builder.append("Translate this line:\n").append(request.text)
         return builder.toString().trimEnd()
     }
