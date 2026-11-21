@@ -401,6 +401,13 @@
     <string name="overlay_stop_hint">اضغط مطوّلًا للإيقاف</string>
     <string name="overlay_stop_hint_cd">إظهار تلميح الإيقاف المطوّل</string>
     <string name="diag_last_stop">آخر إيقاف</string>
+    <string name="notif_channel_alerts_name">تنبيهات الجلسة</string>
+    <string name="notif_channel_alerts_desc">تنبيه عند توقف الترجمة فجأة</string>
+    <string name="notif_resume_title">الترجمة اتوقفت فجأة</string>
+    <string name="notif_resume_text">النظام أنهى مشاركة الشاشة. المس هنا لاستئناف الترجمة.</string>
+    <string name="resume_banner_text">الترجمة اتوقفت فجأة: النظام أنهى مشاركة الشاشة أثناء اللعب. اضغط استئناف وهترجع الترجمة في ثواني.</string>
+    <string name="resume_action">استئناف الترجمة</string>
+    <string name="resume_dismiss">لاحقًا</string>
     <string name="diag_stop_fmt">%1$s (%2$s)</string>
     <string name="diag_stop_user">ضغطة على زرار الإيقاف</string>
     <string name="diag_stop_projection">النظام أنهى مشاركة الشاشة</string>
