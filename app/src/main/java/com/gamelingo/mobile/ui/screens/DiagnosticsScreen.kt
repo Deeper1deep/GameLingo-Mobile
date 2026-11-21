@@ -88,6 +88,10 @@ fun DiagnosticsScreen() {
                 label = stringResource(R.string.diag_last_rebuild),
                 value = ago(snapshot.lastDisplayRebuildAt, tick),
             )
+            InfoRow(
+                label = stringResource(R.string.diag_last_stop),
+                value = stopReasonText(snapshot.lastStopReason, snapshot.lastStopAt, tick),
+            )
         }
 
         SectionHeader(stringResource(R.string.diag_section_worker))
@@ -137,6 +141,32 @@ fun DiagnosticsScreen() {
 }
 
 /** "12 ثانية" style age for a timestamp, or the placeholder when it never happened. */
+/**
+ * The recorded reason the last capture session stopped (user stop button,
+ * the system ending screen sharing, the system killing the service, or a
+ * failure), with how long ago it happened. "لسه" when no stop was recorded.
+ */
+@Composable
+private fun stopReasonText(reason: String?, stopAtMillis: Long, now: Long): String {
+    if (reason == null || stopAtMillis <= 0L) {
+        return stringResource(R.string.diag_none)
+    }
+    val label = when (reason) {
+        CaptureHealth.StopReasons.USER_BUTTON -> stringResource(R.string.diag_stop_user)
+        CaptureHealth.StopReasons.PROJECTION_ENDED -> stringResource(R.string.diag_stop_projection)
+        CaptureHealth.StopReasons.SERVICE_DESTROYED -> stringResource(R.string.diag_stop_service)
+        CaptureHealth.StopReasons.MISSING_CONSENT_DATA,
+        CaptureHealth.StopReasons.FOREGROUND_START_FAILED,
+        CaptureHealth.StopReasons.PROJECTION_REJECTED,
+        CaptureHealth.StopReasons.SETTINGS_UNAVAILABLE,
+        CaptureHealth.StopReasons.CAPTURE_PERSISTENT_FAILURE,
+        -> stringResource(R.string.diag_stop_error)
+
+        else -> stringResource(R.string.diag_stop_unknown)
+    }
+    return stringResource(R.string.diag_stop_fmt, label, ago(stopAtMillis, now))
+}
+
 @Composable
 private fun ago(timestampMillis: Long, now: Long): String =
     if (timestampMillis <= 0L) {
