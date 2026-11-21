@@ -46,6 +46,8 @@ class TranslationCoordinator @Inject constructor(
     private val settingsRepository: SettingsRepository,
     private val historyDao: TranslationHistoryDao,
     private val cache: TranslationCache,
+    private val modelManager: com.gamelingo.mobile.translate.local.LocalModelManager,
+    private val dictionaryHolder: com.gamelingo.mobile.translate.local.EgyptianDictionaryHolder,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -102,11 +104,16 @@ class TranslationCoordinator @Inject constructor(
         val generation = TranslationSessionBus.currentGeneration()
         val settings = settingsRepository.settings.first()
         val contextLines = contextMemory.snapshot().takeLast(settings.contextLines)
+        val plannedEngine = hybridEngine.plannedEngineId()
         val cacheContext = CacheContext(
             aiMode = settings.aiMode,
-            plannedEngineId = hybridEngine.plannedEngineId(),
+            plannedEngineId = plannedEngine,
             promptVersion = EgyptianDialectPrompt.PROMPT_VERSION,
             contextSignature = CacheContext.signatureOf(contextLines),
+            // A model or dictionary update changes the output for the same
+            // input; key on both so an update never serves pre-update entries.
+            modelVersion = installedVersionFor(plannedEngine),
+            dictionaryVersion = dictionaryHolder.get().version,
         )
 
         if (settings.cacheEnabled) {
@@ -193,6 +200,15 @@ class TranslationCoordinator @Inject constructor(
     private fun isStale(generation: Long): Boolean =
         TranslationSessionBus.state.value != SessionState.RUNNING ||
             TranslationSessionBus.currentGeneration() != generation
+
+    /** Installed version of the model backing [plannedEngine], or 0 for engines without one. */
+    private fun installedVersionFor(plannedEngine: String): Int = when (plannedEngine) {
+        com.gamelingo.mobile.translate.local.LocalAiTranslationEngine.ENGINE_ID ->
+            modelManager.installedVersion(com.gamelingo.mobile.translate.local.LocalModelManager.MODEL_MARIAN) ?: 0
+        com.gamelingo.mobile.translate.local.TranslateGemmaEngine.ENGINE_ID ->
+            modelManager.installedVersion(com.gamelingo.mobile.translate.local.LocalModelManager.MODEL_TRANSLATEGEMMA) ?: 0
+        else -> 0
+    }
 
     private fun isLocalFallback(mode: AiMode, actualEngineId: String): Boolean =
         mode != AiMode.LOCAL && actualEngineId == MlKitTranslationEngine.ENGINE_ID
