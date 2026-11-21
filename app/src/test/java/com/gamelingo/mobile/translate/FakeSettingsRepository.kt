@@ -78,6 +78,10 @@ class FakeSettingsRepository(
         state.value = state.value.copy(localAiWifiOnly = enabled)
     }
 
+    override suspend fun setGemmaHdOptIn(enabled: Boolean) {
+        state.value = state.value.copy(gemmaHdOptIn = enabled)
+    }
+
     override suspend fun setRequestTimeoutSec(seconds: Int) {
         state.value = state.value.copy(requestTimeoutSec = seconds)
     }
