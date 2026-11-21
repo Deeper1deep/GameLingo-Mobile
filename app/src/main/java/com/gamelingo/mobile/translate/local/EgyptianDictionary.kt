@@ -33,6 +33,10 @@ class EgyptianDictionary private constructor(
     private val gamingSlang: List<Term> = emptyList(),
     private val characterNames: List<Term> = emptyList(),
     private val locationNames: List<Term> = emptyList(),
+    private val factions: List<Term> = emptyList(),
+    private val weapons: List<Term> = emptyList(),
+    private val militaryTerms: List<Term> = emptyList(),
+    private val missions: List<Term> = emptyList(),
 ) {
 
     @Serializable
@@ -63,6 +67,14 @@ class EgyptianDictionary private constructor(
         val gaming_slang: List<Term> = emptyList(),
         val character_names: List<Term> = emptyList(),
         val location_names: List<Term> = emptyList(),
+        // World-of-the-game layers: faction/group names, weapons and gear,
+        // military vocabulary, mission names. Register-neutral, so they
+        // serve both Arabic modes and keep a name's rendering consistent
+        // across the whole game.
+        val factions: List<Term> = emptyList(),
+        val weapons: List<Term> = emptyList(),
+        val military_terms: List<Term> = emptyList(),
+        val missions: List<Term> = emptyList(),
     )
 
     companion object {
@@ -86,6 +98,10 @@ class EgyptianDictionary private constructor(
                 gamingSlang = data.gaming_slang,
                 characterNames = data.character_names,
                 locationNames = data.location_names,
+                factions = data.factions,
+                weapons = data.weapons,
+                militaryTerms = data.military_terms,
+                missions = data.missions,
             )
         }
 
@@ -129,6 +145,10 @@ class EgyptianDictionary private constructor(
             addAll(gamingSlang)
             addAll(characterNames)
             addAll(locationNames)
+            addAll(factions)
+            addAll(weapons)
+            addAll(militaryTerms)
+            addAll(missions)
             when (mode) {
                 // Legacy terms are Egyptian renderings: Egyptian mode only,
                 // so a فصحى prompt never receives عامية wording.
@@ -176,7 +196,7 @@ class EgyptianDictionary private constructor(
     }
 
     /** Word-boundary phrase match for English (ASCII letters/digits). */
-    private fun containsEnPhrase(haystack: String, needle: String): Boolean {
+    internal fun containsEnPhrase(haystack: String, needle: String): Boolean {
         var idx = haystack.indexOf(needle)
         while (idx >= 0) {
             val before = idx == 0 || !haystack[idx - 1].isLetterOrDigit()
