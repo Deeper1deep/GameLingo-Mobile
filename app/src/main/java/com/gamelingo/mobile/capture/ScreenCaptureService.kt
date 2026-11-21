@@ -16,6 +16,7 @@ import android.media.ImageReader
 import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Build
+import android.os.SystemClock
 import android.util.Log
 import android.os.IBinder
 import android.view.Display
@@ -23,6 +24,7 @@ import android.view.Surface
 import androidx.core.app.NotificationCompat
 import com.gamelingo.mobile.R
 import com.gamelingo.mobile.core.capture.BlockDynamicsTracker
+import com.gamelingo.mobile.core.capture.CaptureHealth
 import com.gamelingo.mobile.core.capture.DisplayGeometry
 import com.gamelingo.mobile.core.capture.FailureTracker
 import com.gamelingo.mobile.core.capture.SubtitleBlockScorer
@@ -35,6 +37,7 @@ import com.gamelingo.mobile.core.text.Deduplicator
 import com.gamelingo.mobile.core.timing.PipelineTiming
 import com.gamelingo.mobile.core.text.TextNormalizer
 import com.gamelingo.mobile.core.text.TextStabilityTracker
+import com.gamelingo.mobile.data.settings.AppSettings
 import com.gamelingo.mobile.data.settings.SettingsRepository
 import com.gamelingo.mobile.ocr.TextRecognizerEngine
 import com.gamelingo.mobile.overlay.OverlayService
@@ -59,11 +62,15 @@ import kotlinx.coroutines.sync.withLock
  * VirtualDisplay, runs on-device OCR and publishes accepted lines to
  * [TranslationSessionBus]. Runs entirely on-device; no frame ever leaves it.
  *
- * The capture surface tracks the display: rotation or size changes (opening a
- * fullscreen game/video after starting the session) rebuild the VirtualDisplay
- * and ImageReader, otherwise the mirrored frame letterboxes into stale
- * geometry and the OCR band lands on black bars. Repeated frame failures
- * surface as a session error instead of spinning silently.
+ * One VirtualDisplay per MediaProjection: the capture surface tracks the
+ * display through [VirtualDisplay.resize] and [VirtualDisplay.setSurface]
+ * on a fresh ImageReader, never by stacking a second VirtualDisplay on the
+ * same projection. Rotation or size changes (opening a fullscreen game or
+ * video after starting the session) are picked up within one capture tick by
+ * the loop's geometry check, or immediately via the DisplayListener.
+ * Repeated frame failures surface as a session error instead of spinning
+ * silently, and every pipeline stage stamps [CaptureHealth] so a starved
+ * session is visible instead of looking "running".
  */
 @AndroidEntryPoint
 class ScreenCaptureService : Service() {
@@ -73,8 +80,12 @@ class ScreenCaptureService : Service() {
 
     // A stray async exception must never reach the default uncaught handler:
     // that kills the whole app. The capture loop handles its own failures and
-    // reports persistent ones to the user; anything else is logged and dropped.
-    private val exceptionHandler = CoroutineExceptionHandler { _, _ -> }
+    // reports persistent ones to the user; anything else is logged (never
+    // silently swallowed) and dropped.
+    private val exceptionHandler = CoroutineExceptionHandler { _, error ->
+        Log.e(TAG, "unhandled failure in capture service scope", error)
+        CaptureHealth.onError("service scope: ${error.javaClass.simpleName}: ${error.message}")
+    }
     private val serviceScope = CoroutineScope(SupervisorJob() + Dispatchers.Default + exceptionHandler)
 
     /** True once teardown has begun; stopCapture runs its body only once. */
@@ -84,10 +95,17 @@ class ScreenCaptureService : Service() {
     private var virtualDisplay: VirtualDisplay? = null
     private var imageReader: ImageReader? = null
     private var captureJob: Job? = null
+    private var settingsJob: Job? = null
 
     /** Guards VirtualDisplay/ImageReader rebuilds against in-flight frame reads. */
     private val displayMutex = Mutex()
     private var currentGeometry: DisplayGeometry? = null
+
+    /**
+     * Latest settings, kept hot by a collector so the capture loop never hits
+     * DataStore on every tick. Null until the first emission arrives.
+     */
+    @Volatile private var cachedSettings: AppSettings? = null
 
     private val frameChangeDetector = FrameChangeDetector()
     private val stabilityTracker = TextStabilityTracker()
@@ -97,6 +115,25 @@ class ScreenCaptureService : Service() {
     /** Separate, larger budget for display rebuilds (full-screen/rotation). */
     private val rebuildFailureTracker = FailureTracker(maxConsecutiveFailures = REBUILD_MAX_FAILURES)
     private val blockDynamicsTracker = BlockDynamicsTracker()
+
+    /** Watchdog: last time a stall was reported, so it logs once per stall. */
+    private var lastStallReportAt = 0L
+
+    /** Reacts to display changes (rotation, size) faster than the next tick. */
+    private val displayListener = object : DisplayManager.DisplayListener {
+        override fun onDisplayAdded(displayId: Int) {}
+        override fun onDisplayRemoved(displayId: Int) {}
+        override fun onDisplayChanged(displayId: Int) {
+            if (displayId != Display.DEFAULT_DISPLAY) return
+            val job = captureJob
+            if (job != null && job.isActive) {
+                serviceScope.launch {
+                    runCatching { rebuildDisplayIfNeeded() }
+                        .onFailure { Log.w(TAG, "display-change rebuild failed", it) }
+                }
+            }
+        }
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -114,12 +151,6 @@ class ScreenCaptureService : Service() {
         }
         return START_NOT_STICKY
     }
-
-    // No onConfigurationChanged hook: rebuilding the capture surface from the
-    // config-change callback races in-flight frame reads, and any exception
-    // thrown there crashes the process. The capture loop already re-checks the
-    // display geometry every tick and rebuilds under its own error handling,
-    // at most one capture interval after rotation.
 
     private fun startCapture(intent: Intent) {
         if (mediaProjection != null) return // already running
@@ -191,7 +222,28 @@ class ScreenCaptureService : Service() {
         )
         mediaProjection = projection
 
+        getSystemService(DisplayManager::class.java)
+            ?.registerDisplayListener(displayListener, null)
+
+        // Keep settings hot for the capture loop: one collector instead of a
+        // DataStore read on every tick (~600 ms).
+        settingsJob?.cancel()
+        settingsJob = serviceScope.launch {
+            try {
+                settingsRepository.settings.collect { cachedSettings = it }
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                Log.e(TAG, "settings collection failed", error)
+                CaptureHealth.onError("settings collection: ${error.javaClass.simpleName}")
+                TranslationSessionBus.onSessionError(SessionError.SETTINGS_UNAVAILABLE)
+                stopCapture()
+            }
+        }
+
         TranslationSessionBus.onSessionStarted()
+        CaptureHealth.onSessionStarted()
+        lastStallReportAt = 0L
         startService(OverlayService.startIntent(this))
         captureJob = serviceScope.launch { captureLoop() }
     }
@@ -212,14 +264,23 @@ class ScreenCaptureService : Service() {
     }
 
     /**
-     * Rebuilds the ImageReader + VirtualDisplay when the display geometry has
-     * changed since the surface was created. The first call builds the surface.
+     * Re-fits the capture surface when the display geometry changed since it
+     * was created. The first call creates the surface; later changes resize
+     * the SAME VirtualDisplay (one per MediaProjection, as required) and swap
+     * in a new ImageReader via setSurface.
      */
     private suspend fun rebuildDisplayIfNeeded() {
         val projection = mediaProjection ?: return
         val latest = latestGeometry()
         displayMutex.withLock {
             if (!DisplayGeometry.needsRebuild(currentGeometry, latest)) return
+            // Transient 0x0 metrics during a configuration change are real on
+            // some devices. Never build a fake 1x1 surface to hide that: skip
+            // the tick and retry once the metrics settle.
+            if (latest.width <= 0 || latest.height <= 0) {
+                Log.w(TAG, "display metrics not settled (${latest.width}x${latest.height}); skipping rebuild this tick")
+                return
+            }
             try {
                 rebuildLocked(projection, latest)
                 rebuildFailureTracker.onSuccess()
@@ -227,12 +288,13 @@ class ScreenCaptureService : Service() {
                 throw cancelled
             } catch (error: Exception) {
                 // A full-screen or rotation switch can make the projection
-                // refuse a new VirtualDisplay for a moment. That transition
+                // refuse a new capture surface for a moment. That transition
                 // must not eat the 5-failure session budget: rebuilds get
                 // their own, much larger budget (about 12 s of retries at the
                 // default capture interval) before the session is declared
                 // broken.
                 Log.w(TAG, "display rebuild failed; retrying next tick", error)
+                CaptureHealth.onError("display rebuild: ${error.javaClass.simpleName}: ${error.message}")
                 if (rebuildFailureTracker.onFailure()) {
                     Log.e(TAG, "display rebuild keeps failing; stopping the session")
                     TranslationSessionBus.onSessionError(SessionError.CAPTURE_PERSISTENT_FAILURE)
@@ -242,37 +304,48 @@ class ScreenCaptureService : Service() {
         }
     }
 
-    /** Builds the capture surface for [latest]; old objects are dropped first. */
+    /**
+     * Builds or re-fits the capture surface for [latest]. Exactly one
+     * VirtualDisplay exists per MediaProjection: a geometry change resizes it
+     * and points it at a new ImageReader surface; only the first call (or a
+     * failed resize) falls back to creating it.
+     */
     private fun rebuildLocked(projection: MediaProjection, latest: DisplayGeometry) {
-        // Release the old surface before building the new one. A failed
-        // release must not skip or break the rebuild: the old objects are
-        // dropped regardless and replaced with fresh ones.
-        runCatching { virtualDisplay?.release() }
-        virtualDisplay = null
-        runCatching { imageReader?.close() }
-        imageReader = null
-        // Transient 0x0 metrics during a configuration change are real on
-        // some devices; ImageReader rejects zero dimensions.
-        val width = latest.width.coerceAtLeast(1)
-        val height = latest.height.coerceAtLeast(1)
+        val width = latest.width
+        val height = latest.height
+        val densityDpi = resources.displayMetrics.densityDpi
         val reader = ImageReader.newInstance(
             width,
             height,
             PixelFormat.RGBA_8888,
             2,
         )
+        val existing = virtualDisplay
+        if (existing == null) {
+            runCatching { imageReader?.close() }
+            virtualDisplay = projection.createVirtualDisplay(
+                "gamelingo-capture",
+                width,
+                height,
+                densityDpi,
+                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                reader.surface,
+                null,
+                null,
+            )
+        } else {
+            // Reuse the live display: resize first so its output matches the
+            // new geometry, then swap the surface atomically, then retire the
+            // old reader (its surface must outlive the swap).
+            val oldReader = imageReader
+            existing.resize(width, height, densityDpi)
+            existing.setSurface(reader.surface)
+            imageReader = null
+            runCatching { oldReader?.close() }
+        }
         imageReader = reader
-        virtualDisplay = projection.createVirtualDisplay(
-            "gamelingo-capture",
-            width,
-            height,
-            resources.displayMetrics.densityDpi,
-            DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-            reader.surface,
-            null,
-            null,
-        )
         currentGeometry = latest
+        CaptureHealth.onDisplayRebuilt()
         // The frame stream restarts: stale digests, half-stable lines and
         // block-position history from the old geometry must not gate the
         // new one.
@@ -284,11 +357,13 @@ class ScreenCaptureService : Service() {
 
     private suspend fun captureLoop() {
         while (serviceScope.isActive) {
-            // The settings read lives inside error handling too: a failing
-            // DataStore must surface as a session error, not kill the loop
-            // silently while the UI keeps showing RUNNING.
-            val settings = try {
-                settingsRepository.settings.first()
+            val tickStart = SystemClock.elapsedRealtime()
+            // Settings come from the hot cache; only the very first ticks
+            // (before the collector's first emission) fall back to a direct
+            // read. A failing DataStore surfaces as a session error through
+            // the collector, not as a silently dead loop.
+            val settings = cachedSettings ?: try {
+                settingsRepository.settings.first().also { cachedSettings = it }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
@@ -304,6 +379,7 @@ class ScreenCaptureService : Service() {
                     displayMutex.withLock {
                         val image = imageReader?.acquireLatestImage()
                         if (image != null) {
+                            CaptureHealth.onFrameAcquired()
                             image.use { processFrame(it, geometry, settings) }
                         }
                     }
@@ -315,6 +391,7 @@ class ScreenCaptureService : Service() {
                 // A single bad frame or OCR failure must not kill the session,
                 // but a persistent failure is a broken session: say so and stop.
                 Log.w(TAG, "frame processing failed", error)
+                CaptureHealth.onError("frame processing: ${error.javaClass.simpleName}: ${error.message}")
                 if (failureTracker.onFailure()) {
                     Log.e(TAG, "frame processing keeps failing; stopping the session")
                     TranslationSessionBus.onSessionError(SessionError.CAPTURE_PERSISTENT_FAILURE)
@@ -322,14 +399,42 @@ class ScreenCaptureService : Service() {
                     break
                 }
             }
-            delay(settings.captureIntervalMs)
+            reportStallIfNeeded()
+            // Time-aware pacing: the interval covers the whole tick (frame
+            // read + OCR + publish), so processing time is subtracted instead
+            // of stacked on top. A floor keeps the loop from spinning when
+            // OCR takes longer than the interval.
+            val elapsed = SystemClock.elapsedRealtime() - tickStart
+            val waitMs = (settings.captureIntervalMs - elapsed)
+                .coerceAtLeast(MIN_TICK_DELAY_MS)
+            delay(waitMs)
         }
+    }
+
+    /**
+     * Watchdog: while a session is running, frames must keep arriving. A
+     * stalled ImageReader (surface dead after a failed resize, projection
+     * half-stopped) otherwise looks like "running, just quiet" forever.
+     * Reports once per stall through CaptureHealth and the log; the
+     * diagnostics page turns it into user-visible state.
+     */
+    private fun reportStallIfNeeded() {
+        if (mediaProjection == null || currentGeometry == null) return
+        val snapshot = CaptureHealth.snapshot()
+        val lastFrame = snapshot.lastFrameAcquiredAt
+        if (lastFrame <= 0L) return
+        val stalledFor = System.currentTimeMillis() - lastFrame
+        if (stalledFor < STALL_REPORT_MS) return
+        if (System.currentTimeMillis() - lastStallReportAt < STALL_REPORT_MS) return
+        lastStallReportAt = System.currentTimeMillis()
+        Log.w(TAG, "no frames for ${stalledFor}ms while capturing")
+        CaptureHealth.onError("capture stalled: no frames for ${stalledFor}ms")
     }
 
     private suspend fun processFrame(
         image: Image,
         geometry: DisplayGeometry,
-        settings: com.gamelingo.mobile.data.settings.AppSettings,
+        settings: AppSettings,
     ) {
         val fullBitmap = PipelineTiming.timed("frame_decode") {
             image.toBitmap(geometry.width, geometry.height)
@@ -343,6 +448,9 @@ class ScreenCaptureService : Service() {
                     frameChangeDetector.hasChanged(fullBitmap.toDownsampledBytes())
                 }
             if (!shouldRunOcr) {
+                // Battery saver skipped this frame. Stamp it: a session whose
+                // OCR keeps being skipped must look starved, not healthy.
+                CaptureHealth.onOcrSkipped()
                 return
             }
 
@@ -382,6 +490,7 @@ class ScreenCaptureService : Service() {
             } else {
                 recognizerEngine.recognize(InputImage.fromBitmap(workingBitmap, 0))
             }
+            CaptureHealth.onOcrRun()
 
             PipelineTiming.mark(
                 "ocr",
@@ -398,6 +507,7 @@ class ScreenCaptureService : Service() {
                 text = text,
                 capturedAtMillis = System.currentTimeMillis(),
             )
+            CaptureHealth.onLinePublished()
             PipelineTiming.mark("line_published", 0, "len=${text.length}")
         } finally {
             // Never recycle the same bitmap twice: the cropped bitmap may BE
@@ -456,6 +566,13 @@ class ScreenCaptureService : Service() {
         if (!stopping.compareAndSet(false, true)) return
         captureJob?.cancel()
         captureJob = null
+        settingsJob?.cancel()
+        settingsJob = null
+        cachedSettings = null
+        runCatching {
+            getSystemService(DisplayManager::class.java)
+                ?.unregisterDisplayListener(displayListener)
+        }
         // Null the fields before releasing: when the system stops the
         // projection on app close, MediaProjection.Callback.onStop calls us
         // while onDestroy may follow right after. Every release step is
@@ -522,6 +639,11 @@ class ScreenCaptureService : Service() {
         // Same guarded teardown as stopCapture: either path can run after the
         // other, and none of these components tolerate a second release.
         runCatching { captureJob?.cancel() }
+        runCatching { settingsJob?.cancel() }
+        runCatching {
+            getSystemService(DisplayManager::class.java)
+                ?.unregisterDisplayListener(displayListener)
+        }
         runCatching { virtualDisplay?.release() }
         runCatching { imageReader?.close() }
         runCatching { mediaProjection?.stop() }
@@ -540,6 +662,12 @@ class ScreenCaptureService : Service() {
         /** About 12 s of rebuild retries at the default 600 ms interval. */
         private const val REBUILD_MAX_FAILURES = 20
         private const val NOTIFICATION_ID = 1001
+
+        /** Watchdog: report when no frame arrived for this long while capturing. */
+        private const val STALL_REPORT_MS = 5_000L
+
+        /** Floor for the capture tick delay when OCR outlasts the interval. */
+        private const val MIN_TICK_DELAY_MS = 50L
 
         fun startIntent(context: Context, resultCode: Int, data: Intent): Intent =
             Intent(context, ScreenCaptureService::class.java)
