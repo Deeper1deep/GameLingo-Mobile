@@ -369,6 +369,11 @@
     <string name="local_ai_section">محرك الذكاء الاصطناعي المحلي</string>
     <string name="local_ai_wifi_only">تحميل النماذج عبر Wi-Fi فقط</string>
     <string name="local_ai_wifi_only_hint">على بيانات الموبايل هيسألك الأول بدل ما يستهلك الباقة</string>
+    <string name="arabic_style_title">أسلوب اللغة العربية</string>
+    <string name="arabic_style_msa_short">الفصحى</string>
+    <string name="arabic_style_egy_short">العامية المصرية</string>
+    <string name="arabic_style_msa_desc">ترجمة عربية فصيحة وطبيعية: قواعد سليمة وصياغة واضحة تحافظ على المعنى الأصلي ونبرة الشخصية، من غير تعبيرات عامية ومن غير ترجمة حرفية راكبة.</string>
+    <string name="arabic_style_egy_desc">ترجمة مصرية طبيعية زي ما المصريين بيتكلموا: تعبيرات يومية مناسبة للسياق، الحفاظ على الـ Slang ومصطلحات الألعاب، والشتائم محفوظة من غير حذف ولا تهذيب ولا اختراع.</string>
     <string name="nav_diagnostics">التشخيص</string>
     <string name="settings_diagnostics_sub">شوف الالتقاط والترجمة بيشتغلوا إزاي دلوقتي</string>
     <string name="diag_section_capture">الالتقاط</string>
