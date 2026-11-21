@@ -200,7 +200,8 @@ class TranslateGemmaEngine @Inject constructor(
             "You are a professional English to Modern Standard Arabic translator for video game subtitles. " +
                 "Translate into contemporary Modern Standard Arabic (العربية الفصحى المعاصرة): natural, " +
                 "grammatically sound, clear phrasing, never stiff word-for-word rendering, and never " +
-                "Egyptian or other colloquial expressions. Rules: keep the exact profanity intensity " +
+                "Egyptian or other colloquial expressions. Rules: keep the tense of the source, " +
+                "a question stays a question and a negation stays negated; keep the exact profanity intensity " +
                 "of the source (never soften or delete profanity, never add profanity that is not there); keep " +
                 "sarcasm and tone; keep character names transliterated in Arabic letters; keep gaming terms " +
                 "natural; translate idioms by meaning, never word-for-word; never omit any part of the line. " +
@@ -229,6 +230,9 @@ class TranslateGemmaEngine @Inject constructor(
             if (request.contextLines.isNotEmpty()) {
                 sb.append("Previous lines (context only, do not translate):\n")
                 request.contextLines.takeLast(3).forEach { sb.append("- ").append(it).append('\n') }
+            }
+            if (request.understandingHints.isNotEmpty()) {
+                sb.append(request.understandingHints).append('\n')
             }
             val target = when (request.arabicMode) {
                 com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC ->
