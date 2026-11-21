@@ -89,10 +89,13 @@ android {
         }
     }
 
-    // Unit tests read the SHIPPED understanding dataset, not a copy that can drift.
+    // Unit tests read the SHIPPED datasets, not copies that can drift.
     sourceSets {
         getByName("test") {
             resources.srcDir("src/main/assets/understanding")
+            // The Egyptian dictionary too: a copied fixture silently drifted
+            // from the shipped file once already.
+            resources.srcDir("src/main/assets/local_ai")
         }
     }
 
