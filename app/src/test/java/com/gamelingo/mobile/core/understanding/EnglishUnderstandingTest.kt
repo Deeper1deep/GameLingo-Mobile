@@ -111,6 +111,31 @@ class EnglishUnderstandingTest {
         assertTrue(layers.contains(EnglishUnderstanding.Layer.IDIOM))
         assertTrue(layers.contains(EnglishUnderstanding.Layer.INFORMAL))
     }
+
+    @Test
+    fun `this is us renders as we, never as the country`() {
+        assertEquals("هذا نحن", layer.exactLineRendering("This is us.", MSA))
+        assertEquals("ده إحنا", layer.exactLineRendering("This is us.", EGY))
+    }
+
+    @Test
+    fun `hud label renders per mode`() {
+        assertEquals("اللعب فقط", layer.exactLineRendering("GAMEPLAY ONLY", MSA))
+        assertEquals("اللعب بس", layer.exactLineRendering("GAMEPLAY ONLY", EGY))
+    }
+
+    @Test
+    fun `coast is clear and patch yourself up are understood inside a line`() {
+        assertTrue(layer.analyze("Looks like the coast is clear.").any { it.expression.en == "the coast is clear" })
+        assertTrue(layer.analyze("Patch yourself up, alright?").any { it.expression.en == "patch yourself up" })
+    }
+
+    @Test
+    fun `modes never swap renderings`() {
+        val e = layer.analyze("The coast is clear").first().expression
+        assertEquals("أصبح المكان آمنًا", e.arabicFor(MSA))
+        assertEquals("المكان بقى أمان", e.arabicFor(EGY))
+    }
 }
 
 class ExactLineRenderingTest {
@@ -166,29 +191,5 @@ class UnderstandingPromptRenderTest {
             .buildUserPrompt(TranslationRequest(text = "Hello."))
         assertFalse(prompt.contains("means"))
     }
-
-    @Test
-    fun `this is us renders as we, never as the country`() {
-        assertEquals("هذا نحن", layer.exactLineRendering("This is us.", MSA))
-        assertEquals("ده إحنا", layer.exactLineRendering("This is us.", EGY))
-    }
-
-    @Test
-    fun `hud label renders per mode`() {
-        assertEquals("اللعب فقط", layer.exactLineRendering("GAMEPLAY ONLY", MSA))
-        assertEquals("اللعب بس", layer.exactLineRendering("GAMEPLAY ONLY", EGY))
-    }
-
-    @Test
-    fun `coast is clear and patch yourself up are understood inside a line`() {
-        assertTrue(layer.analyze("Looks like the coast is clear.").any { it.expression.en == "the coast is clear" })
-        assertTrue(layer.analyze("Patch yourself up, alright?").any { it.expression.en == "patch yourself up" })
-    }
-
-    @Test
-    fun `modes never swap renderings`() {
-        val e = layer.analyze("The coast is clear").first().expression
-        assertEquals("أصبح المكان آمنًا", e.arabicFor(MSA))
-        assertEquals("المكان بقى أمان", e.arabicFor(EGY))
-    }
 }
+
