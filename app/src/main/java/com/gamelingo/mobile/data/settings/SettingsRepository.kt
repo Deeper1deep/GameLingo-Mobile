@@ -7,6 +7,11 @@ import kotlinx.coroutines.flow.Flow
 data class AppSettings(
     // Translation
     val showOriginalText: Boolean = true,
+    /**
+     * Arabic style of every translation. Default EGYPTIAN_ARABIC: the
+     * project's established behavior, kept for existing users on update.
+     */
+    val arabicTranslationMode: ArabicTranslationMode = ArabicTranslationMode.EGYPTIAN_ARABIC,
     // OCR
     val captureIntervalMs: Long = SettingsConstraints.DEFAULT_CAPTURE_INTERVAL_MS,
     val restrictToTextRegion: Boolean = true,
@@ -73,6 +78,7 @@ interface SettingsRepository {
     val settings: Flow<AppSettings>
 
     suspend fun setShowOriginalText(show: Boolean)
+    suspend fun setArabicTranslationMode(mode: ArabicTranslationMode)
 
     suspend fun setCaptureIntervalMs(intervalMs: Long)
     suspend fun setRestrictToTextRegion(restrict: Boolean)
