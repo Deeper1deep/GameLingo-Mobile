@@ -1,6 +1,6 @@
 {
-  "version": 2,
-  "notes": "GameLingo Egyptian game dictionary v1. line_overrides fire on normalized whole-line matches. terms feed glossary consistency and term spotting. msa_map rewrites known MSA renderings to Egyptian with Arabic word boundaries. profanity_upgrades fire ONLY when the English source actually contains the marker (never invent profanity). v2: layered glossaries for dual Arabic modes (common/msa/egyptian/gaming/names); legacy terms act as the shared Egyptian-mode layer.",
+  "version": 3,
+  "notes": "v3: gaming world layers (factions/weapons/military/missions) for the deep-engine brief; v2: layered mode-aware glossaries.",
   "line_overrides": [
     {
       "en": "holy shit!",
@@ -880,7 +880,176 @@
     }
   ],
   "egyptian_glossary": [],
-  "gaming_slang": [],
+  "gaming_slang": [
+    {
+      "en": "checkpoint reached",
+      "ar": "تم بلوغ نقطة الحفظ"
+    },
+    {
+      "en": "loot",
+      "ar": "غنائم"
+    },
+    {
+      "en": "respawn",
+      "ar": "إعادة إحياء"
+    },
+    {
+      "en": "cooldown",
+      "ar": "فترة تبريد"
+    },
+    {
+      "en": "hit points",
+      "ar": "نقاط الصحة"
+    },
+    {
+      "en": "stealth",
+      "ar": "تخفٍّ"
+    },
+    {
+      "en": "boss fight",
+      "ar": "قتال الزعيم"
+    },
+    {
+      "en": "NPC",
+      "ar": "شخصية غير قابلة للعب"
+    }
+  ],
   "character_names": [],
-  "location_names": []
+  "location_names": [],
+  "factions": [
+    {
+      "en": "Fireflies",
+      "ar": "اليراعات"
+    },
+    {
+      "en": "the Fireflies",
+      "ar": "أفراد اليراعات"
+    },
+    {
+      "en": "Hunters",
+      "ar": "الصيادون"
+    },
+    {
+      "en": "FEDRA",
+      "ar": "فيدرا"
+    },
+    {
+      "en": "the Brotherhood",
+      "ar": "الأخوية"
+    },
+    {
+      "en": "the Cartel",
+      "ar": "الكارتل"
+    },
+    {
+      "en": "the Syndicate",
+      "ar": "النقابة"
+    }
+  ],
+  "weapons": [
+    {
+      "en": "assault rifle",
+      "ar": "بندقية هجومية"
+    },
+    {
+      "en": "shotgun",
+      "ar": "بندقية خرطوش"
+    },
+    {
+      "en": "pistol",
+      "ar": "مسدس"
+    },
+    {
+      "en": "sniper rifle",
+      "ar": "بندقية قنص"
+    },
+    {
+      "en": "molotov",
+      "ar": "زجاجة مولوتوف"
+    },
+    {
+      "en": "grenade",
+      "ar": "قنبلة يدوية"
+    },
+    {
+      "en": "body armor",
+      "ar": "درع واقٍ"
+    },
+    {
+      "en": "silencer",
+      "ar": "كاتم صوت"
+    },
+    {
+      "en": "ammo",
+      "ar": "ذخيرة"
+    },
+    {
+      "en": "medkit",
+      "ar": "حقيبة إسعافات"
+    }
+  ],
+  "military_terms": [
+    {
+      "en": "checkpoint",
+      "ar": "نقطة تفتيش"
+    },
+    {
+      "en": "quarantine zone",
+      "ar": "منطقة حجر صحي"
+    },
+    {
+      "en": "perimeter",
+      "ar": "المحيط الأمني"
+    },
+    {
+      "en": "extraction",
+      "ar": "نقطة الإخلاء"
+    },
+    {
+      "en": "rendezvous",
+      "ar": "نقطة التجمع"
+    },
+    {
+      "en": "reinforcements",
+      "ar": "التعزيزات"
+    },
+    {
+      "en": "patrol",
+      "ar": "دورية"
+    },
+    {
+      "en": "outpost",
+      "ar": "بؤرة استطلاع"
+    },
+    {
+      "en": "ceasefire",
+      "ar": "وقف إطلاق النار"
+    },
+    {
+      "en": "evac",
+      "ar": "إخلاء"
+    }
+  ],
+  "missions": [
+    {
+      "en": "side quest",
+      "ar": "مهمة جانبية"
+    },
+    {
+      "en": "main quest",
+      "ar": "المهمة الرئيسية"
+    },
+    {
+      "en": "objective",
+      "ar": "الهدف"
+    },
+    {
+      "en": "bounty",
+      "ar": "مكافأة"
+    },
+    {
+      "en": "contract",
+      "ar": "عقد"
+    }
+  ]
 }
