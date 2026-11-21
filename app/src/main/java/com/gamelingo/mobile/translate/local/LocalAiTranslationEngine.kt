@@ -9,6 +9,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -101,12 +102,18 @@ class LocalAiTranslationEngine @Inject constructor(
         return withContext(Dispatchers.Default) {
             inferenceMutex.withLock {
                 val inputIds = localTokenizer.encode(request.text)
+                // Captured once: the cancellation lambda is not a suspend
+                // context, so it reads the captured context's Job state.
+                val requestContext = currentCoroutineContext()
                 val decoder = GreedyDecoder(
                     runner = localRunner,
                     decoderStartId = DECODER_START_ID,
                     eosId = EOS_ID,
                     maxOutputTokens = MAX_OUTPUT_TOKENS,
-                    isCancelled = { false },
+                    // Real cancellation: a timed-out or stopped request must
+                    // abort the decode loop, not run all 128 tokens while the
+                    // watchdog waits on a consumer that ignores cancel().
+                    isCancelled = { !requestContext.isActive },
                 )
                 val outputIds = try {
                     decoder.generate(inputIds)
@@ -119,7 +126,11 @@ class LocalAiTranslationEngine @Inject constructor(
                     throw EmptyModelOutputException()
                 }
                 val egyptian = dictionary.get().toEgyptian(request.text, msa)
-                TranslationResult(translatedText = egyptian, engineId = ENGINE_ID)
+                // Honest engine id, same convention as the ML Kit fallback:
+                // when the dictionary pass rewrote the wording the tag says
+                // so instead of claiming pure model output.
+                val tag = if (egyptian == msa) ENGINE_ID else "$ENGINE_ID+dict"
+                TranslationResult(translatedText = egyptian, engineId = tag)
             }
         }
     }

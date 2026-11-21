@@ -45,6 +45,7 @@ class TranslationWorkerTest {
     private fun TestScope.worker(
         processor: FakeProcessor,
         queueCapacity: Int = TranslationWorker.DEFAULT_QUEUE_CAPACITY,
+        maxQueueAgeMs: Long = TranslationWorker.DEFAULT_MAX_QUEUE_AGE_MS,
         watchdogIntervalMs: Long = 100L,
         stallThresholdMs: Long = 300L,
         enableWatchdog: Boolean = false,
@@ -53,6 +54,7 @@ class TranslationWorkerTest {
         return TranslationWorker(
             processor = processor::process,
             queueCapacity = queueCapacity,
+            maxQueueAgeMs = maxQueueAgeMs,
             dedupWindowMs = 2_000L,
             watchdogIntervalMs = watchdogIntervalMs,
             stallThresholdMs = stallThresholdMs,
@@ -333,6 +335,20 @@ class TranslationWorkerTest {
         // The loop died honourably; the watchdog revives it on the next stall.
         advanceTimeBy(1_000L)
         assertTrue(w.currentStatus().recoveryCount >= 1)
+        w.stop()
+    }
+
+    @Test
+    fun `a line older than the max queue age is dropped at dequeue, never translated`() = runTest {
+        val processor = FakeProcessor { ok(it.text) }
+        val w = worker(processor, maxQueueAgeMs = 10_000L)
+        w.start()
+        // Captured 20s before "now" (virtual time starts at 0): stale when
+        // the consumer picks it up; the fresh line behind it still runs.
+        w.enqueue("stale", -20_000L)
+        w.enqueue("fresh", 0L)
+        runCurrent()
+        assertEquals(listOf("fresh"), processor.calls.map { it.text })
         w.stop()
     }
 }

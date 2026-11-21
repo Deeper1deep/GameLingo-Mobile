@@ -101,7 +101,15 @@ class LocalModelManager @Inject constructor(
     fun stateOf(modelId: String): LocalAiModelState =
         _states.value[modelId] ?: LocalAiModelState.NotInstalled
 
-    /** Directory holding the verified current install of [modelId]. */
+    /**
+     * Directory holding the verified current install of [modelId], or null.
+     * "Verified" means the completion marker exists: it is written only after
+     * every file's SHA-256 passed. A directory from an older build without a
+     * marker is verified lazily once (hashes re-checked, marker written); a
+     * directory whose files fail verification is NOT an install: the bad file
+     * is deleted so a future download restarts it, and the model reports as
+     * not installed instead of loading corrupt weights.
+     */
     fun modelDir(modelId: String): File? {
         val spec = spec(modelId) ?: return null
         val root = File(context.filesDir, MODEL_ROOT)
@@ -109,9 +117,28 @@ class LocalModelManager @Inject constructor(
             ?.sortedByDescending { it.name.removePrefix("${modelId}_v").toIntOrNull() ?: -1 }
             ?: return null
         for (dir in dirs) {
-            if (spec.files.all { File(dir, it.name).isFile }) return dir
+            val sizesMatch = spec.files.all {
+                val f = File(dir, it.name)
+                f.isFile && f.length() == it.size
+            }
+            if (!sizesMatch) continue
+            if (File(dir, VERIFIED_MARKER).isFile) return dir
+            if (verifyAndMark(dir, spec)) return dir
         }
         return null
+    }
+
+    /** One-time hash check for pre-marker installs; writes the marker on success. */
+    private fun verifyAndMark(dir: File, spec: ModelSpec): Boolean {
+        for (file in spec.files) {
+            val onDisk = File(dir, file.name)
+            if (!onDisk.isFile || sha256(onDisk) != file.sha256) {
+                onDisk.delete()
+                return false
+            }
+        }
+        File(dir, VERIFIED_MARKER).writeText("${spec.version}")
+        return true
     }
 
     fun isInstalled(modelId: String): Boolean = modelDir(modelId) != null
@@ -150,11 +177,23 @@ class LocalModelManager @Inject constructor(
         downloadMutex.withLock {
             val spec = spec(modelId)
                 ?: throw ModelManagerException("manifest_missing", "Unknown model id: $modelId")
+            validateSpec(spec)
             if (preferWifi && !isUnmetered()) {
                 throw MeteredConnectionException()
             }
             val targetDir = File(context.filesDir, "$MODEL_ROOT/${modelId}_v${spec.version}")
             val total = spec.files.sumOf { it.size }
+            // Free-space gate: fail BEFORE the first byte instead of after
+            // burning hundreds of MB of the user's data on a disk that
+            // cannot hold the model anyway.
+            val usable = context.filesDir.usableSpace
+            val needed = total + MIN_FREE_SPACE_MARGIN_BYTES
+            if (usable < needed) {
+                throw ModelManagerException(
+                    "no_space",
+                    "Not enough free storage: need ${needed / 1_000_000}MB, have ${usable / 1_000_000}MB",
+                )
+            }
             var downloadedSoFar = 0L
             try {
                 spec.files.forEachIndexed { index, file ->
@@ -172,6 +211,9 @@ class LocalModelManager @Inject constructor(
                         throw ModelManagerException("verify_failed", "SHA-256 mismatch for ${file.name}; deleted the bad file")
                     }
                 }
+                // Completion marker: only a fully verified install carries it,
+                // and modelDir refuses directories without it (see modelDir).
+                File(targetDir, VERIFIED_MARKER).writeText("${spec.version}")
                 cleanupOldVersions(modelId, keepVersion = spec.version)
                 emitState(modelId, LocalAiModelState.Installed(spec.version, installedSizeBytes(modelId)))
             } catch (cancelled: CancellationException) {
@@ -184,12 +226,35 @@ class LocalModelManager @Inject constructor(
         }
     }
 
-    /** Deletes one installed model and its partial downloads. */
-    suspend fun deleteModel(modelId: String) = withContext(Dispatchers.IO) {
-        val root = File(context.filesDir, MODEL_ROOT)
-        root.listFiles { f -> f.isDirectory && f.name.startsWith("${modelId}_v") }
-            ?.forEach { it.deleteRecursively() }
-        emitState(modelId, LocalAiModelState.NotInstalled)
+    /**
+     * Deletes one installed model and its partial downloads. Serialized with
+     * downloads on the same mutex so a delete can never race an in-flight
+     * install of the same model.
+     */
+    suspend fun deleteModel(modelId: String) {
+        downloadMutex.withLock {
+            withContext(Dispatchers.IO) {
+                val root = File(context.filesDir, MODEL_ROOT)
+                root.listFiles { f -> f.isDirectory && f.name.startsWith("${modelId}_v") }
+                    ?.forEach { it.deleteRecursively() }
+                emitState(modelId, LocalAiModelState.NotInstalled)
+            }
+        }
+    }
+
+    /** Manifest hygiene: reject traversal filenames and non-HTTPS URLs before any byte moves. */
+    private fun validateSpec(spec: ModelSpec) {
+        for (file in spec.files) {
+            if (file.name.isBlank() || File(file.name).name != file.name || file.name.startsWith(".")) {
+                throw ModelManagerException("manifest_bad_name", "Unsafe file name in manifest: ${file.name}")
+            }
+            if (!file.url.startsWith("https://")) {
+                throw ModelManagerException("manifest_bad_url", "Non-HTTPS URL in manifest for ${file.name}")
+            }
+            if (file.size <= 0) {
+                throw ModelManagerException("manifest_bad_size", "Non-positive size in manifest for ${file.name}")
+            }
+        }
     }
 
     /** Recomputes all states from disk (app start / settings open). */
@@ -240,11 +305,37 @@ class LocalModelManager @Inject constructor(
         val request = Request.Builder().url(file.url).apply {
             if (existing > 0) header("Range", "bytes=$existing-")
         }.build()
-        okHttp.newCall(request).execute().use { response ->
+        val call = okHttp.newCall(request)
+        activeCall = call
+        // A cancelled coroutine must actually cut the socket: ensureActive in
+        // the copy loop only fires between 64KB chunks, and a stalled read
+        // would otherwise hang the cancel until the server moves.
+        currentCoroutineContext()[kotlinx.coroutines.Job]?.invokeOnCompletion { cause ->
+            if (cause is CancellationException) call.cancel()
+        }
+        try {
+        call.execute().use { response ->
             if (existing > 0 && response.code == 200) {
                 // Server ignored the Range header: restart the file cleanly.
                 partFile.delete()
                 existing = 0L
+            } else if (existing > 0 && response.code == 206) {
+                // Validate the server resumed where we asked: a mismatched
+                // Content-Range would corrupt the file silently.
+                val range = response.header("Content-Range")
+                val rangeStart = range
+                    ?.removePrefix("bytes")
+                    ?.trim()
+                    ?.substringBefore('-')
+                    ?.toLongOrNull()
+                if (rangeStart != existing) {
+                    partFile.delete()
+                    existing = 0L
+                    throw ModelManagerException(
+                        "range_mismatch",
+                        "Bad Content-Range for ${file.name}: $range; restart the download",
+                    )
+                }
             }
             if (response.code !in 200..299 && response.code != 206) {
                 throw ModelManagerException("http_${response.code}", "HTTP ${response.code} downloading ${file.name}")
@@ -274,6 +365,18 @@ class LocalModelManager @Inject constructor(
         if (!partFile.renameTo(finalFile)) {
             throw ModelManagerException("rename_failed", "Could not finalize ${file.name}")
         }
+        } finally {
+            if (activeCall === call) activeCall = null
+        }
+    }
+
+    /** The in-flight download call, so cancellation can cut the socket. */
+    @Volatile
+    private var activeCall: okhttp3.Call? = null
+
+    /** Cancels the in-flight download, if any; the coroutine unwinds as CancellationException. */
+    fun cancelActiveDownload() {
+        activeCall?.cancel()
     }
 
     private fun sha256(file: File): String {
@@ -307,5 +410,11 @@ class LocalModelManager @Inject constructor(
         const val MODEL_TRANSLATEGEMMA = "translategemma-4b"
         private const val MODEL_ROOT = "local_ai"
         private const val ASSET_DIR = "local_ai"
+
+        /** Written into an install dir only after every file's SHA-256 passed. */
+        private const val VERIFIED_MARKER = ".verified"
+
+        /** Extra headroom the free-space gate demands beyond the model size. */
+        private const val MIN_FREE_SPACE_MARGIN_BYTES = 200L * 1_000_000L
     }
 }

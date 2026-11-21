@@ -18,8 +18,15 @@ interface OnnxRunner {
     fun close()
 }
 
-/** Opaque per-request encoder output (hidden states + attention mask). */
-interface EncoderState
+/**
+ * Opaque per-request encoder output (hidden states + attention mask).
+ * Implementations holding native resources must release them in [close];
+ * the default is a no-op for pure-JVM fakes. [GreedyDecoder] always closes
+ * the state, so one request can never leak native tensors.
+ */
+interface EncoderState {
+    fun close() {}
+}
 
 /**
  * Greedy autoregressive decode loop shared by device and tests: starts from the
@@ -40,22 +47,29 @@ class GreedyDecoder(
     /** Returns the generated token ids WITHOUT the leading start token or trailing EOS. */
     fun generate(inputIds: IntArray): IntArray {
         val encoderState = runner.encode(inputIds)
-        val prefix = ArrayList<Int>(16)
-        prefix.add(decoderStartId)
-        repeat(maxOutputTokens) {
-            if (isCancelled()) throw DecodeCancelledException()
-            val logits = runner.decodeStep(encoderState, prefix.toIntArray())
-            var argmax = 0
-            var best = Float.NEGATIVE_INFINITY
-            for (i in logits.indices) {
-                if (logits[i] > best) {
-                    best = logits[i]
-                    argmax = i
+        try {
+            val prefix = ArrayList<Int>(16)
+            prefix.add(decoderStartId)
+            repeat(maxOutputTokens) {
+                if (isCancelled()) throw DecodeCancelledException()
+                val logits = runner.decodeStep(encoderState, prefix.toIntArray())
+                var argmax = 0
+                var best = Float.NEGATIVE_INFINITY
+                for (i in logits.indices) {
+                    if (logits[i] > best) {
+                        best = logits[i]
+                        argmax = i
+                    }
                 }
+                if (argmax == eosId) return prefix.drop(1).toIntArray()
+                prefix.add(argmax)
             }
-            if (argmax == eosId) return prefix.drop(1).toIntArray()
-            prefix.add(argmax)
+            return prefix.drop(1).toIntArray()
+        } finally {
+            // The encoder output holds native tensors; release them on every
+            // path (success, EOS, cancellation, engine error) or each request
+            // leaks native memory until the whole model is unloaded.
+            runCatching { encoderState.close() }
         }
-        return prefix.drop(1).toIntArray()
     }
 }

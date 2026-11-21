@@ -66,7 +66,19 @@ class LocalEngineChainTest {
         gemma: FakeCandidate = FakeCandidate(TranslateGemmaEngine.ENGINE_ID, available = false),
         marian: FakeCandidate = FakeCandidate(LocalAiTranslationEngine.ENGINE_ID, available = false),
         mlKit: FakeMlKit = FakeMlKit(),
-    ) = Triple(LocalEngineChain(gemma, marian, mlKit), gemma, marian) to mlKit
+        gemmaOptIn: Boolean = false,
+        thermalHot: Boolean = false,
+    ) = Triple(
+        LocalEngineChain(
+            gemma,
+            marian,
+            mlKit,
+            gemmaOptIn = { gemmaOptIn },
+            thermalHot = { thermalHot },
+        ),
+        gemma,
+        marian,
+    ) to mlKit
 
     @Test
     fun `no downloadable model means mlkit and hasLocalAiModel false`() {
@@ -85,10 +97,26 @@ class LocalEngineChainTest {
     }
 
     @Test
-    fun `gemma installed wins over marian`() = runTest {
+    fun `gemma installed but not opted in keeps marian primary`() = runTest {
+        val gemma = FakeCandidate(TranslateGemmaEngine.ENGINE_ID, available = true, answer = "مصري")
+        val marian = FakeCandidate(LocalAiTranslationEngine.ENGINE_ID, available = true, answer = "فصحى")
+        val (triple, mlKit) = chain(gemma = gemma, marian = marian)
+        val (chain, _, _) = triple
+        // The model being on disk is never by itself a reason to load a 4B model.
+        assertEquals(LocalAiTranslationEngine.ENGINE_ID, chain.plannedLocalEngineId())
+        val result = chain.translate(TranslationRequest(text = "hi"))
+        assertEquals(LocalAiTranslationEngine.ENGINE_ID, result.engineId)
+        assertEquals("فصحى", result.translatedText)
+        assertEquals(0, gemma.calls)
+        assertEquals(1, marian.calls)
+        assertEquals(0, mlKit.calls)
+    }
+
+    @Test
+    fun `opted-in gemma on a cool device wins over marian`() = runTest {
         val gemma = FakeCandidate(TranslateGemmaEngine.ENGINE_ID, available = true, answer = "مصري")
         val marian = FakeCandidate(LocalAiTranslationEngine.ENGINE_ID, available = true)
-        val (triple, mlKit) = chain(gemma = gemma, marian = marian)
+        val (triple, mlKit) = chain(gemma = gemma, marian = marian, gemmaOptIn = true)
         val (chain, _, _) = triple
         assertEquals(TranslateGemmaEngine.ENGINE_ID, chain.plannedLocalEngineId())
         val result = chain.translate(TranslationRequest(text = "hi"))
@@ -100,6 +128,19 @@ class LocalEngineChainTest {
     }
 
     @Test
+    fun `opted-in gemma on a hot device falls back to marian without loading`() = runTest {
+        val gemma = FakeCandidate(TranslateGemmaEngine.ENGINE_ID, available = true, answer = "مصري")
+        val marian = FakeCandidate(LocalAiTranslationEngine.ENGINE_ID, available = true, answer = "فصحى")
+        val (triple, _) = chain(gemma = gemma, marian = marian, gemmaOptIn = true, thermalHot = true)
+        val (chain, _, _) = triple
+        assertEquals(LocalAiTranslationEngine.ENGINE_ID, chain.plannedLocalEngineId())
+        val result = chain.translate(TranslationRequest(text = "hi"))
+        assertEquals(LocalAiTranslationEngine.ENGINE_ID, result.engineId)
+        assertEquals(0, gemma.calls)
+        assertEquals(1, marian.calls)
+    }
+
+    @Test
     fun `a failing gemma degrades to marian for that line only`() = runTest {
         val gemma = FakeCandidate(
             TranslateGemmaEngine.ENGINE_ID,
@@ -107,7 +148,7 @@ class LocalEngineChainTest {
             failure = IOException("native crash"),
         )
         val marian = FakeCandidate(LocalAiTranslationEngine.ENGINE_ID, available = true, answer = "فصحى محسنة")
-        val (triple, _) = chain(gemma = gemma, marian = marian)
+        val (triple, _) = chain(gemma = gemma, marian = marian, gemmaOptIn = true)
         val (chain, _, _) = triple
         val result = chain.translate(TranslationRequest(text = "hi"))
         assertEquals(LocalAiTranslationEngine.ENGINE_ID, result.engineId)
@@ -118,7 +159,7 @@ class LocalEngineChainTest {
     fun `all local ai failing still answers via mlkit`() = runTest {
         val gemma = FakeCandidate(TranslateGemmaEngine.ENGINE_ID, available = true, failure = IOException("x"))
         val marian = FakeCandidate(LocalAiTranslationEngine.ENGINE_ID, available = true, failure = IOException("y"))
-        val (triple, mlKit) = chain(gemma = gemma, marian = marian)
+        val (triple, mlKit) = chain(gemma = gemma, marian = marian, gemmaOptIn = true)
         val (chain, _, _) = triple
         val result = chain.translate(TranslationRequest(text = "hi"))
         assertEquals(MlKitTranslationEngine.ENGINE_ID, result.engineId)
@@ -133,7 +174,7 @@ class LocalEngineChainTest {
             failure = CancellationException("stale"),
         )
         val marian = FakeCandidate(LocalAiTranslationEngine.ENGINE_ID, available = true)
-        val (triple, mlKit) = chain(gemma = gemma, marian = marian)
+        val (triple, mlKit) = chain(gemma = gemma, marian = marian, gemmaOptIn = true)
         val (chain, _, _) = triple
         val thrown = runCatching { chain.translate(TranslationRequest(text = "hi")) }.exceptionOrNull()
         assertTrue(thrown is CancellationException)
@@ -193,7 +234,7 @@ class LocalEngineChainTest {
             fatal = UnsatisfiedLinkError("no litertlm"),
         )
         val marian = FakeCandidate(LocalAiTranslationEngine.ENGINE_ID, available = true, answer = "مصري")
-        val (triple, _) = chain(gemma = gemma, marian = marian)
+        val (triple, _) = chain(gemma = gemma, marian = marian, gemmaOptIn = true)
         val (chain, gemmaRef, marianRef) = triple
         val result = chain.translate(TranslationRequest(text = "line"))
         assertEquals("مصري", result.translatedText)
@@ -218,6 +259,24 @@ class LocalEngineChainTest {
         chain.translate(TranslationRequest(text = "two"))
         // Not poisoned: a transient failure is retried on the next line.
         assertEquals(2, marianRef.calls)
+    }
+
+    @Test
+    fun `marian init failure poisons marian instead of retrying every line`() = runTest {
+        val marian = FakeCandidate(
+            LocalAiTranslationEngine.ENGINE_ID,
+            available = true,
+            failure = LocalAiTranslationEngine.EngineInitException(UnsatisfiedLinkError("bad onnx")),
+        )
+        val (triple, mlKit) = chain(marian = marian)
+        val (chain, _, marianRef) = triple
+        val first = chain.translate(TranslationRequest(text = "one"))
+        assertEquals(MlKitTranslationEngine.ENGINE_ID, first.engineId)
+        chain.translate(TranslationRequest(text = "two"))
+        // Poisoned on a deterministic failure: no per-line init retries.
+        assertEquals(1, marianRef.calls)
+        assertEquals(MlKitTranslationEngine.ENGINE_ID, chain.plannedLocalEngineId())
+        assertEquals(2, mlKit.calls)
     }
 
     @Test

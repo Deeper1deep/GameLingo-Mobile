@@ -1,7 +1,12 @@
 package com.gamelingo.mobile.core.session
 
+import java.util.concurrent.atomic.AtomicLong
+import kotlinx.coroutines.channels.BufferOverflow
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 
@@ -77,6 +82,24 @@ enum class RequestState {
     TIMEOUT,
     LOCAL_FALLBACK,
     RECOVERING,
+
+    /** A local engine failed to initialize (native load, bad model files). */
+    ENGINE_INIT_FAILED,
+
+    /** The selected local model is not installed on the device. */
+    MODEL_MISSING,
+
+    /** The engine returned an empty or unusable result. */
+    EMPTY_RESULT,
+
+    /**
+     * The consumer was stuck in a call that would not cancel (wedged native
+     * op): the worker stopped rather than risk two consumers on one engine.
+     */
+    ENGINE_STUCK,
+
+    /** Anything that did not fit a known class. */
+    UNKNOWN,
 }
 
 /** Observable status of the translation worker (see TranslationWorker). */
@@ -115,6 +138,30 @@ object TranslationSessionBus {
     private val _latestLine = MutableStateFlow<OcrLine?>(null)
     val latestLine: StateFlow<OcrLine?> = _latestLine.asStateFlow()
 
+    /**
+     * Lossless line stream for the translation pipeline. [latestLine] is a
+     * StateFlow for the UI, where only the newest line matters; the
+     * translation worker must see EVERY accepted line, so it collects this
+     * buffered SharedFlow instead. Conflating worker input was dropping
+     * subtitles under fast dialogue.
+     */
+    private val _ocrLines = MutableSharedFlow<OcrLine>(
+        extraBufferCapacity = OCR_LINES_BUFFER,
+        onBufferOverflow = BufferOverflow.DROP_OLDEST,
+    )
+    val ocrLines: SharedFlow<OcrLine> = _ocrLines.asSharedFlow()
+
+    /**
+     * Monotonic session generation: bumped on every start AND stop. A
+     * translation captured in generation N that finishes after the session
+     * moved on compares its generation and drops the result instead of
+     * publishing a stale line into the next session.
+     */
+    private val generationCounter = AtomicLong(0)
+
+    /** The generation of the currently running (or just-stopped) session. */
+    fun currentGeneration(): Long = generationCounter.get()
+
     private val _translatedLine = MutableStateFlow<TranslatedLine?>(null)
     val translatedLine: StateFlow<TranslatedLine?> = _translatedLine.asStateFlow()
 
@@ -143,6 +190,7 @@ object TranslationSessionBus {
     val error: StateFlow<SessionError?> = _error.asStateFlow()
 
     fun onSessionStarted() {
+        generationCounter.incrementAndGet()
         _error.value = null
         if (_state.value != SessionState.RUNNING) {
             _startedAtMillis.value = System.currentTimeMillis()
@@ -152,6 +200,7 @@ object TranslationSessionBus {
     }
 
     fun onSessionStopped() {
+        generationCounter.incrementAndGet()
         _state.value = SessionState.STOPPED
         _startedAtMillis.value = null
         _translatedCount.value = 0
@@ -176,7 +225,11 @@ object TranslationSessionBus {
     }
 
     fun onNewLine(text: String, capturedAtMillis: Long) {
-        _latestLine.value = OcrLine(text = text, capturedAtMillis = capturedAtMillis)
+        val line = OcrLine(text = text, capturedAtMillis = capturedAtMillis)
+        _latestLine.value = line
+        // Buffered, DROP_OLDEST: a saturated buffer sheds the stalest line,
+        // never the fresh one; tryEmit never blocks the capture loop.
+        _ocrLines.tryEmit(line)
         _translationFailure.value = null
     }
 
@@ -213,4 +266,7 @@ object TranslationSessionBus {
     fun onWorkerStatus(status: WorkerStatus) {
         _workerStatus.value = status
     }
+
+    /** Buffer for the lossless worker line stream (~10 s of fast dialogue). */
+    private const val OCR_LINES_BUFFER = 64
 }

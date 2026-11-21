@@ -66,8 +66,18 @@ class OverlayService : Service() {
         if (!Settings.canDrawOverlays(this)) {
             TranslationSessionBus.onSessionError(SessionError.OVERLAY_PERMISSION_LOST)
             stopSelf()
+            return START_NOT_STICKY
         }
-        return START_NOT_STICKY
+        // A restarted (or stale) overlay with no running session is a ghost
+        // window over the user's game: never show one.
+        if (TranslationSessionBus.state.value != SessionState.RUNNING) {
+            stopSelf()
+            return START_NOT_STICKY
+        }
+        // START_STICKY: if the system kills the overlay while capture runs,
+        // it is recreated (onCreate re-attaches to the live session bus)
+        // instead of leaving the session translating into nothing.
+        return START_STICKY
     }
 
     override fun onCreate() {
@@ -121,7 +131,11 @@ class OverlayService : Service() {
         view.setContent {
             val state by uiState.collectAsState()
             val settings by settingsState.collectAsState()
-            OverlayContent(state = state, settings = settings)
+            OverlayContent(
+                state = state,
+                settings = settings,
+                onStopSession = { stopSessionFromOverlay() },
+            )
         }
         attachDragHandler(view)
 
@@ -156,13 +170,20 @@ class OverlayService : Service() {
         }
     }
 
-    /** Free drag: the window follows the finger on both axes, clamped on screen. */
+    /**
+     * Free drag: the window follows the finger on both axes, clamped on
+     * screen. A tap is NOT a drag: until the finger moves past the touch
+     * slop, events fall through to Compose so the stop affordance (and any
+     * future control) stays clickable.
+     */
     @SuppressLint("ClickableViewAccessibility")
     private fun attachDragHandler(view: View) {
         var startOffsetY = 0
         var startOffsetX = 0
         var startTouchY = 0f
         var startTouchX = 0f
+        var dragging = false
+        val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
         view.setOnTouchListener { _, event ->
             val params = layoutParams ?: return@setOnTouchListener false
             val screenHeight = resources.displayMetrics.heightPixels
@@ -173,10 +194,23 @@ class OverlayService : Service() {
                     startOffsetX = params.x
                     startTouchY = event.rawY
                     startTouchX = event.rawX
-                    true
+                    dragging = false
+                    false
                 }
 
                 MotionEvent.ACTION_MOVE -> {
+                    if (!dragging) {
+                        val moved = kotlin.math.abs(event.rawX - startTouchX) > slop ||
+                            kotlin.math.abs(event.rawY - startTouchY) > slop
+                        if (!moved) return@setOnTouchListener false
+                        dragging = true
+                        // Re-anchor the drag origin so the window does not
+                        // jump by the slop distance when the drag starts.
+                        startOffsetY = params.y
+                        startOffsetX = params.x
+                        startTouchY = event.rawY
+                        startTouchX = event.rawX
+                    }
                     // For a bottom-anchored window, dragging up increases y.
                     val deltaY = if (params.gravity and Gravity.BOTTOM == Gravity.BOTTOM) {
                         startTouchY - event.rawY
@@ -197,7 +231,11 @@ class OverlayService : Service() {
                     true
                 }
 
-                else -> false
+                else -> {
+                    val wasDragging = dragging
+                    dragging = false
+                    wasDragging
+                }
             }
         }
     }
@@ -240,6 +278,7 @@ class OverlayService : Service() {
             TranslationSessionBus.state.collect { sessionState ->
                 uiState.value = uiState.value.copy(
                     sessionError = sessionState == SessionState.ERROR,
+                    sessionRunning = sessionState == SessionState.RUNNING,
                 )
             }
         }
@@ -247,6 +286,15 @@ class OverlayService : Service() {
             TranslationSessionBus.notice.collect { notice ->
                 uiState.value = uiState.value.copy(notice = notice)
             }
+        }
+    }
+
+    /** The overlay's stop affordance ends the whole session, exactly like the in-app stop button. */
+    private fun stopSessionFromOverlay() {
+        runCatching {
+            startService(
+                com.gamelingo.mobile.capture.ScreenCaptureService.stopIntent(this),
+            )
         }
     }
 

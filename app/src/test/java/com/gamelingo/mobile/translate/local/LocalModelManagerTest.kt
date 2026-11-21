@@ -222,6 +222,8 @@ class LocalModelManagerTest {
                 val start = range.removePrefix("bytes=").substringBefore('-').toInt()
                 responseCodes[url] = 206
                 builder.code(206)
+                    // A real 206 carries Content-Range; the manager validates it.
+                    .header("Content-Range", "bytes $start-${bytes.size - 1}/${bytes.size}")
                     .body(bytes.copyOfRange(start, bytes.size).toResponseBody("application/octet-stream".toMediaType()))
                     .build()
             } else {

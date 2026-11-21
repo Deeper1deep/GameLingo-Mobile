@@ -1,6 +1,7 @@
 package com.gamelingo.mobile.overlay
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.widthIn
@@ -30,6 +31,8 @@ data class OverlayUiState(
     val failure: String? = null,
     val sessionError: Boolean = false,
     val notice: SessionNotice? = null,
+    /** True while a session runs: shows the stop affordance. */
+    val sessionRunning: Boolean = false,
 )
 
 /**
@@ -45,6 +48,7 @@ data class OverlayUiState(
 fun OverlayContent(
     state: OverlayUiState,
     settings: AppSettings,
+    onStopSession: (() -> Unit)? = null,
 ) {
     val background = Color(
         OverlayLayout.backgroundWithOpacity(
@@ -63,6 +67,22 @@ fun OverlayContent(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
+        // In-session stop affordance: without it the user must leave the game
+        // and find the app's stop button to end a session.
+        if (state.sessionRunning && onStopSession != null) {
+            Text(
+                text = stringResource(R.string.overlay_stop),
+                color = textColor.copy(alpha = 0.8f),
+                fontSize = (settings.overlayTextSizeSp - 6).coerceAtLeast(9).sp,
+                textAlign = TextAlign.Center,
+                modifier = Modifier
+                    .align(Alignment.End)
+                    .clickable(onClickLabel = stringResource(R.string.overlay_stop_cd)) {
+                        onStopSession()
+                    }
+                    .padding(bottom = 2.dp),
+            )
+        }
         when {
             state.sessionError -> Text(
                 text = stringResource(R.string.overlay_error),
