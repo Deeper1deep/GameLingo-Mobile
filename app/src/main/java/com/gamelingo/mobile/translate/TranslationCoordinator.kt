@@ -180,14 +180,25 @@ class TranslationCoordinator @Inject constructor(
             // lost question mark) are fixed and tagged "+qc"; anything else
             // publishes once exactly as the engine produced it.
             val inspection = com.gamelingo.mobile.core.quality.TranslationQualityGate
-                .inspect(request.text, result.translatedText)
-            val finalResult = if (inspection.corrected) {
-                result.copy(
+                .inspect(request.text, result.translatedText, arabicMode)
+            // A flagged output for a line that is, as a whole, one known
+            // expression ("This is us.") is replaced by that expression's
+            // reference rendering: local, deterministic, no second engine call.
+            val knownRendering = if (inspection.issues.any { it in REPLACEABLE_ISSUES }) {
+                understandingHolder.get().exactLineRendering(request.text, arabicMode)
+            } else {
+                null
+            }
+            val finalResult = when {
+                knownRendering != null -> result.copy(
+                    translatedText = knownRendering,
+                    engineId = "${result.engineId}+idiom",
+                )
+                inspection.corrected -> result.copy(
                     translatedText = inspection.text,
                     engineId = "${result.engineId}+qc",
                 )
-            } else {
-                result
+                else -> result
             }
             PipelineTiming.mark(
                 "engine",
@@ -340,6 +351,14 @@ class TranslationCoordinator @Inject constructor(
 
     internal companion object {
         const val MAX_CONTEXT_LINES = 20
+
+        /** Gate findings that justify swapping in a known whole-line rendering. */
+        val REPLACEABLE_ISSUES = setOf(
+            com.gamelingo.mobile.core.quality.TranslationQualityGate.Issue.PRONOUN_US_MISREAD,
+            com.gamelingo.mobile.core.quality.TranslationQualityGate.Issue.NEGATION_LOST,
+            com.gamelingo.mobile.core.quality.TranslationQualityGate.Issue.UNTRANSLATED,
+            com.gamelingo.mobile.core.quality.TranslationQualityGate.Issue.REGISTER_LEAK,
+        )
         const val MILLIS_PER_SECOND = 1_000L
         const val NANOS_PER_MS = 1_000_000L
 

@@ -22,6 +22,12 @@ object TranslationQualityGate {
 
         /** Output equals the source: nothing was translated. */
         UNTRANSLATED,
+
+        /** Pronoun "us" was read as the United States ("This is us" -> "الولايات المتحدة"). */
+        PRONOUN_US_MISREAD,
+
+        /** Modern Standard Arabic mode, but the output carries Egyptian colloquial words. */
+        REGISTER_LEAK,
     }
 
     data class Inspection(
@@ -52,7 +58,26 @@ object TranslationQualityGate {
         return ARABIC_MA.containsMatchIn(text) && !isMaQuestion
     }
 
-    fun inspect(source: String, translation: String): Inspection {
+    // Lowercase "us" only: "US" / "U.S." / "USA" are the country and never match.
+    private val PRONOUN_US = Regex("""(?<![A-Za-z])us(?![A-Za-z])""")
+    private val COUNTRY_IN_SOURCE = Regex("""\b(america|american|united states|u\.s\.?|usa)\b""", RegexOption.IGNORE_CASE)
+    private val COUNTRY_IN_ARABIC = Regex("الولايات المتحدة|أمريكا|امريكا|أمريكي")
+
+    // Egyptian-only function words that never appear in natural MSA.
+    private val EGYPTIAN_MARKERS = Regex(
+        """(?<![\p{IsArabic}])(مش|ده|دي|دول|دلوقتي|دلوقت|عايز|عايزة|عايزين|إيه|ايه|ازاي|إزاي|كده|اللي|فين|بتاع|بتاعة|علشان|عشان|كمان|برضه|برضو)(?![\p{IsArabic}])""",
+    )
+
+    /**
+     * [mode] is optional: when it is Modern Standard Arabic the gate also
+     * reports Egyptian colloquial leakage. Report-only - a model's sentence is
+     * never rewritten word by word here.
+     */
+    fun inspect(
+        source: String,
+        translation: String,
+        mode: com.gamelingo.mobile.data.settings.ArabicTranslationMode? = null,
+    ): Inspection {
         val issues = mutableListOf<Issue>()
         var text = translation
 
@@ -79,6 +104,19 @@ object TranslationQualityGate {
         val multiWord = source.trim().split(Regex("\\s+")).size >= 2
         if (multiWord && text.trim().equals(source.trim(), ignoreCase = true)) {
             issues += Issue.UNTRANSLATED
+        }
+
+        if (PRONOUN_US.containsMatchIn(source) &&
+            !COUNTRY_IN_SOURCE.containsMatchIn(source) &&
+            COUNTRY_IN_ARABIC.containsMatchIn(text)
+        ) {
+            issues += Issue.PRONOUN_US_MISREAD
+        }
+
+        if (mode == com.gamelingo.mobile.data.settings.ArabicTranslationMode.MODERN_STANDARD_ARABIC &&
+            EGYPTIAN_MARKERS.containsMatchIn(text)
+        ) {
+            issues += Issue.REGISTER_LEAK
         }
 
         return Inspection(text = text, issues = issues, corrected = corrected)

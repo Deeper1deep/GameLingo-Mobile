@@ -1,5 +1,5 @@
 {
-  "version": 1,
+  "version": 2,
   "cases": [
     {
       "id": "mandatory-01",
@@ -1642,6 +1642,610 @@
       "has_negation": null,
       "context": [],
       "note": "time skip: context before it is stale"
+    },
+    {
+      "id": "tlou-04",
+      "category": "tlou",
+      "source": "I got no idea where he's hiding.",
+      "detect": [
+        "i got no idea"
+      ],
+      "expect_msa_tokens": [
+        "ليس لدي أدنى فكرة"
+      ],
+      "expect_egy_tokens": [
+        "مش عارف خالص"
+      ],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "tlou-08",
+      "category": "tlou",
+      "source": "She's been asking around, trying to find him.",
+      "detect": [
+        "she's been asking around"
+      ],
+      "expect_msa_tokens": [
+        "تسأل عنه في كل مكان"
+      ],
+      "expect_egy_tokens": [
+        "بتسأل عليه في كل حتة"
+      ],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "tlou-09",
+      "category": "tlou",
+      "source": "Equip Health Kit and Hold to heal.",
+      "detect": [
+        "equip health kit",
+        "hold to heal"
+      ],
+      "expect_msa_tokens": [
+        "حقيبة الإسعافات",
+        "اضغط مطوّلًا للعلاج"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "tlou-10",
+      "category": "tlou",
+      "source": "Patch yourself up, alright?",
+      "detect": [
+        "patch yourself up"
+      ],
+      "expect_msa_tokens": [
+        "ضمّد جروحك"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "tlou-11",
+      "category": "tlou",
+      "source": "Fuck... so much for the easy route.",
+      "detect": [
+        "so much for the easy route"
+      ],
+      "expect_msa_tokens": [
+        "وداعًا للطريق السهل الذي كنا نتوقعه"
+      ],
+      "expect_egy_tokens": [
+        "سلام على الطريق السهل اللي كنا مستنيينه"
+      ],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "tlou-12",
+      "category": "tlou",
+      "source": "All civilians must clear the surrounding area immediately.",
+      "detect": [
+        "clear the surrounding area"
+      ],
+      "expect_msa_tokens": [
+        "المدنيون",
+        "أخلِ المنطقة المحيطة"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "tlou-13",
+      "category": "tlou",
+      "source": "Checkpoint five is now closed until further notice.",
+      "detect": [
+        "until further notice"
+      ],
+      "expect_msa_tokens": [
+        "نقطة تفتيش",
+        "حتى إشعار آخر"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "tlou-14",
+      "category": "tlou",
+      "source": "Looks like the coast is clear.",
+      "detect": [
+        "the coast is clear"
+      ],
+      "expect_msa_tokens": [
+        "أصبح المكان آمنًا"
+      ],
+      "expect_egy_tokens": [
+        "المكان بقى أمان"
+      ],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "tlou-15",
+      "category": "tlou",
+      "source": "Hey guys. How's it going?",
+      "detect": [
+        "hey guys",
+        "how's it going"
+      ],
+      "expect_msa_tokens": [
+        "مرحبًا يا رفاق",
+        "كيف الحال"
+      ],
+      "expect_egy_tokens": [
+        "عامل إيه"
+      ],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "tlou-16",
+      "category": "tlou",
+      "source": "This is us.",
+      "detect": [
+        "this is us"
+      ],
+      "expect_msa_tokens": [
+        "هذا نحن"
+      ],
+      "expect_egy_tokens": [
+        "ده إحنا"
+      ],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "tlou-17",
+      "category": "tlou",
+      "source": "Shit's stirring up out there.",
+      "detect": [
+        "stirring up out there"
+      ],
+      "expect_msa_tokens": [
+        "الأوضاع تتأزم هناك"
+      ],
+      "expect_egy_tokens": [
+        "الدنيا بتسخن برّه"
+      ],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "tlou-18",
+      "category": "tlou",
+      "source": "GAMEPLAY ONLY",
+      "detect": [
+        "gameplay only"
+      ],
+      "expect_msa_tokens": [
+        "اللعب فقط"
+      ],
+      "expect_egy_tokens": [
+        "اللعب بس"
+      ],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "deep-engine brief 2"
+    },
+    {
+      "id": "gaming-01",
+      "category": "gaming",
+      "source": "What's stirring up out there?",
+      "detect": [
+        "what's stirring up out there"
+      ],
+      "expect_msa_tokens": [
+        "ما الذي يحدث هناك"
+      ],
+      "expect_egy_tokens": [
+        "إيه اللي بيحصل هناك"
+      ],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-02",
+      "category": "gaming",
+      "source": "Cover me, I'm going in.",
+      "detect": [
+        "cover me"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-03",
+      "category": "gaming",
+      "source": "We're pinned down! We can't move!",
+      "detect": [
+        "we're pinned down"
+      ],
+      "expect_msa_tokens": [
+        "نحن محاصرون تحت النيران"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-04",
+      "category": "gaming",
+      "source": "Stay on my six and keep it down.",
+      "detect": [
+        "on my six",
+        "keep it down"
+      ],
+      "expect_msa_tokens": [
+        "خلفي مباشرة",
+        "اخفض صوتك"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-05",
+      "category": "gaming",
+      "source": "It's a trap! Get out of here!",
+      "detect": [
+        "it's a trap"
+      ],
+      "expect_msa_tokens": [
+        "إنه فخ"
+      ],
+      "expect_egy_tokens": [
+        "ده فخ"
+      ],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-06",
+      "category": "gaming",
+      "source": "There's no way out of this place.",
+      "detect": [
+        "no way out"
+      ],
+      "expect_msa_tokens": [
+        "لا مفرّ"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-07",
+      "category": "gaming",
+      "source": "Don't get cute with me.",
+      "detect": [
+        "don't get cute"
+      ],
+      "expect_msa_tokens": [
+        "لا تحاول التذاكي"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-08",
+      "category": "gaming",
+      "source": "Cut the crap and tell me where it is.",
+      "detect": [
+        "cut the crap"
+      ],
+      "expect_msa_tokens": [
+        "كفّ عن هذا الهراء"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-09",
+      "category": "gaming",
+      "source": "You're on your own from here.",
+      "detect": [
+        "you're on your own"
+      ],
+      "expect_msa_tokens": [
+        "أنت وحدك الآن"
+      ],
+      "expect_egy_tokens": [
+        "إنت لوحدك دلوقتي"
+      ],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-10",
+      "category": "gaming",
+      "source": "We're running out of time, move!",
+      "detect": [
+        "we're running out of time"
+      ],
+      "expect_msa_tokens": [
+        "ينفد الوقت منا"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-11",
+      "category": "gaming",
+      "source": "Lay low until it's over.",
+      "detect": [
+        "lay low"
+      ],
+      "expect_msa_tokens": [
+        "اختبئ وتجنّب الظهور"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-12",
+      "category": "gaming",
+      "source": "Hang in there, we're almost out.",
+      "detect": [
+        "hang in there"
+      ],
+      "expect_msa_tokens": [
+        "اصمد"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-13",
+      "category": "gaming",
+      "source": "Can you give me a hand with this?",
+      "detect": [
+        "give me a hand"
+      ],
+      "expect_msa_tokens": [
+        "ساعدني"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-14",
+      "category": "gaming",
+      "source": "Over my dead body.",
+      "detect": [
+        "over my dead body"
+      ],
+      "expect_msa_tokens": [
+        "لن يحدث ذلك إلا على جثتي"
+      ],
+      "expect_egy_tokens": [
+        "على جثتي"
+      ],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-15",
+      "category": "gaming",
+      "source": "The military sealed the quarantine zone.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "الجيش",
+        "منطقة حجر صحي"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-16",
+      "category": "gaming",
+      "source": "Civilians are not allowed after curfew.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "المدنيون",
+        "حظر التجول"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-17",
+      "category": "gaming",
+      "source": "Pick up a medkit and heal yourself.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "حقيبة الإسعافات"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-18",
+      "category": "gaming",
+      "source": "Clear the area now!",
+      "detect": [
+        "clear the area"
+      ],
+      "expect_msa_tokens": [
+        "أخلِ المنطقة"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-19",
+      "category": "gaming",
+      "source": "What's the plan?",
+      "detect": [
+        "what's the plan"
+      ],
+      "expect_msa_tokens": [
+        "ما الخطة"
+      ],
+      "expect_egy_tokens": [
+        "إيه الخطة"
+      ],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-20",
+      "category": "gaming",
+      "source": "Hey guys, what's up?",
+      "detect": [
+        "hey guys"
+      ],
+      "expect_msa_tokens": [
+        "مرحبًا يا رفاق"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-21",
+      "category": "gaming",
+      "source": "Marlene said it's us or them.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-22",
+      "category": "gaming",
+      "source": "They're not going to let us through.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-23",
+      "category": "gaming",
+      "source": "Hold to heal, then reload.",
+      "detect": [
+        "hold to heal"
+      ],
+      "expect_msa_tokens": [
+        "اضغط مطوّلًا للعلاج"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-24",
+      "category": "gaming",
+      "source": "Do you know where US troops are stationed?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "gaming-25",
+      "category": "gaming",
+      "source": "Keep your voice down, they'll hear us.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
     }
   ]
 }

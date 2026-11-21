@@ -1,5 +1,5 @@
 {
-  "version": 2,
+  "version": 3,
   "idioms": [
     {
       "en": "see you around",
@@ -150,6 +150,90 @@
       "meaning_en": "involved in something too difficult (first-person plural)",
       "ar_msa": "في أمر أكبر منا",
       "ar_egy": "داخلين في حاجة أكبر مننا"
+    },
+    {
+      "en": "so much for the easy route",
+      "meaning_en": "the hoped-for easy way has failed",
+      "ar_msa": "وداعًا للطريق السهل الذي كنا نتوقعه",
+      "ar_egy": "سلام على الطريق السهل اللي كنا مستنيينه"
+    },
+    {
+      "en": "the coast is clear",
+      "meaning_en": "no danger nearby, safe to move",
+      "ar_msa": "أصبح المكان آمنًا",
+      "ar_egy": "المكان بقى أمان"
+    },
+    {
+      "en": "what's stirring up out there",
+      "meaning_en": "what is happening out there",
+      "ar_msa": "ما الذي يحدث هناك",
+      "ar_egy": "إيه اللي بيحصل هناك"
+    },
+    {
+      "en": "stirring up out there",
+      "meaning_en": "trouble is building up outside",
+      "ar_msa": "الأوضاع تتأزم هناك",
+      "ar_egy": "الدنيا بتسخن برّه"
+    },
+    {
+      "en": "until further notice",
+      "meaning_en": "for an unspecified time",
+      "ar_msa": "حتى إشعار آخر",
+      "ar_egy": "لحد إشعار آخر"
+    },
+    {
+      "en": "it's a trap",
+      "meaning_en": "this is an ambush",
+      "ar_msa": "إنه فخ",
+      "ar_egy": "ده فخ"
+    },
+    {
+      "en": "no way out",
+      "meaning_en": "there is no escape",
+      "ar_msa": "لا مفرّ",
+      "ar_egy": "مفيش مفرّ"
+    },
+    {
+      "en": "we're pinned down",
+      "meaning_en": "trapped by enemy fire",
+      "ar_msa": "نحن محاصرون تحت النيران",
+      "ar_egy": "إحنا محاصرين تحت النار"
+    },
+    {
+      "en": "on my six",
+      "meaning_en": "directly behind me",
+      "ar_msa": "خلفي مباشرة",
+      "ar_egy": "ورايا على طول"
+    },
+    {
+      "en": "over my dead body",
+      "meaning_en": "never, I will not allow it",
+      "ar_msa": "لن يحدث ذلك إلا على جثتي",
+      "ar_egy": "على جثتي"
+    },
+    {
+      "en": "we're running out of time",
+      "meaning_en": "time is almost up",
+      "ar_msa": "ينفد الوقت منا",
+      "ar_egy": "الوقت بيخلص مننا"
+    },
+    {
+      "en": "don't get cute",
+      "meaning_en": "do not try to be clever",
+      "ar_msa": "لا تحاول التذاكي",
+      "ar_egy": "ماتتفلسفش"
+    },
+    {
+      "en": "cut the crap",
+      "meaning_en": "stop the nonsense",
+      "ar_msa": "كفّ عن هذا الهراء",
+      "ar_egy": "بطّل كلام فاضي"
+    },
+    {
+      "en": "you're on your own",
+      "meaning_en": "no help will come",
+      "ar_msa": "أنت وحدك الآن",
+      "ar_egy": "إنت لوحدك دلوقتي"
     }
   ],
   "phrasal_verbs": [
@@ -272,6 +356,48 @@
       "meaning_en": "stop talking (profane emphasis)",
       "ar_msa": "اخرس حالًا",
       "ar_egy": "اخرس خالص"
+    },
+    {
+      "en": "patch yourself up",
+      "meaning_en": "treat your own wounds",
+      "ar_msa": "ضمّد جروحك",
+      "ar_egy": "اعمل لنفسك إسعافات أولية"
+    },
+    {
+      "en": "clear the surrounding area",
+      "meaning_en": "evacuate the nearby area",
+      "ar_msa": "أخلِ المنطقة المحيطة",
+      "ar_egy": "إخلوا المنطقة اللي حواليكم"
+    },
+    {
+      "en": "clear the area",
+      "meaning_en": "leave the area",
+      "ar_msa": "أخلِ المنطقة",
+      "ar_egy": "اخلّوا المنطقة"
+    },
+    {
+      "en": "lay low",
+      "meaning_en": "hide and avoid being seen",
+      "ar_msa": "اختبئ وتجنّب الظهور",
+      "ar_egy": "استخبّى وماتظهرش"
+    },
+    {
+      "en": "hang in there",
+      "meaning_en": "keep going, endure",
+      "ar_msa": "اصمد",
+      "ar_egy": "اصبر وخليك قوي"
+    },
+    {
+      "en": "give me a hand",
+      "meaning_en": "help me",
+      "ar_msa": "ساعدني",
+      "ar_egy": "ساعدني"
+    },
+    {
+      "en": "keep it down",
+      "meaning_en": "be quieter",
+      "ar_msa": "اخفض صوتك",
+      "ar_egy": "وطّي صوتك"
     }
   ],
   "informal": [
@@ -426,6 +552,48 @@
       "meaning_en": "yes, consider it done",
       "ar_msa": "حاضر",
       "ar_egy": "حاضر"
+    },
+    {
+      "en": "how's it going",
+      "meaning_en": "casual greeting: how are you",
+      "ar_msa": "كيف الحال",
+      "ar_egy": "عامل إيه"
+    },
+    {
+      "en": "hey guys",
+      "meaning_en": "casual greeting to a group",
+      "ar_msa": "مرحبًا يا رفاق",
+      "ar_egy": "إزيّكم يا شباب"
+    },
+    {
+      "en": "this is us",
+      "meaning_en": "pronoun 'us' (we), NOT the United States",
+      "ar_msa": "هذا نحن",
+      "ar_egy": "ده إحنا"
+    },
+    {
+      "en": "gameplay only",
+      "meaning_en": "interface label: gameplay only",
+      "ar_msa": "اللعب فقط",
+      "ar_egy": "اللعب بس"
+    },
+    {
+      "en": "hold to heal",
+      "meaning_en": "interface prompt: hold the button to heal",
+      "ar_msa": "اضغط مطوّلًا للعلاج",
+      "ar_egy": "اضغط مطوّلًا للعلاج"
+    },
+    {
+      "en": "equip health kit",
+      "meaning_en": "interface prompt: equip the health kit",
+      "ar_msa": "جهّز حقيبة الإسعافات",
+      "ar_egy": "جهّز حقيبة الإسعافات"
+    },
+    {
+      "en": "what's the plan",
+      "meaning_en": "asking about the plan",
+      "ar_msa": "ما الخطة",
+      "ar_egy": "إيه الخطة"
     }
   ]
 }

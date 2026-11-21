@@ -60,7 +60,34 @@ class RegressionCorpusTest {
     @Test
     fun `corpus has the 8 mandatory cases and at least 100 more`() {
         assertTrue(corpus.cases.count { it.category == "mandatory" } == 8)
-        assertTrue(corpus.cases.size >= 108)
+        assertTrue(corpus.cases.size >= 150)
+    }
+
+    @Test
+    fun `the brief's 18 observed lines are all in the corpus`() {
+        val sources = corpus.cases.map { it.source.lowercase() }.toSet()
+        val required = listOf(
+            "Yeah, see you around.",
+            "Good man. Hey, you stay out of trouble, alright?",
+            "Military's gonna be out in force soon.",
+            "I got no idea where he's hiding.",
+            "Well, what did you tell her?",
+            "You think she'd tell me?",
+            "Marlene? What do the Fireflies need with Robert?",
+            "She's been asking around, trying to find him.",
+            "Equip Health Kit and Hold to heal.",
+            "Patch yourself up, alright?",
+            "Fuck... so much for the easy route.",
+            "All civilians must clear the surrounding area immediately.",
+            "Checkpoint five is now closed until further notice.",
+            "Looks like the coast is clear.",
+            "Hey guys. How's it going?",
+            "This is us.",
+            "Shit's stirring up out there.",
+            "GAMEPLAY ONLY",
+        )
+        val missing = required.filter { it.lowercase() !in sources }
+        if (missing.isNotEmpty()) fail("missing from corpus: $missing")
     }
 
     @Test
