@@ -64,6 +64,13 @@ data class AppSettings(
     val overlayTextColor: Long = OverlayColors.DEFAULT_TEXT,
     val overlayBackgroundColor: Long = OverlayColors.DEFAULT_BACKGROUND,
     val overlayPosition: OverlayPosition = OverlayPosition.BOTTOM,
+    /**
+     * The user's own glossary terms (character names, factions, slang from
+     * the game they play). These win over the bundled dictionary so a name
+     * the user pins stays exactly as they wrote it. Persisted as JSON in
+     * DataStore; no database schema change.
+     */
+    val userGlossaryTerms: List<UserGlossaryTerm> = emptyList(),
 ) {
     /** The effective OCR band for the current preset. */
     val effectiveRegion: TextRegionFractions
@@ -74,11 +81,16 @@ data class AppSettings(
         )
 }
 
+/** One user-pinned term: [en] must be rendered [ar], in both Arabic modes. */
+@kotlinx.serialization.Serializable
+data class UserGlossaryTerm(val en: String, val ar: String)
+
 interface SettingsRepository {
     val settings: Flow<AppSettings>
 
     suspend fun setShowOriginalText(show: Boolean)
     suspend fun setArabicTranslationMode(mode: ArabicTranslationMode)
+    suspend fun setUserGlossaryTerms(terms: List<UserGlossaryTerm>)
 
     suspend fun setCaptureIntervalMs(intervalMs: Long)
     suspend fun setRestrictToTextRegion(restrict: Boolean)
