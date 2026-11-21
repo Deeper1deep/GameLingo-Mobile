@@ -43,3 +43,33 @@ class ContextMemoryTest {
         assertEquals(0, memory.size())
     }
 }
+
+class ContextMemorySceneTest {
+
+    @Test
+    fun `a gap longer than the scene gap starts a new scene and drops old context`() {
+        val memory = ContextMemory(maxLines = 10, sceneGapMillis = 60_000L)
+        memory.add("Marlene is looking for Robert.", 1_000L)
+        memory.add("What do the Fireflies need with Robert?", 5_000L)
+        assertEquals(2, memory.size())
+        val newScene = memory.add("The gate is open.", 5_000L + 61_000L)
+        assertEquals(true, newScene)
+        assertEquals(listOf("The gate is open."), memory.snapshot())
+    }
+
+    @Test
+    fun `lines within the scene gap keep the conversation together`() {
+        val memory = ContextMemory(maxLines = 10, sceneGapMillis = 60_000L)
+        assertEquals(false, memory.add("first", 1_000L))
+        assertEquals(false, memory.add("second", 30_000L))
+        assertEquals(listOf("first", "second"), memory.snapshot())
+    }
+
+    @Test
+    fun `timestamp-less lines never trigger a scene break`() {
+        val memory = ContextMemory(maxLines = 10, sceneGapMillis = 60_000L)
+        memory.add("first", 1_000L)
+        memory.add("second") // legacy add: no timestamp
+        assertEquals(2, memory.size())
+    }
+}
