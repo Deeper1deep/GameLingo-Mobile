@@ -46,6 +46,8 @@ class LocalEngineChain internal constructor(
     private val gemmaOptIn: () -> Boolean,
     private val thermalHot: () -> Boolean,
     private val dictionaryHolder: EgyptianDictionaryHolder? = null,
+    private val understanding: () -> com.gamelingo.mobile.core.understanding.EnglishUnderstanding =
+        { com.gamelingo.mobile.core.understanding.EnglishUnderstanding.empty() },
 ) : TranslationEngine, LocalAiRouter {
 
     /** Hilt entry point: the real engines, live settings and the device thermal state. */
@@ -56,6 +58,7 @@ class LocalEngineChain internal constructor(
         @Named("mlkit") mlKitEngine: TranslationEngine,
         settingsRepository: SettingsRepository,
         dictionaryHolder: EgyptianDictionaryHolder,
+        understandingHolder: com.gamelingo.mobile.core.understanding.EnglishUnderstandingHolder,
         @ApplicationContext context: Context,
     ) : this(
         translateGemmaEngine as LocalAiCandidate,
@@ -64,6 +67,7 @@ class LocalEngineChain internal constructor(
         gemmaOptIn = settingsRepository.gemmaOptInFlag(),
         thermalHot = { context.isThermallyConstrained() },
         dictionaryHolder = dictionaryHolder,
+        understanding = { understandingHolder.get() },
     )
 
     override val engineId: String = ENGINE_ID
@@ -113,14 +117,33 @@ class LocalEngineChain internal constructor(
         }
         if (marianUsable()) {
             try {
-                return marianEngine.translate(request)
+                return correctLiteralIdiom(request, marianEngine.translate(request))
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (failure: Throwable) {
                 if (isDeterministic(failure)) marianPoisoned = true
             }
         }
-        return polishMlKit(request, mlKitEngine.translate(request))
+        return correctLiteralIdiom(request, polishMlKit(request, mlKitEngine.translate(request)))
+    }
+
+    /**
+     * Literal engines never see the understanding hints. Their safety net:
+     * when the whole source line IS one known non-literal expression, the
+     * established rendering replaces the word-for-word output and the engine
+     * id is tagged "+idiom" so history shows the correction honestly.
+     * Whole-line replacement only - partial spans inside a sentence are too
+     * easy to corrupt, so those stay untouched.
+     */
+    private fun correctLiteralIdiom(
+        request: TranslationRequest,
+        result: TranslationResult,
+    ): TranslationResult {
+        val rendering = runCatching {
+            understanding().exactLineRendering(request.text, request.arabicMode)
+        }.getOrNull() ?: return result
+        if (rendering == result.translatedText) return result
+        return result.copy(translatedText = rendering, engineId = "${result.engineId}+idiom")
     }
 
     /**
