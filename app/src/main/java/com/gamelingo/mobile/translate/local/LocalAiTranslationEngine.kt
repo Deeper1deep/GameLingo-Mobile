@@ -126,7 +126,11 @@ class LocalAiTranslationEngine @Inject constructor(
                     throw EmptyModelOutputException()
                 }
                 val egyptian = dictionary.get().toEgyptian(request.text, msa)
-                TranslationResult(translatedText = egyptian, engineId = ENGINE_ID)
+                // Honest engine id, same convention as the ML Kit fallback:
+                // when the dictionary pass rewrote the wording the tag says
+                // so instead of claiming pure model output.
+                val tag = if (egyptian == msa) ENGINE_ID else "$ENGINE_ID+dict"
+                TranslationResult(translatedText = egyptian, engineId = tag)
             }
         }
     }
