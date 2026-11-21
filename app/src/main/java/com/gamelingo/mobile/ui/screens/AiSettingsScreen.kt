@@ -44,15 +44,12 @@ import com.gamelingo.mobile.ui.components.SliderCard
 import com.gamelingo.mobile.ui.components.StatusChip
 import com.gamelingo.mobile.ui.components.StatusTone
 import com.gamelingo.mobile.ui.components.SwitchCard
-<<<<<<< redesign/premium-ui
 import com.gamelingo.mobile.ui.components.glTextFieldColors
 import com.gamelingo.mobile.ui.navigation.AiEngineViewModel
 import com.gamelingo.mobile.ui.navigation.AiTestUiState
 import com.gamelingo.mobile.ui.navigation.SessionViewModel
-=======
 import com.gamelingo.mobile.translate.local.LocalAiModelState
 import com.gamelingo.mobile.translate.local.LocalModelManager
->>>>>>> main
 import com.gamelingo.mobile.ui.navigation.SettingsViewModel
 import com.gamelingo.mobile.ui.navigation.StatusViewModel
 import com.gamelingo.mobile.ui.theme.GlColors
