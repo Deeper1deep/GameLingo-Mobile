@@ -417,4 +417,10 @@
     <string name="local_ai_test_running">جاري الاختبار...</string>
     <string name="local_ai_test_error">فشل الاختبار: %1$s</string>
     <string name="local_ai_test_meta">المحرك: %1$s - الزمن: %2$d مللي ثانية</string>
+    <string name="user_glossary_title">مصطلحاتي</string>
+    <string name="user_glossary_empty">ثبّت أسماء الشخصيات والمصطلحات بترجمتك؛ تُستخدم في الفصحى والعامية وتتقدم على القاموس المدمج.</string>
+    <string name="user_glossary_en_hint">المصطلح الإنجليزي</string>
+    <string name="user_glossary_ar_hint">الترجمة العربية</string>
+    <string name="user_glossary_add">إضافة المصطلح</string>
+    <string name="user_glossary_remove">حذف</string>
 </resources>
