@@ -1,0 +1,431 @@
+{
+  "version": 2,
+  "idioms": [
+    {
+      "en": "see you around",
+      "meaning_en": "goodbye, we will probably meet again",
+      "ar_msa": "أراك لاحقًا",
+      "ar_egy": "أشوفك على خير"
+    },
+    {
+      "en": "out in force",
+      "meaning_en": "appearing in large numbers, deployed heavily",
+      "ar_msa": "ينتشر بقوة",
+      "ar_egy": "نازل بكثافة"
+    },
+    {
+      "en": "stay out of trouble",
+      "meaning_en": "avoid getting into trouble",
+      "ar_msa": "إياك أن تورّط نفسك في المشاكل",
+      "ar_egy": "بلاش مشاكل"
+    },
+    {
+      "en": "asking around",
+      "meaning_en": "asking many people in different places",
+      "ar_msa": "تسأل عنه في كل مكان",
+      "ar_egy": "بتدوّر عليه في كل حتة"
+    },
+    {
+      "en": "I got no idea",
+      "meaning_en": "I have no idea at all",
+      "ar_msa": "ليس لدي أدنى فكرة",
+      "ar_egy": "مش عارف خالص"
+    },
+    {
+      "en": "what do they need with him",
+      "meaning_en": "why do they want him",
+      "ar_msa": "ما الذي يريدونه منه",
+      "ar_egy": "عايزين منه إيه"
+    },
+    {
+      "en": "what do the fireflies need with",
+      "meaning_en": "why do the Fireflies want",
+      "ar_msa": "ما الذي يريده أفراد اليراعات من",
+      "ar_egy": "اليراعات عايزين إيه من"
+    },
+    {
+      "en": "hold your horses",
+      "meaning_en": "wait, slow down",
+      "ar_msa": "مهلًا، تمهّل",
+      "ar_egy": "على مهلك يا بطل"
+    },
+    {
+      "en": "piece of cake",
+      "meaning_en": "very easy",
+      "ar_msa": "سهل للغاية",
+      "ar_egy": "سهل جدًا"
+    },
+    {
+      "en": "under the weather",
+      "meaning_en": "feeling sick",
+      "ar_msa": "مريض قليلًا",
+      "ar_egy": "تعبان شوية"
+    },
+    {
+      "en": "break a leg",
+      "meaning_en": "good luck",
+      "ar_msa": "بالتوفيق",
+      "ar_egy": "ربنا يوفقك"
+    },
+    {
+      "en": "cut to the chase",
+      "meaning_en": "get to the point",
+      "ar_msa": "ادخل في الموضوع مباشرة",
+      "ar_egy": "ادخل في المفيد"
+    },
+    {
+      "en": "hit the road",
+      "meaning_en": "leave, start a journey",
+      "ar_msa": "لننطلق",
+      "ar_egy": "يلا نمشي"
+    },
+    {
+      "en": "on the same page",
+      "meaning_en": "in agreement",
+      "ar_msa": "متفقان",
+      "ar_egy": "على نفس الموجة"
+    },
+    {
+      "en": "by the book",
+      "meaning_en": "following the rules exactly",
+      "ar_msa": "حسب القواعد",
+      "ar_egy": "بالقانون"
+    },
+    {
+      "en": "in over your head",
+      "meaning_en": "involved in something too difficult",
+      "ar_msa": "في أمر أكبر منك",
+      "ar_egy": "داخل في حاجة أكبر منك"
+    },
+    {
+      "en": "keep your head down",
+      "meaning_en": "stay unnoticed, avoid attention",
+      "ar_msa": "ابتعد عن الأنظار",
+      "ar_egy": "ماتبينش"
+    },
+    {
+      "en": "watch your back",
+      "meaning_en": "be careful of danger behind you",
+      "ar_msa": "احذر ممن خلفك",
+      "ar_egy": "خد بالك من وراك"
+    },
+    {
+      "en": "cover me",
+      "meaning_en": "protect me with gunfire while I move",
+      "ar_msa": "غطِّني",
+      "ar_egy": "غطّي عليا"
+    },
+    {
+      "en": "fall back",
+      "meaning_en": "retreat",
+      "ar_msa": "تراجعوا",
+      "ar_egy": "ارجعوا لورا"
+    },
+    {
+      "en": "hold the line",
+      "meaning_en": "defend the position, do not retreat",
+      "ar_msa": "اثبتوا على المواقع",
+      "ar_egy": "ماتسيبوش الخط"
+    },
+    {
+      "en": "stand down",
+      "meaning_en": "stop the operation, withdraw",
+      "ar_msa": "أنهوا العملية",
+      "ar_egy": "ارجعوا أماكنكم"
+    },
+    {
+      "en": "we're sitting ducks",
+      "meaning_en": "we are easy targets",
+      "ar_msa": "نحن أهداف سهلة",
+      "ar_egy": "إحنا هدف سهل"
+    },
+    {
+      "en": "bug out",
+      "meaning_en": "retreat quickly",
+      "ar_msa": "انسحبوا فورًا",
+      "ar_egy": "يلا نهرب"
+    },
+    {
+      "en": "in over our heads",
+      "meaning_en": "involved in something too difficult (first-person plural)",
+      "ar_msa": "في أمر أكبر منا",
+      "ar_egy": "داخلين في حاجة أكبر مننا"
+    }
+  ],
+  "phrasal_verbs": [
+    {
+      "en": "look out",
+      "meaning_en": "be careful",
+      "ar_msa": "انتبه",
+      "ar_egy": "خد بالك"
+    },
+    {
+      "en": "look for",
+      "meaning_en": "search for",
+      "ar_msa": "يبحث عن",
+      "ar_egy": "يدوّر على"
+    },
+    {
+      "en": "find out",
+      "meaning_en": "discover, learn",
+      "ar_msa": "يكتشف",
+      "ar_egy": "يعرف"
+    },
+    {
+      "en": "give up",
+      "meaning_en": "stop trying, surrender",
+      "ar_msa": "يستسلم",
+      "ar_egy": "ييأس"
+    },
+    {
+      "en": "back off",
+      "meaning_en": "move back, stop pressuring",
+      "ar_msa": "تراجع",
+      "ar_egy": "ابعد"
+    },
+    {
+      "en": "calm down",
+      "meaning_en": "become calm",
+      "ar_msa": "اهدأ",
+      "ar_egy": "اهدي"
+    },
+    {
+      "en": "come on",
+      "meaning_en": "hurry up / expression of encouragement",
+      "ar_msa": "هيّا",
+      "ar_egy": "يلا"
+    },
+    {
+      "en": "get out of here",
+      "meaning_en": "leave this place",
+      "ar_msa": "اخرجوا من هنا",
+      "ar_egy": "امشوا من هنا"
+    },
+    {
+      "en": "go ahead",
+      "meaning_en": "proceed",
+      "ar_msa": "تفضل",
+      "ar_egy": "اتفضل"
+    },
+    {
+      "en": "hold on",
+      "meaning_en": "wait a moment",
+      "ar_msa": "انتظر",
+      "ar_egy": "استنى"
+    },
+    {
+      "en": "keep going",
+      "meaning_en": "continue",
+      "ar_msa": "واصل",
+      "ar_egy": "كمل"
+    },
+    {
+      "en": "move out",
+      "meaning_en": "leave the position and advance",
+      "ar_msa": "تقدّموا",
+      "ar_egy": "اتحركوا"
+    },
+    {
+      "en": "run into",
+      "meaning_en": "meet by chance / collide with",
+      "ar_msa": "يصادف",
+      "ar_egy": "يقابل بالصدفة"
+    },
+    {
+      "en": "shut up",
+      "meaning_en": "stop talking",
+      "ar_msa": "اخرس",
+      "ar_egy": "اخرس"
+    },
+    {
+      "en": "take cover",
+      "meaning_en": "hide behind protection",
+      "ar_msa": "احتموا",
+      "ar_egy": "استخبوا"
+    },
+    {
+      "en": "wake up",
+      "meaning_en": "stop sleeping / realize",
+      "ar_msa": "استيقظ",
+      "ar_egy": "صحي"
+    },
+    {
+      "en": "watch out",
+      "meaning_en": "be careful",
+      "ar_msa": "احذر",
+      "ar_egy": "خد بالك"
+    },
+    {
+      "en": "get down",
+      "meaning_en": "drop to the ground",
+      "ar_msa": "انبطحوا",
+      "ar_egy": "انزلوا الأرض"
+    },
+    {
+      "en": "get the hell out of here",
+      "meaning_en": "leave this place immediately (profane emphasis)",
+      "ar_msa": "اخرجوا من هنا فورًا",
+      "ar_egy": "امشوا من هنا يلا"
+    },
+    {
+      "en": "shut the hell up",
+      "meaning_en": "stop talking (profane emphasis)",
+      "ar_msa": "اخرس حالًا",
+      "ar_egy": "اخرس خالص"
+    }
+  ],
+  "informal": [
+    {
+      "en": "gonna",
+      "meaning_en": "going to",
+      "ar_msa": "سوف",
+      "ar_egy": "هـ"
+    },
+    {
+      "en": "wanna",
+      "meaning_en": "want to",
+      "ar_msa": "يريد أن",
+      "ar_egy": "عايز"
+    },
+    {
+      "en": "gotta",
+      "meaning_en": "have to, must",
+      "ar_msa": "يجب أن",
+      "ar_egy": "لازم"
+    },
+    {
+      "en": "ain't",
+      "meaning_en": "is not / have not",
+      "ar_msa": "ليس",
+      "ar_egy": "مش"
+    },
+    {
+      "en": "yeah",
+      "meaning_en": "yes (informal)",
+      "ar_msa": "حسنًا",
+      "ar_egy": "أيوه"
+    },
+    {
+      "en": "nah",
+      "meaning_en": "no (informal)",
+      "ar_msa": "كلا",
+      "ar_egy": "لأ"
+    },
+    {
+      "en": "kinda",
+      "meaning_en": "kind of, somewhat",
+      "ar_msa": "إلى حد ما",
+      "ar_egy": "شوية"
+    },
+    {
+      "en": "lemme",
+      "meaning_en": "let me",
+      "ar_msa": "دعني",
+      "ar_egy": "سيبني"
+    },
+    {
+      "en": "gimme",
+      "meaning_en": "give me",
+      "ar_msa": "أعطني",
+      "ar_egy": "هات"
+    }
+  ],
+  "dialogue_expressions": [
+    {
+      "en": "you stay out of trouble",
+      "meaning_en": "warning to avoid trouble",
+      "ar_msa": "إياك أن تورّط نفسك في المشاكل",
+      "ar_egy": "بلاش مشاكل يا بطل"
+    },
+    {
+      "en": "good man",
+      "meaning_en": "praise for doing the right thing",
+      "ar_msa": "أحسنت يا رجل",
+      "ar_egy": "كفو عليك"
+    },
+    {
+      "en": "the truth",
+      "meaning_en": "preface: honestly speaking",
+      "ar_msa": "في الحقيقة",
+      "ar_egy": "بصراحة"
+    },
+    {
+      "en": "no idea where",
+      "meaning_en": "completely unknown location",
+      "ar_msa": "لا أدنى فكرة عن مكان",
+      "ar_egy": "مش عارف فين"
+    },
+    {
+      "en": "you think she'd tell me",
+      "meaning_en": "do you think she would tell me",
+      "ar_msa": "أتظن أنها ستخبرني",
+      "ar_egy": "فتكر هتقولي"
+    },
+    {
+      "en": "she's been asking around",
+      "meaning_en": "she has been asking many people",
+      "ar_msa": "إنها تسأل عنه في كل مكان",
+      "ar_egy": "بتسأل عليه في كل حتة"
+    },
+    {
+      "en": "what did you tell her",
+      "meaning_en": "what was said to her",
+      "ar_msa": "ماذا قلت لها",
+      "ar_egy": "قلتلها إيه"
+    },
+    {
+      "en": "let's move",
+      "meaning_en": "let us go now",
+      "ar_msa": "لنتحرك",
+      "ar_egy": "يلا بينا"
+    },
+    {
+      "en": "we got company",
+      "meaning_en": "enemies are approaching",
+      "ar_msa": "هناك أعداء قادمون",
+      "ar_egy": "فيه ناس جاية"
+    },
+    {
+      "en": "it's quiet",
+      "meaning_en": "no enemies in sight (often ominous)",
+      "ar_msa": "الأمور هادئة",
+      "ar_egy": "الدنيا هادية"
+    },
+    {
+      "en": "too quiet",
+      "meaning_en": "suspiciously quiet",
+      "ar_msa": "هادئة أكثر من اللازم",
+      "ar_egy": "هادية أوي"
+    },
+    {
+      "en": "behind you",
+      "meaning_en": "warning of danger from behind",
+      "ar_msa": "خلفك",
+      "ar_egy": "وراك"
+    },
+    {
+      "en": "heads up",
+      "meaning_en": "warning, pay attention",
+      "ar_msa": "انتبهوا",
+      "ar_egy": "خدوا بالكم"
+    },
+    {
+      "en": "my bad",
+      "meaning_en": "my mistake",
+      "ar_msa": "غلطتي",
+      "ar_egy": "غلطتي أنا"
+    },
+    {
+      "en": "fair enough",
+      "meaning_en": "that is reasonable",
+      "ar_msa": "كلام منطقي",
+      "ar_egy": "معاك حق"
+    },
+    {
+      "en": "you got it",
+      "meaning_en": "yes, consider it done",
+      "ar_msa": "حاضر",
+      "ar_egy": "حاضر"
+    }
+  ]
+}

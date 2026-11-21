@@ -1,8 +1,15 @@
 package com.gamelingo.mobile.ui.screens
 
 import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.hilt.navigation.compose.hiltViewModel
@@ -78,6 +85,57 @@ fun TranslationSettingsScreen(
             )
             HintText(stringResource(R.string.translation_style_hint))
             HintText(stringResource(R.string.tr_style_note))
+        }
+
+        // My terms: the user's pinned names and terms. A pinned rendering
+        // wins over the bundled dictionary, in both Arabic modes.
+        SectionHeader(stringResource(R.string.user_glossary_title))
+        GlCard {
+            if (settings.userGlossaryTerms.isEmpty()) {
+                HintText(stringResource(R.string.user_glossary_empty))
+            } else {
+                settings.userGlossaryTerms.forEach { term ->
+                    androidx.compose.foundation.layout.Row(
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Text(
+                            text = "${term.en} = ${term.ar}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.weight(1f),
+                        )
+                        TextButton(onClick = { viewModel.removeUserGlossaryTerm(term.en) }) {
+                            Text(stringResource(R.string.user_glossary_remove))
+                        }
+                    }
+                }
+            }
+            var newEn by remember { mutableStateOf("") }
+            var newAr by remember { mutableStateOf("") }
+            OutlinedTextField(
+                value = newEn,
+                onValueChange = { newEn = it },
+                label = { Text(stringResource(R.string.user_glossary_en_hint)) },
+                singleLine = true,
+                modifier = Modifier.padding(top = GlSpacing.md),
+            )
+            OutlinedTextField(
+                value = newAr,
+                onValueChange = { newAr = it },
+                label = { Text(stringResource(R.string.user_glossary_ar_hint)) },
+                singleLine = true,
+                modifier = Modifier.padding(top = GlSpacing.sm),
+            )
+            TextButton(
+                onClick = {
+                    viewModel.addUserGlossaryTerm(newEn, newAr)
+                    newEn = ""
+                    newAr = ""
+                },
+                enabled = newEn.isNotBlank() && newAr.isNotBlank(),
+                modifier = Modifier.padding(top = GlSpacing.sm),
+            ) {
+                Text(stringResource(R.string.user_glossary_add))
+            }
         }
 
         SwitchCard(

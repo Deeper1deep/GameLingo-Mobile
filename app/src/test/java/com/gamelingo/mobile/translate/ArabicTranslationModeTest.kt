@@ -246,10 +246,14 @@ class ArabicTranslationModeTest {
     // ---- 12: fallback keeps the chosen mode (also covered above) ----
 
     @Test
-    fun `prompt versions differ per mode so cached prompts never cross over`() {
-        assertNotEquals(
-            ArabicStylePrompt.promptVersionFor(MSA),
-            ArabicStylePrompt.promptVersionFor(EGY),
-        )
+    fun `cache entries never cross modes even when prompt versions coincide`() {
+        // The mode itself is part of the cache identity, so two modes at the
+        // same numeric prompt version still key different entries; a version
+        // bump invalidates only its own mode's entries.
+        val msaKey = MSA to ArabicStylePrompt.promptVersionFor(MSA)
+        val egyKey = EGY to ArabicStylePrompt.promptVersionFor(EGY)
+        assertNotEquals(msaKey, egyKey)
+        // Brief 9 upgraded the MSA mandate: its version must have moved.
+        assertTrue(ArabicStylePrompt.promptVersionFor(MSA) >= 2)
     }
 }

@@ -69,6 +69,7 @@ class DataStoreSettingsRepository @Inject constructor(
                 prefs[KEY_ARABIC_TRANSLATION_MODE],
                 ArabicTranslationMode.EGYPTIAN_ARABIC,
             ),
+            userGlossaryTerms = com.gamelingo.mobile.data.settings.parseUserGlossary(prefs[KEY_USER_GLOSSARY]),
             requestTimeoutSec = SettingsConstraints.clampTimeoutSec(
                 prefs[KEY_TIMEOUT_SEC] ?: SettingsConstraints.DEFAULT_TIMEOUT_SEC,
             ),
@@ -217,6 +218,10 @@ class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { it[KEY_ARABIC_TRANSLATION_MODE] = mode.name }
     }
 
+    override suspend fun setUserGlossaryTerms(terms: List<UserGlossaryTerm>) {
+        dataStore.edit { it[KEY_USER_GLOSSARY] = userGlossaryJson.encodeToString(terms) }
+    }
+
     override suspend fun setRequestTimeoutSec(seconds: Int) {
         dataStore.edit { it[KEY_TIMEOUT_SEC] = SettingsConstraints.clampTimeoutSec(seconds) }
     }
@@ -270,6 +275,9 @@ class DataStoreSettingsRepository @Inject constructor(
         val KEY_LOCAL_AI_WIFI_ONLY = booleanPreferencesKey("local_ai_wifi_only")
         val KEY_GEMMA_HD_OPT_IN = booleanPreferencesKey("gemma_hd_opt_in")
         val KEY_ARABIC_TRANSLATION_MODE = stringPreferencesKey("arabic_translation_mode")
+        val KEY_USER_GLOSSARY = stringPreferencesKey("user_glossary_terms")
+
+        internal val userGlossaryJson = kotlinx.serialization.json.Json { ignoreUnknownKeys = true }
         val KEY_TIMEOUT_SEC = intPreferencesKey("request_timeout_sec")
         val KEY_CACHE_ENABLED = booleanPreferencesKey("cache_enabled")
         val KEY_CONTEXT_LINES = intPreferencesKey("context_lines")

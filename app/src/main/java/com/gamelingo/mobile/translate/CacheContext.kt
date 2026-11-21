@@ -25,6 +25,10 @@ data class CacheContext(
     val promptVersion: Int,
     /** Hash of the context lines actually sent; 0 when context is disabled. */
     val contextSignature: Long,
+    /** Understanding dataset version: new idiom knowledge changes output. */
+    val understandingVersion: Int = 0,
+    /** Signature of the user's pinned glossary terms; 0 when none. */
+    val glossarySignature: Long = 0L,
     /** Installed version of the model behind the planned local engine; 0 otherwise. */
     val modelVersion: Int = 0,
     /** Active Egyptian dictionary version; a dictionary update must not serve old entries. */

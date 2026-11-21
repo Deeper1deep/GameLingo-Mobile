@@ -17,6 +17,14 @@ data class TranslationRequest(
      */
     val arabicMode: com.gamelingo.mobile.data.settings.ArabicTranslationMode =
         com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC,
+    /**
+     * Non-literal expressions the understanding layer found in [text],
+     * rendered as meaning hints for prompt-capable engines. Empty when the
+     * line has no known idiom/phrasal verb, so prompts never pay for noise.
+     * Literal engines ignore this; their safety net is exact-line
+     * post-processing in the chain.
+     */
+    val understandingHints: String = "",
 )
 
 /** The engine's answer for one line. */

@@ -1,0 +1,1647 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "mandatory-01",
+      "category": "mandatory",
+      "source": "Yeah, see you around.",
+      "detect": [
+        "see you around"
+      ],
+      "expect_msa_tokens": [
+        "أراك لاحقًا"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "brief case 1"
+    },
+    {
+      "id": "mandatory-02",
+      "category": "mandatory",
+      "source": "Good man. Hey, you stay out of trouble, alright?",
+      "detect": [
+        "good man",
+        "you stay out of trouble"
+      ],
+      "expect_msa_tokens": [
+        "أحسنت"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "brief case 2"
+    },
+    {
+      "id": "mandatory-03",
+      "category": "mandatory",
+      "source": "Military's gonna be out in force soon.",
+      "detect": [
+        "out in force",
+        "gonna"
+      ],
+      "expect_msa_tokens": [
+        "ينتشر",
+        "بقوة"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "brief case 3"
+    },
+    {
+      "id": "mandatory-04",
+      "category": "mandatory",
+      "source": "The truth. I got no idea where he's hiding.",
+      "detect": [
+        "the truth",
+        "I got no idea"
+      ],
+      "expect_msa_tokens": [
+        "ليس لدي"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": "brief case 4"
+    },
+    {
+      "id": "mandatory-05",
+      "category": "mandatory",
+      "source": "Well, what did you tell her?",
+      "detect": [],
+      "expect_msa_tokens": [
+        "ماذا قلت لها"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": "brief case 5: keep correct output"
+    },
+    {
+      "id": "mandatory-06",
+      "category": "mandatory",
+      "source": "You think she'd tell me?",
+      "detect": [
+        "you think she'd tell me"
+      ],
+      "expect_msa_tokens": [
+        "ستخبرني"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": "brief case 6"
+    },
+    {
+      "id": "mandatory-07",
+      "category": "mandatory",
+      "source": "Marlene? What do the Fireflies need with Robert?",
+      "detect": [
+        "what do the fireflies need with"
+      ],
+      "expect_msa_tokens": [
+        "اليراعات"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": "brief case 7"
+    },
+    {
+      "id": "mandatory-08",
+      "category": "mandatory",
+      "source": "Uh... Marlene. She's been asking around, trying to find him.",
+      "detect": [
+        "she's been asking around"
+      ],
+      "expect_msa_tokens": [
+        "تسأل"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "brief case 8"
+    },
+    {
+      "id": "dialogue-01",
+      "category": "dialogue",
+      "source": "Come on, we don't have all day.",
+      "detect": [
+        "come on"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "dialogue-02",
+      "category": "dialogue",
+      "source": "Hold on, let me think.",
+      "detect": [
+        "hold on"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "dialogue-03",
+      "category": "dialogue",
+      "source": "It's not what it looks like.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "dialogue-04",
+      "category": "dialogue",
+      "source": "Whatever you say, boss.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "dialogue-05",
+      "category": "dialogue",
+      "source": "Fair enough. Let's move.",
+      "detect": [
+        "fair enough",
+        "let's move"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "dialogue-06",
+      "category": "dialogue",
+      "source": "You're kidding me, right?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "dialogue-07",
+      "category": "dialogue",
+      "source": "My bad. Won't happen again.",
+      "detect": [
+        "my bad"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "dialogue-08",
+      "category": "dialogue",
+      "source": "Long time no see.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "dialogue-09",
+      "category": "dialogue",
+      "source": "Don't tell me you lost it.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "idiom-01",
+      "category": "idiom",
+      "source": "Break a leg out there, kid.",
+      "detect": [
+        "break a leg"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "idiom-02",
+      "category": "idiom",
+      "source": "This part is a piece of cake.",
+      "detect": [
+        "piece of cake"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "idiom-03",
+      "category": "idiom",
+      "source": "We are in over our heads here.",
+      "detect": [
+        "in over our heads"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "idiom-04",
+      "category": "idiom",
+      "source": "Keep your head down and follow me.",
+      "detect": [
+        "keep your head down"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "idiom-05",
+      "category": "idiom",
+      "source": "Watch your back in the tunnels.",
+      "detect": [
+        "watch your back"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "idiom-06",
+      "category": "idiom",
+      "source": "Cut to the chase, what do you want?",
+      "detect": [
+        "cut to the chase"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "idiom-07",
+      "category": "idiom",
+      "source": "By the book this time, understood?",
+      "detect": [
+        "by the book"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "idiom-08",
+      "category": "idiom",
+      "source": "Hit the road before dawn.",
+      "detect": [
+        "hit the road"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "phrasal-01",
+      "category": "phrasal",
+      "source": "Look out! Behind you!",
+      "detect": [
+        "look out",
+        "behind you"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "phrasal-02",
+      "category": "phrasal",
+      "source": "Take cover, now!",
+      "detect": [
+        "take cover"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "phrasal-03",
+      "category": "phrasal",
+      "source": "We can't give up now.",
+      "detect": [
+        "give up"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "phrasal-04",
+      "category": "phrasal",
+      "source": "Back off, he's mine.",
+      "detect": [
+        "back off"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "phrasal-05",
+      "category": "phrasal",
+      "source": "Calm down and listen to me.",
+      "detect": [
+        "calm down"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "phrasal-06",
+      "category": "phrasal",
+      "source": "Get down! Sniper on the roof.",
+      "detect": [
+        "get down"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "phrasal-07",
+      "category": "phrasal",
+      "source": "We move out at midnight.",
+      "detect": [
+        "move out"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "phrasal-08",
+      "category": "phrasal",
+      "source": "Keep going, the exit is close.",
+      "detect": [
+        "keep going"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "informal-01",
+      "category": "informal",
+      "source": "I'm gonna find him, whatever it takes.",
+      "detect": [
+        "gonna"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "informal-02",
+      "category": "informal",
+      "source": "You wanna live? Then run.",
+      "detect": [
+        "wanna"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "informal-03",
+      "category": "informal",
+      "source": "We gotta go, right now.",
+      "detect": [
+        "gotta"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "informal-04",
+      "category": "informal",
+      "source": "This ain't over.",
+      "detect": [
+        "ain't"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "informal-05",
+      "category": "informal",
+      "source": "Nah, I'm good.",
+      "detect": [
+        "nah"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "informal-06",
+      "category": "informal",
+      "source": "Gimme the map.",
+      "detect": [
+        "gimme"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "informal-07",
+      "category": "informal",
+      "source": "Lemme handle this.",
+      "detect": [
+        "lemme"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "informal-08",
+      "category": "informal",
+      "source": "It's kinda late for that.",
+      "detect": [
+        "kinda"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "question-01",
+      "category": "question",
+      "source": "Where did you last see him?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "question-02",
+      "category": "question",
+      "source": "Why would the soldiers come here?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "question-03",
+      "category": "question",
+      "source": "How many of them are out there?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "question-04",
+      "category": "question",
+      "source": "Did anyone survive the ambush?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "question-05",
+      "category": "question",
+      "source": "What happens if we fail?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "question-06",
+      "category": "question",
+      "source": "Who gave you this information?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "question-07",
+      "category": "question",
+      "source": "Are you coming with us or not?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "question-08",
+      "category": "question",
+      "source": "Can you hear me now?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "negation-01",
+      "category": "negation",
+      "source": "I won't leave without her.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "negation-02",
+      "category": "negation",
+      "source": "Nobody knows about this place.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "negation-03",
+      "category": "negation",
+      "source": "He never told us the truth.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "negation-04",
+      "category": "negation",
+      "source": "There's nothing we can do.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "negation-05",
+      "category": "negation",
+      "source": "She doesn't trust anyone anymore.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "negation-06",
+      "category": "negation",
+      "source": "We have nowhere to run.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "negation-07",
+      "category": "negation",
+      "source": "Don't open that door.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "negation-08",
+      "category": "negation",
+      "source": "No one gets in or out.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "tense-01",
+      "category": "tense",
+      "source": "I was sleeping when the sirens started.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "tense-02",
+      "category": "tense",
+      "source": "We will be waiting at the bridge.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "tense-03",
+      "category": "tense",
+      "source": "She had already left when we arrived.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "tense-04",
+      "category": "tense",
+      "source": "They have been searching for hours.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "tense-05",
+      "category": "tense",
+      "source": "If I had known, I would have warned you.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "tense-06",
+      "category": "tense",
+      "source": "He would never betray us.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "tense-07",
+      "category": "tense",
+      "source": "By tomorrow, we will have crossed the border.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "tense-08",
+      "category": "tense",
+      "source": "I used to live here before the outbreak.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "pronoun-01",
+      "category": "pronoun",
+      "source": "Joel gave it to her, and she gave it back.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [
+        "Joel is carrying the medicine."
+      ],
+      "note": ""
+    },
+    {
+      "id": "pronoun-02",
+      "category": "pronoun",
+      "source": "That's his rifle, not yours.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "pronoun-03",
+      "category": "pronoun",
+      "source": "They took everything we had.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "pronoun-04",
+      "category": "pronoun",
+      "source": "Tell them I said goodbye.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "pronoun-05",
+      "category": "pronoun",
+      "source": "It's hers. She made it herself.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "pronoun-06",
+      "category": "pronoun",
+      "source": "We did this to ourselves.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "pronoun-07",
+      "category": "pronoun",
+      "source": "Someone left this for us.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "pronoun-08",
+      "category": "pronoun",
+      "source": "Everyone who was there is gone now.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "names-01",
+      "category": "names",
+      "source": "Marlene sent us.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "transliterate, keep consistent"
+    },
+    {
+      "id": "names-02",
+      "category": "names",
+      "source": "The Fireflies are regrouping.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "اليراعات"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "names-03",
+      "category": "names",
+      "source": "FEDRA controls the quarantine zone.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "فيدرا",
+        "منطقة حجر صحي"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "names-04",
+      "category": "names",
+      "source": "The Hunters took the bridge.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "الصيادون"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "names-05",
+      "category": "names",
+      "source": "Robert owes the Fireflies guns.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "اليراعات"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "names-06",
+      "category": "names",
+      "source": "The Cartel moved into the city.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "الكارتل"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "names-07",
+      "category": "names",
+      "source": "Ellie, stay close to me.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "names-08",
+      "category": "names",
+      "source": "Is Tommy still at the dam?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "military-01",
+      "category": "military",
+      "source": "The patrol passes every ten minutes.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "دورية"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "military-02",
+      "category": "military",
+      "source": "Meet at the rendezvous point.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "نقطة التجمع"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "military-03",
+      "category": "military",
+      "source": "Reinforcements are on the way.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "التعزيزات"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "military-04",
+      "category": "military",
+      "source": "Hold the perimeter at all costs.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "المحيط الأمني"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "military-05",
+      "category": "military",
+      "source": "Stand down, the mission is over.",
+      "detect": [
+        "stand down"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "military-06",
+      "category": "military",
+      "source": "We need a ceasefire to get the wounded out.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "وقف إطلاق النار"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "military-07",
+      "category": "military",
+      "source": "Fall back to the outpost!",
+      "detect": [
+        "fall back"
+      ],
+      "expect_msa_tokens": [
+        "بؤرة استطلاع"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "military-08",
+      "category": "military",
+      "source": "The convoy reaches the checkpoint at dawn.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "نقطة تفتيش"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "weapons-01",
+      "category": "weapons",
+      "source": "Grab the shotgun and some ammo.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "بندقية خرطوش",
+        "ذخيرة"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "weapons-02",
+      "category": "weapons",
+      "source": "My rifle is out of ammo.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "ذخيرة"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "weapons-03",
+      "category": "weapons",
+      "source": "He threw a molotov at the barricade.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "مولوتوف"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "weapons-04",
+      "category": "weapons",
+      "source": "Take the body armor, you'll need it.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "درع واقٍ"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "weapons-05",
+      "category": "weapons",
+      "source": "The sniper has a silencer.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "كاتم صوت"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "weapons-06",
+      "category": "weapons",
+      "source": "There's a medkit in the bathroom.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "حقيبة إسعافات"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "weapons-07",
+      "category": "weapons",
+      "source": "Cover me while I reload.",
+      "detect": [
+        "cover me"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "weapons-08",
+      "category": "weapons",
+      "source": "One grenade left. Make it count.",
+      "detect": [],
+      "expect_msa_tokens": [
+        "قنبلة يدوية"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "profanity-01",
+      "category": "profanity",
+      "source": "Get the hell out of here.",
+      "detect": [
+        "get the hell out of here"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "profanity-02",
+      "category": "profanity",
+      "source": "This is bullshit and you know it.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "profanity-03",
+      "category": "profanity",
+      "source": "Damn it, we lost him.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "profanity-04",
+      "category": "profanity",
+      "source": "Shut the hell up and drive.",
+      "detect": [
+        "shut the hell up"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "profanity-05",
+      "category": "profanity",
+      "source": "You're a dead man, you hear me?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "profanity-06",
+      "category": "profanity",
+      "source": "I don't give a damn about the rules.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "profanity-07",
+      "category": "profanity",
+      "source": "What the fuck was that?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "profanity-08",
+      "category": "profanity",
+      "source": "They're gonna kill that bastard.",
+      "detect": [
+        "gonna"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "short-01",
+      "category": "short",
+      "source": "Run!",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "short-02",
+      "category": "short",
+      "source": "Now.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "short-03",
+      "category": "short",
+      "source": "Not yet.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "short-04",
+      "category": "short",
+      "source": "Behind you!",
+      "detect": [
+        "behind you"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "short-05",
+      "category": "short",
+      "source": "Go, go, go!",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "short-06",
+      "category": "short",
+      "source": "Heads up!",
+      "detect": [
+        "heads up"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "short-07",
+      "category": "short",
+      "source": "Enough.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "short-08",
+      "category": "short",
+      "source": "Wait.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": ""
+    },
+    {
+      "id": "context-01",
+      "category": "context",
+      "source": "What do the Fireflies need with Robert?",
+      "detect": [],
+      "expect_msa_tokens": [
+        "اليراعات"
+      ],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [
+        "Marlene is looking for Robert."
+      ],
+      "note": ""
+    },
+    {
+      "id": "context-02",
+      "category": "context",
+      "source": "He said he'd meet us there.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [
+        "Robert promised to come to the bridge."
+      ],
+      "note": ""
+    },
+    {
+      "id": "context-03",
+      "category": "context",
+      "source": "She won't forgive him for it.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": true,
+      "context": [
+        "Joel lied to Ellie about the hospital."
+      ],
+      "note": ""
+    },
+    {
+      "id": "context-04",
+      "category": "context",
+      "source": "That's why they hate us.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [
+        "The soldiers took their supplies."
+      ],
+      "note": ""
+    },
+    {
+      "id": "context-05",
+      "category": "context",
+      "source": "Then we're doing this alone.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [
+        "The Fireflies refused to help."
+      ],
+      "note": ""
+    },
+    {
+      "id": "context-06",
+      "category": "context",
+      "source": "You still trust him after that?",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": true,
+      "has_negation": null,
+      "context": [
+        "Robert sold their route to the Hunters."
+      ],
+      "note": ""
+    },
+    {
+      "id": "scene-01",
+      "category": "scene",
+      "source": "The gate is open. Let's move.",
+      "detect": [
+        "let's move"
+      ],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "after a long pause: new scene"
+    },
+    {
+      "id": "scene-02",
+      "category": "scene",
+      "source": "Menu. Inventory. Map.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "game UI line between scenes"
+    },
+    {
+      "id": "scene-03",
+      "category": "scene",
+      "source": "Chapter 3: The Outskirts",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "title card starts a new scene"
+    },
+    {
+      "id": "scene-04",
+      "category": "scene",
+      "source": "Two days later.",
+      "detect": [],
+      "expect_msa_tokens": [],
+      "expect_egy_tokens": [],
+      "is_question": null,
+      "has_negation": null,
+      "context": [],
+      "note": "time skip: context before it is stale"
+    }
+  ]
+}

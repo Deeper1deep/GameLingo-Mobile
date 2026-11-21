@@ -25,7 +25,8 @@ object ArabicStylePrompt {
         ArabicTranslationMode.MODERN_STANDARD_ARABIC -> MSA_PROMPT_VERSION
     }
 
-    const val MSA_PROMPT_VERSION = 1
+    // v2: tense/question/negation fidelity and no-padding rules (brief 9 §5).
+    const val MSA_PROMPT_VERSION = 2
 
     /**
      * MSA mandate: contemporary Modern Standard Arabic, natural and clear,
@@ -37,9 +38,16 @@ object ArabicStylePrompt {
         "Translate the complete source text faithfully into contemporary Modern Standard Arabic " +
             "(العربية الفصحى المعاصرة). Rules:\n" +
             "- Use natural, correct, clear Arabic: sound grammar, readable phrasing, no stiff " +
-            "word-for-word rendering.\n" +
+            "word-for-word rendering, as a professional human game translator would write it.\n" +
             "- Preserve the original meaning, the context, and the speaker's tone (angry, " +
             "sarcastic, funny, serious).\n" +
+            "- Keep the tense and modality of the source: past stays past, a plan for the future " +
+            "stays future, a possibility stays a possibility. Contractions and informal English " +
+            "(gonna, wanna, ain't) carry their real meaning, not a literal one.\n" +
+            "- A question stays a question; a negation stays negated; never turn either into a " +
+            "plain statement.\n" +
+            "- Do not lengthen the translation: no added explanations, no invented information, " +
+            "no repeated words.\n" +
             "- Never use Egyptian or other colloquial dialect expressions.\n" +
             "- Keep character and place names unchanged (transliterate into Arabic letters) " +
             "and keep established gaming terms from the provided glossary when present.\n" +
