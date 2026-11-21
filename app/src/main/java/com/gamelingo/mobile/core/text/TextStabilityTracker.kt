@@ -14,14 +14,23 @@ package com.gamelingo.mobile.core.text
 class TextStabilityTracker(
     private val requiredReadings: Int = DEFAULT_REQUIRED_READINGS,
     private val similarityThreshold: Float = DEFAULT_SIMILARITY_THRESHOLD,
+    private val confidentLength: Int = DEFAULT_CONFIDENT_LENGTH,
 ) {
 
     private var lastKey: String? = null
     private var consecutive: Int = 0
 
     /**
-     * @return true when this reading completes [requiredReadings] similar
-     * readings in a row, meaning the text is stable enough to translate.
+     * @return true when this reading completes enough similar readings in a
+     * row, meaning the text is stable enough to translate.
+     *
+     * Latency vs flicker: a full subtitle line (key of at least
+     * [confidentLength] characters) is accepted on its FIRST reading. Long
+     * lines are almost never OCR noise, and waiting a whole extra capture
+     * interval was the single biggest delay between a subtitle appearing and
+     * its translation starting. Short fragments (single-word barks) still
+     * need [requiredReadings] sightings: they are exactly where OCR flicker
+     * lives.
      */
     fun offer(raw: String): Boolean {
         val key = TextNormalizer.comparisonKey(raw)
@@ -40,7 +49,8 @@ class TextStabilityTracker(
             lastKey = key
             consecutive = 1
         }
-        return consecutive >= requiredReadings
+        val needed = if (key.length >= confidentLength) 1 else requiredReadings
+        return consecutive >= needed
     }
 
     /** Clears the current run; called when the session restarts. */
@@ -52,5 +62,6 @@ class TextStabilityTracker(
     companion object {
         const val DEFAULT_REQUIRED_READINGS = 2
         const val DEFAULT_SIMILARITY_THRESHOLD = 0.8f
+        const val DEFAULT_CONFIDENT_LENGTH = 20
     }
 }

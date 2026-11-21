@@ -17,6 +17,38 @@ class EgyptianDialectPromptTest {
     }
 
     @Test
+    fun `system prompt carries the faithful translation mandate verbatim`() {
+        val prompt = EgyptianDialectPrompt.SYSTEM_PROMPT
+        assertTrue(prompt.contains("Preserve profanity, insults, vulgar language, slang"))
+        assertTrue(prompt.contains("original meaning and intensity"))
+        assertTrue(prompt.contains("Never censor, omit, sanitize, soften"))
+        assertTrue(prompt.contains("asterisks"))
+        assertTrue(prompt.contains("Do not invent profanity"))
+        assertTrue(prompt.contains("context-aware Egyptian colloquial equivalents"))
+    }
+
+    @Test
+    fun `prompt version bumped so cached pre-mandate translations are never served`() {
+        assertEquals(2, EgyptianDialectPrompt.PROMPT_VERSION)
+    }
+
+    @Test
+    fun `profanity in the source line passes into the request untouched`() {
+        // Our own pipeline must never rewrite the source text: whatever the
+        // game says reaches the engine verbatim.
+        val line = "You piece of shit, get the hell out of my way, bastard!"
+        val out = EgyptianDialectPrompt.buildUserPrompt(TranslationRequest(text = line))
+        assertTrue(out.endsWith(line))
+    }
+
+    @Test
+    fun `slang and sarcasm pass through unmodified`() {
+        val line = "Yeah right, tough guy. LMFAO, you wish, dumbass."
+        val out = EgyptianDialectPrompt.buildUserPrompt(TranslationRequest(text = line))
+        assertTrue(out.endsWith(line))
+    }
+
+    @Test
     fun `user prompt always ends with the current line`() {
         val out = EgyptianDialectPrompt.buildUserPrompt(TranslationRequest(text = "Let's go!"))
         assertTrue(out.endsWith("Let's go!"))

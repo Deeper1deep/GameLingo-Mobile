@@ -17,6 +17,14 @@
     <string name="home_status_stopped">حالة الجلسة: متوقفة</string>
     <string name="home_status_running">حالة الجلسة: شغالة — القراءة جارية</string>
     <string name="home_status_error">حالة الجلسة: حصلت مشكلة</string>
+    <string name="session_error_missing_consent">بيانات إذن التقاط الشاشة موصلتش صح. ابدأ الجلسة من جديد.</string>
+    <string name="session_error_foreground_failed">النظام رفض تشغيل خدمة الالتقاط. اقفل التطبيق وافتحه وجرّب من جديد.</string>
+    <string name="session_error_projection_rejected">النظام رفض إذن التقاط الشاشة. ابدأ الجلسة من جديد ووافق على الإذن.</string>
+    <string name="session_error_capture_persistent">قراءة الشاشة بتفشل بشكل متكرر. ابدأ الجلسة من جديد، ولو المشكلة مستمرة أعد تشغيل الموبايل.</string>
+    <string name="session_error_settings_unavailable">إعدادات التطبيق مش قابلة للقراءة دلوقتي. اقفل التطبيق وافتحه من جديد.</string>
+    <string name="session_error_overlay_permission">إذن الظهور فوق التطبيقات غير متاح أو اتسحب. فعّله من الإعدادات وابدأ الجلسة من جديد.</string>
+    <string name="session_error_overlay_window">نافذة الترجمة معرفتش تظهر. تأكد من إذن الظهور فوق التطبيقات وابدأ من جديد.</string>
+    <string name="session_error_projection_ended">النظام أنهى إذن التقاط الشاشة (انتهت صلاحيته أو اتسحب). ابدأ الجلسة من جديد ووافق على الإذن.</string>
     <string name="home_stop">إيقاف الترجمة</string>
     <string name="home_capture_cancelled">تم إلغاء إذن التقاط الشاشة</string>
     <string name="home_translation_failed">تعذّرت ترجمة آخر جملة — هتتعاد مع الجملة الجاية</string>
@@ -173,6 +181,7 @@
 
     <string name="back">رجوع</string>
     <string name="cancel">إلغاء</string>
+<<<<<<< redesign/premium-ui
     <!-- ===== Premium redesign ===== -->
     <string name="tab_home">الرئيسية</string>
     <string name="tab_history">السجل</string>
@@ -355,4 +364,28 @@
     <string name="update_unknown">غير معروف</string>
     <string name="update_no_release_info">اضغط فحص التحديثات عشان تشوف أحدث إصدار.</string>
 
+=======
+
+    <!-- Local AI engine section -->
+    <string name="local_ai_section">محرك الذكاء الاصطناعي المحلي</string>
+    <string name="local_ai_wifi_only">تحميل النماذج عبر Wi-Fi فقط</string>
+    <string name="local_ai_wifi_only_hint">على بيانات الموبايل هيسألك الأول بدل ما يستهلك الباقة</string>
+    <string name="local_ai_auto_fallback">السماح بالرجوع لـ Gemini في الوضع التلقائي</string>
+    <string name="local_ai_auto_fallback_hint">لو المحرك المحلي فشل في سطر، يجرب Gemini بشرط وجود مفتاح وموافقة السحابة</string>
+    <string name="local_ai_license">الترخيص: %1$s</string>
+    <string name="local_ai_size">الحجم: %1$d ميجا</string>
+    <string name="local_ai_not_installed">النموذج مش متثبت - الترجمة المحلية مش هتشتغل من غيره</string>
+    <string name="local_ai_download">تحميل النموذج</string>
+    <string name="local_ai_retry">إعادة المحاولة</string>
+    <string name="local_ai_delete">حذف النموذج</string>
+    <string name="local_ai_downloading">جاري التحميل (%1$d/%2$d) - %3$d%% - متبقي %4$d ميجا</string>
+    <string name="local_ai_verifying">جاري التحقق من سلامة الملفات...</string>
+    <string name="local_ai_installed">متثبت (إصدار %1$d - %2$d ميجا)</string>
+    <string name="local_ai_failed">فشل التحميل: %1$s</string>
+    <string name="local_ai_dictionary_version">إصدار القاموس المصري: %1$d</string>
+    <string name="local_ai_test_button">اختبار الترجمة المحلية</string>
+    <string name="local_ai_test_running">جاري الاختبار...</string>
+    <string name="local_ai_test_error">فشل الاختبار: %1$s</string>
+    <string name="local_ai_test_meta">المحرك: %1$s - الزمن: %2$d مللي ثانية</string>
+>>>>>>> main
 </resources>

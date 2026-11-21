@@ -25,3 +25,10 @@
 # Keep line numbers for crash reports.
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
+
+# ONNX Runtime + LiteRT-LM resolve Java classes BY NAME from JNI (OrtException,
+# LiteRtLmJniException, value/info types). R8 renaming or removing them turns a
+# catchable native error into a fatal FindClass abort: this exact path crashed
+# v0.4.0 on device (decoder error -> native throw -> class not found -> SIGABRT).
+-keep class ai.onnxruntime.** { *; }
+-keep class com.google.ai.edge.litertlm.** { *; }

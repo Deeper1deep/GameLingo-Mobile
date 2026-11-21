@@ -25,6 +25,70 @@ enum class SessionNotice {
     FELL_BACK_TO_LOCAL,
 }
 
+/**
+ * The reason a session went to ERROR. Kept apart from the session state
+ * itself: the teardown that follows a failure flips the state back to
+ * STOPPED, but the user must still see WHY the session died, so the reason
+ * survives until the next start or an explicit dismiss.
+ */
+enum class SessionError {
+    /** The consent intent extras never reached the capture service. */
+    MISSING_CONSENT_DATA,
+
+    /** startForeground failed before the projection handoff. */
+    FOREGROUND_START_FAILED,
+
+    /** getMediaProjection rejected the consent token (reused or revoked). */
+    PROJECTION_REJECTED,
+
+    /** Frame reads or OCR failed persistently, not once. */
+    CAPTURE_PERSISTENT_FAILURE,
+
+    /** The settings store could not be read inside the capture loop. */
+    SETTINGS_UNAVAILABLE,
+
+    /** The overlay permission was missing or revoked while running. */
+    OVERLAY_PERMISSION_LOST,
+
+    /** WindowManager refused the overlay view. */
+    OVERLAY_WINDOW_FAILED,
+
+    /**
+     * The system ended the MediaProjection itself (token expired or consent
+     * revoked). A genuine expiry: the session is over and needs a fresh
+     * consent grant, not a silent retry.
+     */
+    PROJECTION_ENDED,
+}
+
+/**
+ * Explicit per-request translation states. Replaces any single boolean: the
+ * UI and the watchdog can always tell a queued line from a translating one,
+ * a rate limit from an auth failure, and a recovery in progress.
+ */
+enum class RequestState {
+    IDLE,
+    QUEUED,
+    TRANSLATING,
+    SUCCESS,
+    NETWORK_ERROR,
+    RATE_LIMITED,
+    AUTH_ERROR,
+    TIMEOUT,
+    LOCAL_FALLBACK,
+    RECOVERING,
+}
+
+/** Observable status of the translation worker (see TranslationWorker). */
+data class WorkerStatus(
+    val state: RequestState = RequestState.IDLE,
+    val activeRequestId: Long? = null,
+    val queueDepth: Int = 0,
+    val lastSuccessAtMillis: Long = -1,
+    val lastError: String? = null,
+    val recoveryCount: Int = 0,
+)
+
 /** One accepted OCR line, ready for the translation engine (Phase 4). */
 data class OcrLine(
     val text: String,
@@ -62,6 +126,7 @@ object TranslationSessionBus {
     private val _notice = MutableStateFlow<SessionNotice?>(null)
     val notice: StateFlow<SessionNotice?> = _notice.asStateFlow()
 
+<<<<<<< redesign/premium-ui
     /** Wall-clock start of the running session, or null when stopped. UI-only statistic. */
     private val _startedAtMillis = MutableStateFlow<Long?>(null)
     val startedAtMillis: StateFlow<Long?> = _startedAtMillis.asStateFlow()
@@ -75,6 +140,18 @@ object TranslationSessionBus {
             _startedAtMillis.value = System.currentTimeMillis()
             _translatedCount.value = 0
         }
+=======
+    /**
+     * Why the session last failed, or null. Survives [onSessionStopped]: the
+     * teardown after a failure must not erase the explanation the user needs.
+     * Cleared by the next [onSessionStarted] or by [dismissError].
+     */
+    private val _error = MutableStateFlow<SessionError?>(null)
+    val error: StateFlow<SessionError?> = _error.asStateFlow()
+
+    fun onSessionStarted() {
+        _error.value = null
+>>>>>>> main
         _state.value = SessionState.RUNNING
     }
 
@@ -86,10 +163,20 @@ object TranslationSessionBus {
         _translatedLine.value = null
         _translationFailure.value = null
         _notice.value = null
+        _workerStatus.value = WorkerStatus()
     }
 
-    fun onSessionError() {
+    fun onSessionError(reason: SessionError) {
+        _error.value = reason
         _state.value = SessionState.ERROR
+    }
+
+    /** Hides the current error reason; the state settles back to STOPPED. */
+    fun dismissError() {
+        _error.value = null
+        if (_state.value == SessionState.ERROR) {
+            _state.value = SessionState.STOPPED
+        }
     }
 
     fun onNewLine(text: String, capturedAtMillis: Long) {
@@ -121,5 +208,13 @@ object TranslationSessionBus {
 
     fun onNotice(notice: SessionNotice) {
         _notice.value = notice
+    }
+
+    /** Latest translation-worker status (state, queue depth, recoveries). */
+    private val _workerStatus = MutableStateFlow(WorkerStatus())
+    val workerStatus: StateFlow<WorkerStatus> = _workerStatus.asStateFlow()
+
+    fun onWorkerStatus(status: WorkerStatus) {
+        _workerStatus.value = status
     }
 }

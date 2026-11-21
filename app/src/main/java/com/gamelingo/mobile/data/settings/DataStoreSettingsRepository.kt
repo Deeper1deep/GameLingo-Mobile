@@ -62,6 +62,8 @@ class DataStoreSettingsRepository @Inject constructor(
             aiMode = parseEnumOrDefault(prefs[KEY_AI_MODE], AiMode.AUTO),
             onlineApiKey = resolveApiKey(prefs),
             cloudTranslationOptIn = prefs[KEY_CLOUD_OPT_IN] ?: false,
+            autoOnlineFallback = prefs[KEY_AUTO_ONLINE_FALLBACK] ?: false,
+            localAiWifiOnly = prefs[KEY_LOCAL_AI_WIFI_ONLY] ?: true,
             requestTimeoutSec = SettingsConstraints.clampTimeoutSec(
                 prefs[KEY_TIMEOUT_SEC] ?: SettingsConstraints.DEFAULT_TIMEOUT_SEC,
             ),
@@ -194,6 +196,14 @@ class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { it[KEY_CLOUD_OPT_IN] = enabled }
     }
 
+    override suspend fun setAutoOnlineFallback(enabled: Boolean) {
+        dataStore.edit { it[KEY_AUTO_ONLINE_FALLBACK] = enabled }
+    }
+
+    override suspend fun setLocalAiWifiOnly(enabled: Boolean) {
+        dataStore.edit { it[KEY_LOCAL_AI_WIFI_ONLY] = enabled }
+    }
+
     override suspend fun setRequestTimeoutSec(seconds: Int) {
         dataStore.edit { it[KEY_TIMEOUT_SEC] = SettingsConstraints.clampTimeoutSec(seconds) }
     }
@@ -243,6 +253,8 @@ class DataStoreSettingsRepository @Inject constructor(
         val KEY_ONLINE_API_KEY = stringPreferencesKey("online_api_key")
         val KEY_ONLINE_API_KEY_ENC = stringPreferencesKey("online_api_key_enc")
         val KEY_CLOUD_OPT_IN = booleanPreferencesKey("cloud_translation_opt_in")
+        val KEY_AUTO_ONLINE_FALLBACK = booleanPreferencesKey("auto_online_fallback")
+        val KEY_LOCAL_AI_WIFI_ONLY = booleanPreferencesKey("local_ai_wifi_only")
         val KEY_TIMEOUT_SEC = intPreferencesKey("request_timeout_sec")
         val KEY_CACHE_ENABLED = booleanPreferencesKey("cache_enabled")
         val KEY_CONTEXT_LINES = intPreferencesKey("context_lines")

@@ -20,8 +20,8 @@ android {
         applicationId = "com.gamelingo.mobile"
         minSdk = 26
         targetSdk = 36
-        versionCode = 8
-        versionName = "0.2.1"
+        versionCode = 12
+        versionName = "0.4.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables { useSupportLibrary = true }
@@ -109,6 +109,13 @@ android {
         warningsAsErrors = false
     }
 
+
+    // Unit tests on constrained CI/dev boxes: cap the forked test JVM so the
+    // Robolectric suites cannot starve the Gradle/Kotlin daemons.
+    tasks.withType<Test>().configureEach {
+        maxHeapSize = "768m"
+    }
+
     testOptions {
         // Robolectric migration tests read the exported Room schema JSONs
         // from src/test/assets; without this assets never reach the test runtime.
@@ -152,6 +159,8 @@ dependencies {
 
     implementation(libs.mlkit.text.recognition)
     implementation(libs.mlkit.translate)
+    implementation(libs.onnxruntime.mobile)
+    implementation(libs.litertlm.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

@@ -9,8 +9,15 @@ import java.io.IOException
  */
 class OnlineNotConfiguredException : IOException("online mode selected but key or consent missing")
 
-/** The provider rejected the request for quota or rate reasons (HTTP 429). */
-class QuotaExceededException(message: String) : IOException(message)
+/**
+ * The provider rejected the request for quota or rate reasons (HTTP 429).
+ * [retryAfterMs] carries the provider's Retry-After hint when it sent one,
+ * so the cooldown respects it instead of guessing.
+ */
+class QuotaExceededException(
+    message: String,
+    val retryAfterMs: Long? = null,
+) : IOException(message)
 
 /** The provider is temporarily unavailable (HTTP 5xx). */
 class ProviderUnavailableException(message: String) : IOException(message)

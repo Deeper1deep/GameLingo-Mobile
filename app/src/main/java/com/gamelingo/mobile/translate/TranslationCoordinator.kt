@@ -1,8 +1,11 @@
 package com.gamelingo.mobile.translate
 
 import com.gamelingo.mobile.core.context.ContextMemory
+import com.gamelingo.mobile.core.session.RequestState
 import com.gamelingo.mobile.core.session.SessionNotice
+import com.gamelingo.mobile.core.session.SessionState
 import com.gamelingo.mobile.core.session.TranslationSessionBus
+import com.gamelingo.mobile.core.timing.PipelineTiming
 import com.gamelingo.mobile.data.local.TranslationHistoryDao
 import com.gamelingo.mobile.data.local.TranslationHistoryEntity
 import com.gamelingo.mobile.data.settings.AiMode
@@ -13,7 +16,6 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.first
@@ -21,17 +23,18 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
 /**
- * Watches the session bus for accepted OCR lines, translates them with the
- * hybrid engine, publishes the translation back to the bus and records it in
- * the Room history.
+ * Watches the session bus for accepted OCR lines and hands them to the
+ * [TranslationWorker], whose bounded queue, single consumer and watchdog
+ * keep translations flowing even when individual requests fail or stall.
+ * A newer subtitle line never cancels an in-flight translation anymore:
+ * lines are processed in arrival order, and the queue's drop-oldest policy
+ * keeps a burst of stale lines from starving fresh ones.
  *
- * Honours the user's settings on every line: AI mode and API key (inside the
- * hybrid engine), request timeout, cache enablement and context line count.
- * The cache key covers the full translation context (mode, planned engine,
- * prompt version, dialogue context, language pair), so a mode switch or a
- * prompt upgrade never serves a stale answer. A newer line cancels the
- * in-flight translation so a stale subtitle never replaces a fresher one;
- * cancelled work is never shown as a failure.
+ * Honours the user's settings on every line: AI mode and API key (inside
+ * the hybrid engine), request timeout, cache enablement and context line
+ * count. The cache key covers the full translation context (mode, planned
+ * engine, prompt version, dialogue context, language pair), so a mode
+ * switch or a prompt upgrade never serves a stale answer.
  *
  * When the effective engine is not the one the user picked (ONLINE without
  * setup, or an AUTO fallback after an online failure), a [SessionNotice] is
@@ -48,23 +51,48 @@ class TranslationCoordinator @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val started = AtomicBoolean(false)
     private val contextMemory = ContextMemory(maxLines = MAX_CONTEXT_LINES)
-    private var currentJob: Job? = null
+
+    /** Visible for tests: the worker driving every translation request. */
+    var worker: TranslationWorker? = null
+        private set
 
     /** Idempotent: safe to call from every service start and app launch. */
     fun start() {
         if (!started.compareAndSet(false, true)) return
+        val translationWorker = TranslationWorker(processor = ::processRequest)
+        worker = translationWorker
+        translationWorker.start()
         scope.launch {
             TranslationSessionBus.latestLine.collect { line ->
                 if (line == null) return@collect
-                currentJob?.cancel()
-                currentJob = scope.launch {
-                    translateLine(line.text, line.capturedAtMillis)
+                translationWorker.enqueue(line.text, line.capturedAtMillis)
+            }
+        }
+        // The worker follows the session: a stopped session stops it
+        // (queued lines belong to that session and must not leak into the
+        // next one), and a fresh start re-arms it. Both calls are
+        // idempotent, so repeated starts never spawn a second consumer.
+        scope.launch {
+            TranslationSessionBus.state.collect { state ->
+                when (state) {
+                    SessionState.RUNNING -> translationWorker.start()
+                    SessionState.STOPPED -> {
+                        translationWorker.stop()
+                        contextMemory.clear()
+                    }
+                    SessionState.ERROR -> Unit
                 }
             }
         }
     }
 
-    private suspend fun translateLine(text: String, capturedAtMillis: Long) {
+    /**
+     * Translates one queued line: cache, engine call with the user's
+     * timeout, publication, history. Failures are surfaced to the bus and
+     * then rethrown so the worker can classify them into a [RequestState];
+     * a cancellation (session stop or worker recovery) always propagates.
+     */
+    private suspend fun processRequest(request: QueuedRequest): ProcessorOutcome {
         val settings = settingsRepository.settings.first()
         val contextLines = contextMemory.snapshot().takeLast(settings.contextLines)
         val cacheContext = CacheContext(
@@ -75,34 +103,43 @@ class TranslationCoordinator @Inject constructor(
         )
 
         if (settings.cacheEnabled) {
-            cache.get(text, cacheContext)?.let { hit ->
+            cache.get(request.text, cacheContext)?.let { hit ->
                 publish(
-                    original = text,
+                    original = request.text,
                     result = TranslationResult(
                         translatedText = hit.translatedText,
                         engineId = hit.engineId,
                         fromCache = true,
                     ),
-                    capturedAtMillis = capturedAtMillis,
+                    capturedAtMillis = request.capturedAtMillis,
                 )
-                contextMemory.add(text)
-                return
+                contextMemory.add(request.text)
+                return ProcessorOutcome(
+                    engineId = hit.engineId,
+                    usedLocalFallback = isLocalFallback(settings.aiMode, hit.engineId),
+                )
             }
         }
 
-        runCatching {
-            withTimeout(settings.requestTimeoutSec * MILLIS_PER_SECOND) {
+        val engineStartNanos = System.nanoTime()
+        try {
+            val result = withTimeout(settings.requestTimeoutSec * MILLIS_PER_SECOND) {
                 hybridEngine.translate(
                     TranslationRequest(
-                        text = text,
+                        text = request.text,
                         contextLines = contextLines,
                     ),
                 )
             }
-        }.onSuccess { result ->
+            PipelineTiming.mark(
+                "engine",
+                (System.nanoTime() - engineStartNanos) / NANOS_PER_MS,
+                result.engineId,
+            )
+            PipelineTiming.endToEnd("translated", request.capturedAtMillis)
             if (settings.cacheEnabled) {
                 cache.put(
-                    text,
+                    request.text,
                     cacheContext,
                     CachedTranslation(
                         translatedText = result.translatedText,
@@ -110,29 +147,40 @@ class TranslationCoordinator @Inject constructor(
                     ),
                 )
             }
-            publish(text, result, capturedAtMillis)
-            contextMemory.add(text)
+            publish(request.text, result, request.capturedAtMillis)
+            contextMemory.add(request.text)
             publishEngineNotice(settings.aiMode, result.engineId)
-        }.onFailure { error ->
+            return ProcessorOutcome(
+                engineId = result.engineId,
+                usedLocalFallback = isLocalFallback(settings.aiMode, result.engineId),
+            )
+        } catch (timeout: TimeoutCancellationException) {
+            // The provider hit the user's timeout: a visible failure. The
+            // worker classifies the state; checked before CancellationException.
+            TranslationSessionBus.onTranslationFailed(request.text)
+            throw timeout
+        } catch (cancelled: CancellationException) {
+            // Session stop or worker recovery: never misreport as a failure.
+            throw cancelled
+        } catch (error: Exception) {
+            // The user sees the line failed; the worker sees the typed error
+            // and moves to the next queued line.
             when (error) {
-                // The provider hit the user's timeout: a visible failure.
-                is TimeoutCancellationException ->
-                    TranslationSessionBus.onTranslationFailed(text)
-                // ONLINE selected without key/consent: say so, do not fake it.
-                is OnlineNotConfiguredException -> {
+                is OnlineNotConfiguredException ->
                     TranslationSessionBus.onNotice(SessionNotice.ONLINE_NOT_CONFIGURED)
-                    TranslationSessionBus.onTranslationFailed(text)
-                }
-                // A newer line superseded this one: stay silent.
-                is CancellationException -> throw error
-                else -> TranslationSessionBus.onTranslationFailed(text)
+                else -> Unit
             }
+            TranslationSessionBus.onTranslationFailed(request.text)
+            throw error
         }
     }
 
+    private fun isLocalFallback(mode: AiMode, actualEngineId: String): Boolean =
+        mode != AiMode.LOCAL && actualEngineId == MlKitTranslationEngine.ENGINE_ID
+
     /** Tell the user when the engine that answered is not the one they picked. */
     private fun publishEngineNotice(mode: AiMode, actualEngineId: String) {
-        if (mode != AiMode.LOCAL && actualEngineId == MlKitTranslationEngine.ENGINE_ID) {
+        if (isLocalFallback(mode, actualEngineId)) {
             TranslationSessionBus.onNotice(SessionNotice.FELL_BACK_TO_LOCAL)
         }
     }
@@ -167,5 +215,6 @@ class TranslationCoordinator @Inject constructor(
     private companion object {
         const val MAX_CONTEXT_LINES = 20
         const val MILLIS_PER_SECOND = 1_000L
+        const val NANOS_PER_MS = 1_000_000L
     }
 }
