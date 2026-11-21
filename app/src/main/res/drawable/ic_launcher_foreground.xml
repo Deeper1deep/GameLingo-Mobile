@@ -1,19 +1,57 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!--
+  GameLingo adaptive icon, foreground layer.
+  Speech bubble + letter G + translation waves. All artwork sits inside the
+  66dp safe zone of the 108dp canvas so no launcher mask can crop it.
+-->
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
+
+    <!-- Chat bubble -->
+    <path android:pathData="M43,31H65A13,13 0 0 1 78,44V56A13,13 0 0 1 65,69H56L38,80L44,69H43A13,13 0 0 1 30,56V44A13,13 0 0 1 43,31Z">
+        <aapt:attr name="android:fillColor">
+            <gradient
+                android:type="linear"
+                android:startX="34"
+                android:startY="31"
+                android:endX="74"
+                android:endY="80">
+                <item android:color="#FFA78BFA" android:offset="0" />
+                <item android:color="#FF7C3AED" android:offset="1" />
+            </gradient>
+        </aapt:attr>
+    </path>
+
+    <!-- Letter G -->
     <path
-        android:fillColor="#FFFFFF"
-        android:pathData="M38,34h32a8,8 0 0 1 8,8v16a8,8 0 0 1 -8,8H56l-10,10v-10h-8a8,8 0 0 1 -8,-8V42a8,8 0 0 1 8,-8z" />
+        android:pathData="M61.1,42.9A10.2,10.2 0 1 0 64.2,51"
+        android:strokeColor="#FFF8FAFC"
+        android:strokeWidth="4.4"
+        android:strokeLineCap="round" />
     <path
-        android:fillColor="#1B5E20"
-        android:pathData="M42,50m-3.5,0a3.5,3.5 0 1,1 7,0a3.5,3.5 0 1,1 -7,0" />
+        android:pathData="M64.2,51H58.6"
+        android:strokeColor="#FFF8FAFC"
+        android:strokeWidth="4.4"
+        android:strokeLineCap="round" />
+
+    <!-- Translation waves (the G's inner counter) -->
     <path
-        android:fillColor="#1B5E20"
-        android:pathData="M54,50m-3.5,0a3.5,3.5 0 1,1 7,0a3.5,3.5 0 1,1 -7,0" />
+        android:pathData="M46.4,49.6V52.4"
+        android:strokeColor="#FF22D3EE"
+        android:strokeWidth="2.7"
+        android:strokeLineCap="round" />
     <path
-        android:fillColor="#1B5E20"
-        android:pathData="M66,50m-3.5,0a3.5,3.5 0 1,1 7,0a3.5,3.5 0 1,1 -7,0" />
+        android:pathData="M50.2,47.1V54.9"
+        android:strokeColor="#FF22D3EE"
+        android:strokeWidth="2.7"
+        android:strokeLineCap="round" />
+    <path
+        android:pathData="M54,48.9V53.1"
+        android:strokeColor="#FF22D3EE"
+        android:strokeWidth="2.7"
+        android:strokeLineCap="round" />
 </vector>

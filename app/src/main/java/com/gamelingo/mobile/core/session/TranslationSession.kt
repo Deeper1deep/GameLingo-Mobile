@@ -3,6 +3,7 @@ package com.gamelingo.mobile.core.session
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.update
 
 /** Lifecycle of a screen-capture/translation session. */
 enum class SessionState {
@@ -61,12 +62,26 @@ object TranslationSessionBus {
     private val _notice = MutableStateFlow<SessionNotice?>(null)
     val notice: StateFlow<SessionNotice?> = _notice.asStateFlow()
 
+    /** Wall-clock start of the running session, or null when stopped. UI-only statistic. */
+    private val _startedAtMillis = MutableStateFlow<Long?>(null)
+    val startedAtMillis: StateFlow<Long?> = _startedAtMillis.asStateFlow()
+
+    /** Lines translated since the session started. UI-only statistic. */
+    private val _translatedCount = MutableStateFlow(0)
+    val translatedCount: StateFlow<Int> = _translatedCount.asStateFlow()
+
     fun onSessionStarted() {
+        if (_state.value != SessionState.RUNNING) {
+            _startedAtMillis.value = System.currentTimeMillis()
+            _translatedCount.value = 0
+        }
         _state.value = SessionState.RUNNING
     }
 
     fun onSessionStopped() {
         _state.value = SessionState.STOPPED
+        _startedAtMillis.value = null
+        _translatedCount.value = 0
         _latestLine.value = null
         _translatedLine.value = null
         _translationFailure.value = null
@@ -97,6 +112,7 @@ object TranslationSessionBus {
             capturedAtMillis = capturedAtMillis,
         )
         _translationFailure.value = null
+        _translatedCount.update { it + 1 }
     }
 
     fun onTranslationFailed(original: String) {

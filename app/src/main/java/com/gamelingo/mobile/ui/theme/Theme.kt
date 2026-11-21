@@ -1,35 +1,56 @@
 package com.gamelingo.mobile.ui.theme
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
-import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.unit.LayoutDirection
 
-private val DarkColors = darkColorScheme(
-    primary = GreenLight,
-    surfaceTint = GreenLight,
-)
-
-private val LightColors = lightColorScheme(
-    primary = GreenPrimary,
-    surfaceTint = GreenPrimary,
+private val GlColorScheme = darkColorScheme(
+    primary = GlColors.Primary,
+    onPrimary = GlColors.Background,
+    primaryContainer = GlColors.PrimaryStrong,
+    onPrimaryContainer = GlColors.TextPrimary,
+    secondary = GlColors.Secondary,
+    onSecondary = GlColors.Background,
+    secondaryContainer = GlColors.SurfaceElevated,
+    onSecondaryContainer = GlColors.TextPrimary,
+    tertiary = GlColors.Accent,
+    onTertiary = GlColors.Background,
+    background = GlColors.Background,
+    onBackground = GlColors.TextPrimary,
+    surface = GlColors.Surface,
+    onSurface = GlColors.TextPrimary,
+    surfaceVariant = GlColors.SurfaceElevated,
+    onSurfaceVariant = GlColors.TextSecondary,
+    surfaceTint = GlColors.Primary,
+    surfaceContainerLowest = GlColors.Background,
+    surfaceContainerLow = GlColors.Surface,
+    surfaceContainer = GlColors.Surface,
+    surfaceContainerHigh = GlColors.SurfaceElevated,
+    surfaceContainerHighest = GlColors.SurfaceElevated,
+    outline = GlColors.OutlineStrong,
+    outlineVariant = GlColors.Outline,
+    error = GlColors.Error,
+    onError = GlColors.TextPrimary,
+    errorContainer = GlColors.Error,
+    onErrorContainer = GlColors.TextPrimary,
 )
 
 /**
- * The app UI is Arabic-first, so the layout direction is pinned to RTL
- * regardless of the device locale.
+ * The GameLingo identity is dark-only, so the theme ignores the system
+ * light/dark setting. The layout direction is pinned to RTL because the UI is
+ * Arabic-first regardless of the device locale.
  */
 @Composable
 fun GameLingoTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
     content: @Composable () -> Unit,
 ) {
     MaterialTheme(
-        colorScheme = if (darkTheme) DarkColors else LightColors,
+        colorScheme = GlColorScheme,
+        typography = GlTypography,
+        shapes = GlMaterialShapes,
         content = {
             CompositionLocalProvider(
                 LocalLayoutDirection provides LayoutDirection.Rtl,

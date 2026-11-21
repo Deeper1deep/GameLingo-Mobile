@@ -1,58 +1,51 @@
 package com.gamelingo.mobile.ui.screens
 
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.verticalScroll
-import androidx.compose.material3.Card
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
+import androidx.compose.foundation.layout.padding
 import com.gamelingo.mobile.R
+import com.gamelingo.mobile.ui.components.GlCard
+import com.gamelingo.mobile.ui.components.HintText
+import com.gamelingo.mobile.ui.components.SettingsColumn
+import com.gamelingo.mobile.ui.theme.GlColors
+import com.gamelingo.mobile.ui.theme.GlSpacing
 
 /**
- * Placeholder for the future audio-translation feature. The brief asks for the
- * architecture to be ready for it, without shipping it as a finished feature in v1.
+ * Placeholder for the future audio-translation feature. The architecture is
+ * ready for it, but it is not shipped as a finished feature yet.
  */
 @Composable
 fun VoiceTranslationScreen() {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Card(modifier = Modifier.fillMaxWidth()) {
-            ListItem(
-                headlineContent = { Text(stringResource(R.string.voice_status_title)) },
-                supportingContent = { Text(stringResource(R.string.voice_coming_soon)) },
+    SettingsColumn {
+        GlCard {
+            Text(
+                text = stringResource(R.string.voice_status_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = GlColors.TextPrimary,
             )
+            HintText(stringResource(R.string.voice_coming_soon))
         }
-        Card(modifier = Modifier.fillMaxWidth()) {
-            Column(modifier = Modifier.padding(16.dp)) {
+        GlCard {
+            Text(
+                text = stringResource(R.string.voice_planned_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = GlColors.TextPrimary,
+            )
+            listOf(
+                R.string.voice_planned_1,
+                R.string.voice_planned_2,
+                R.string.voice_planned_3,
+            ).forEach { lineRes ->
                 Text(
-                    text = stringResource(R.string.voice_planned_title),
-                    style = MaterialTheme.typography.titleMedium,
+                    text = stringResource(R.string.voice_planned_line, stringResource(lineRes)),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = GlColors.TextSecondary,
+                    modifier = Modifier.padding(top = GlSpacing.sm),
                 )
-                listOf(
-                    R.string.voice_planned_1,
-                    R.string.voice_planned_2,
-                    R.string.voice_planned_3,
-                ).forEach { lineRes ->
-                    Text(
-                        text = stringResource(R.string.voice_planned_line, stringResource(lineRes)),
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(top = 6.dp),
-                    )
-                }
             }
         }
     }

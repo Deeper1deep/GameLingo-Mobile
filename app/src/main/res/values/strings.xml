@@ -173,4 +173,186 @@
 
     <string name="back">رجوع</string>
     <string name="cancel">إلغاء</string>
+    <!-- ===== Premium redesign ===== -->
+    <string name="tab_home">الرئيسية</string>
+    <string name="tab_history">السجل</string>
+    <string name="tab_session">الترجمة</string>
+    <string name="tab_settings">الإعدادات</string>
+    <string name="nav_settings">الإعدادات</string>
+    <string name="nav_session">جلسة الترجمة</string>
+    <string name="nav_update_center">مركز التحديثات</string>
+    <string name="common_close">إغلاق</string>
+
+    <string name="splash_tagline">ترجمة ألعابك لحظة بلحظة</string>
+
+    <!-- Home -->
+    <string name="home_subtitle">ترجمة فورية للعامية المصرية</string>
+    <string name="phase_ready">جاهز</string>
+    <string name="phase_capturing">بيلتقط الشاشة</string>
+    <string name="phase_translating">بيترجم</string>
+    <string name="phase_error">في مشكلة</string>
+    <string name="phase_ready_desc">اضغط بدء الترجمة وبعدها شغّل لعبتك.</string>
+    <string name="phase_capturing_desc">الجلسة شغّالة وبيدوّر على نص جديد في الشاشة.</string>
+    <string name="phase_translating_desc">اتعرف على نص جديد وبيترجمه دلوقتي.</string>
+    <string name="phase_error_desc">حصلت مشكلة في الجلسة. اضغط بدء الترجمة تحاول من جديد.</string>
+    <string name="tile_translation">نظام الترجمة</string>
+    <string name="tile_ocr">قراءة النص (OCR)</string>
+    <string name="tile_internet">الإنترنت</string>
+    <string name="tile_ai">محرك الذكاء</string>
+    <string name="value_running">شغّال</string>
+    <string name="value_stopped">متوقف</string>
+    <string name="value_error">فيه مشكلة</string>
+    <string name="value_ocr_ready">جاهز على الجهاز</string>
+    <string name="value_ocr_active">شغّال</string>
+    <string name="value_online">متصل</string>
+    <string name="value_offline">غير متصل</string>
+    <string name="value_ai_local">محلي</string>
+    <string name="value_ai_online">أونلاين</string>
+    <string name="value_ai_auto_online">تلقائي (أونلاين)</string>
+    <string name="value_ai_auto_local">تلقائي (محلي)</string>
+    <string name="value_ai_not_ready">غير جاهز</string>
+    <string name="home_last_title">آخر ترجمة محفوظة</string>
+    <string name="home_last_empty">لسه مفيش ترجمات محفوظة. أول جلسة هتظهر هنا.</string>
+    <string name="home_open_session">فتح شاشة الجلسة</string>
+    <string name="home_shortcut_settings">الإعدادات</string>
+    <string name="home_shortcut_history">سجل الترجمات</string>
+    <string name="home_permissions_missing_title">محتاج تفعّل الأذونات دي</string>
+
+    <!-- Session -->
+    <string name="session_idle_title">مفيش جلسة شغّالة</string>
+    <string name="session_idle_body">ابدأ الجلسة وهتشوف هنا النص المكتشف وترجمته لحظة بلحظة.</string>
+    <string name="session_original_label">النص الإنجليزي</string>
+    <string name="session_translation_label">الترجمة العربية</string>
+    <string name="session_waiting_text">لسه مفيش نص… شغّل اللعبة وهيظهر هنا.</string>
+    <string name="session_waiting_translation">الترجمة هتظهر أول ما يتعرف على نص.</string>
+    <string name="session_duration">مدة الجلسة</string>
+    <string name="session_count">جمل مترجمة</string>
+    <string name="session_engine">آخر محرك استُخدم</string>
+    <string name="session_engine_none">لسه</string>
+    <string name="session_from_cache">من الكاش</string>
+    <string name="session_stop">إيقاف الجلسة</string>
+    <string name="session_overlay_hint">النافذة العائمة بتظهر فوق اللعبة طول ما الجلسة شغّالة، وتقدر تحركها بإيدك.</string>
+    <string name="engine_label_online">Gemini (أونلاين)</string>
+    <string name="engine_label_local">ML Kit (محلي)</string>
+    <string name="engine_label_other">%1$s</string>
+
+    <!-- Settings hub -->
+    <string name="settings_translation_sub">اللغة والأسلوب وسياق الحوار</string>
+    <string name="settings_ai_sub">الوضع والمفتاح واختبار الاتصال</string>
+    <string name="settings_ocr_sub">معدل الالتقاط ومنطقة النص</string>
+    <string name="settings_overlay_sub">الشكل والألوان والمكان</string>
+    <string name="settings_voice_sub">قريبًا</string>
+    <string name="settings_updates_sub">الإصدار الحالي %1$s</string>
+    <string name="settings_about_sub">معلومات التطبيق والمستودعات</string>
+    <string name="settings_section_features">الترجمة والتقاط الشاشة</string>
+    <string name="settings_section_app">التطبيق</string>
+    <string name="settings_permissions_title">الأذونات</string>
+    <string name="settings_permissions_manage">إدارة</string>
+    <string name="settings_language_title">اللغة</string>
+    <string name="settings_language_value">الواجهة عربية (من اليمين لليسار). الترجمة من الإنجليزية للعامية المصرية.</string>
+    <string name="settings_theme_title">المظهر</string>
+    <string name="settings_theme_value">داكن — الهوية الأساسية للتطبيق</string>
+    <string name="settings_storage_title">التخزين والكاش</string>
+    <string name="storage_history">ترجمات محفوظة في السجل</string>
+    <string name="storage_clear_cache">مسح كاش الترجمة</string>
+    <string name="storage_cache_hint">الكاش في الذاكرة فقط وبيتمسح لما التطبيق يتقفل. مسحه مش بيمس السجل.</string>
+    <string name="storage_cache_cleared">تم مسح كاش الترجمة</string>
+
+    <!-- Translation settings -->
+    <string name="tr_languages_title">اللغات</string>
+    <string name="tr_source">اللغة الأصلية</string>
+    <string name="tr_source_value">الإنجليزية</string>
+    <string name="tr_target">اللغة المستهدفة</string>
+    <string name="tr_target_value">العربية</string>
+    <string name="tr_fixed_hint">اللغات واللهجة ثابتة في الإصدار ده: إنجليزي ← عامية مصرية.</string>
+    <string name="tr_style_value">طبيعية</string>
+    <string name="tr_style_note">أسلوب الترجمة ثابت (طبيعي) حاليًا. اختيار أسلوب تاني مش متاح لسه.</string>
+    <string name="tr_context_title">الاحتفاظ بالسياق</string>
+    <string name="tr_context_sub">بيبعت الجمل السابقة مع كل ترجمة عشان المعنى يطلع أدق.</string>
+
+    <!-- AI engine -->
+    <string name="ai_status_title">حالة المحرك</string>
+    <string name="ai_current_engine">المحرك الحالي</string>
+    <string name="ai_connection">الاتصال بالإنترنت</string>
+    <string name="ai_api_status">حالة الـ API</string>
+    <string name="api_status_ready">جاهز: المفتاح محفوظ والموافقة مفعّلة</string>
+    <string name="api_status_no_key">مفيش مفتاح محفوظ</string>
+    <string name="api_status_no_consent">المفتاح محفوظ — الموافقة السحابية مقفولة</string>
+    <string name="engine_local">محلي على الجهاز (ML Kit)</string>
+    <string name="engine_online_ready">أونلاين (Gemini)</string>
+    <string name="engine_online_not_configured">أونلاين — لسه مش جاهز</string>
+    <string name="engine_auto_online">تلقائي: أونلاين ثم محلي</string>
+    <string name="engine_auto_local">تلقائي: محلي حاليًا</string>
+    <string name="ai_mode_auto_short">تلقائي</string>
+    <string name="ai_mode_online_short">أونلاين</string>
+    <string name="ai_mode_local_short">محلي</string>
+    <string name="ai_key_section">مفتاح API</string>
+    <string name="ai_test_title">اختبار الاتصال</string>
+    <string name="ai_test_button">اختبار الاتصال</string>
+    <string name="ai_test_hint">بيبعت كلمة Hello واحدة لـ Gemini بمفتاحك عشان يتأكد إن كل حاجة شغّالة. مش بيشتغل غير لما تضغط الزر، وبعد موافقتك على الترجمة السحابية.</string>
+    <string name="ai_test_ok">الاتصال شغّال (%1$d مللي ثانية)</string>
+    <string name="ai_test_no_key">حط مفتاح API الأول</string>
+    <string name="ai_test_no_consent">فعّل الترجمة السحابية الأول</string>
+    <string name="ai_test_bad_key">المفتاح مرفوض: غلط أو منتهي أو محظور</string>
+    <string name="ai_test_quota">تجاوزت الحد المسموح للمفتاح. استنى شوية وجرّب تاني</string>
+    <string name="ai_test_unavailable">خدمة Gemini مش متاحة دلوقتي</string>
+    <string name="ai_test_timeout">انتهت مهلة الطلب. زوّد المهلة أو جرّب شبكة أحسن</string>
+    <string name="ai_test_network">مفيش اتصال بالإنترنت أو الخادم مش راد</string>
+    <string name="ai_test_unknown">حصل خطأ غير متوقع في الاختبار</string>
+
+    <!-- OCR and capture -->
+    <string name="ocr_status_title">حالة الالتقاط</string>
+    <string name="ocr_projection">التقاط الشاشة</string>
+    <string name="ocr_projection_active">شغّال</string>
+    <string name="ocr_projection_inactive">غير نشط — بيشتغل لما تبدأ جلسة</string>
+    <string name="ocr_projection_error">حصل خطأ في آخر جلسة</string>
+    <string name="ocr_permissions_title">أذونات Android</string>
+    <string name="ocr_region_preview_title">منطقة القراءة على الشاشة</string>
+    <string name="ocr_region_preview_full">الشاشة كلها</string>
+    <string name="ocr_region_preview_band">من %1$d%% إلى %2$d%% من ارتفاع الشاشة</string>
+    <string name="ocr_region_preview_off">القراءة على الشاشة كلها (تحديد المنطقة مقفول)</string>
+
+    <!-- History -->
+    <string name="history_group_count">%1$d ترجمة</string>
+    <string name="history_today">النهارده</string>
+    <string name="history_yesterday">إمبارح</string>
+    <string name="history_detail_title">تفاصيل الترجمة</string>
+    <string name="history_original">النص الأصلي</string>
+    <string name="history_translated">الترجمة</string>
+    <string name="history_engine">المحرك</string>
+    <string name="history_cached_yes">من الكاش</string>
+    <string name="history_cached_no">ترجمة جديدة</string>
+    <string name="history_source_label">النوع</string>
+    <string name="history_time_label">الوقت</string>
+    <string name="history_copy">نسخ الترجمة</string>
+    <string name="history_copy_original">نسخ الأصل</string>
+    <string name="history_copied">تم النسخ</string>
+    <string name="history_delete_confirm_title">حذف الترجمة دي؟</string>
+    <string name="history_delete_confirm_body">هتتمسح نهائيًا من السجل ومش هتقدر ترجعها.</string>
+
+    <!-- Update center -->
+    <string name="update_current">الإصدار الحالي</string>
+    <string name="update_latest">أحدث إصدار</string>
+    <string name="update_status_label">الحالة</string>
+    <string name="update_status_idle">لسه ماتفحصش</string>
+    <string name="update_status_checking">جاري الفحص…</string>
+    <string name="update_status_uptodate">إنت على آخر إصدار</string>
+    <string name="update_status_available">تحديث جديد متاح</string>
+    <string name="update_status_downloading">جاري التنزيل</string>
+    <string name="update_status_verified">تم التحقق من الملف</string>
+    <string name="update_status_failed">فشل التحديث</string>
+    <string name="update_changelog">سجل التغييرات</string>
+    <string name="update_apk_size">حجم الـ APK</string>
+    <string name="update_release_date">تاريخ الإصدار</string>
+    <string name="update_check">فحص التحديثات</string>
+    <string name="update_download">تنزيل التحديث</string>
+    <string name="update_install">تثبيت التحديث</string>
+    <string name="update_verification">التحقق من الملف</string>
+    <string name="update_verification_pending">بيتم بعد انتهاء التنزيل: SHA-256 والتوقيع واسم الحزمة.</string>
+    <string name="update_verification_ok">تم التحقق: SHA-256 والتوقيع واسم الحزمة مطابقين.</string>
+    <string name="update_verification_failed">فشل التحقق، والملف اتحذف.</string>
+    <string name="update_size_mb">%1$s ميجابايت</string>
+    <string name="update_unknown">غير معروف</string>
+    <string name="update_no_release_info">اضغط فحص التحديثات عشان تشوف أحدث إصدار.</string>
+
 </resources>

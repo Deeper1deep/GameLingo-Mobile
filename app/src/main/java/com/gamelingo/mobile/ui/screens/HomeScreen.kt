@@ -1,20 +1,17 @@
 package com.gamelingo.mobile.ui.screens
 
-import android.Manifest
-import android.content.Context
-import android.content.Intent
-import android.app.Activity
-import android.content.pm.PackageManager
-import android.media.projection.MediaProjectionManager
-import android.net.Uri
-import android.os.Build
-import android.provider.Settings
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -22,433 +19,391 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
-import androidx.compose.material.icons.filled.CheckCircle
-import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Create
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Face
-import androidx.compose.material.icons.filled.Info
-import androidx.compose.material.icons.filled.List
-import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
+import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.SnackbarHost
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gamelingo.mobile.R
-import com.gamelingo.mobile.capture.ScreenCaptureService
 import com.gamelingo.mobile.core.session.SessionNotice
 import com.gamelingo.mobile.core.session.SessionState
+import com.gamelingo.mobile.core.status.SessionPhase
+import com.gamelingo.mobile.core.status.resolveEngineReadiness
+import com.gamelingo.mobile.core.status.resolveSessionPhase
+import com.gamelingo.mobile.data.settings.AiMode
+import com.gamelingo.mobile.ui.components.GlButton
+import com.gamelingo.mobile.ui.components.GlButtonStyle
+import com.gamelingo.mobile.ui.components.GlCard
+import com.gamelingo.mobile.ui.components.GlTextButton
+import com.gamelingo.mobile.ui.components.IconBadge
+import com.gamelingo.mobile.ui.components.LogoMark
+import com.gamelingo.mobile.ui.components.SectionHeader
+import com.gamelingo.mobile.ui.components.StatusChip
+import com.gamelingo.mobile.ui.components.StatusTile
+import com.gamelingo.mobile.ui.components.StatusTone
 import com.gamelingo.mobile.ui.navigation.GameLingoRoutes
 import com.gamelingo.mobile.ui.navigation.HistoryViewModel
 import com.gamelingo.mobile.ui.navigation.SessionViewModel
-import kotlinx.coroutines.launch
-
-private fun hasOverlayPermission(context: Context): Boolean =
-    Settings.canDrawOverlays(context)
-
-private fun hasNotificationPermission(context: Context): Boolean =
-    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
-        ContextCompat.checkSelfPermission(
-            context,
-            Manifest.permission.POST_NOTIFICATIONS,
-        ) == PackageManager.PERMISSION_GRANTED
+import com.gamelingo.mobile.ui.navigation.SettingsViewModel
+import com.gamelingo.mobile.ui.navigation.StatusViewModel
+import com.gamelingo.mobile.ui.system.rememberSessionController
+import com.gamelingo.mobile.ui.theme.GlColors
+import com.gamelingo.mobile.ui.theme.GlSpacing
+import java.text.DateFormat
+import java.util.Date
 
 @Composable
 fun HomeScreen(
     onNavigate: (String) -> Unit,
-    viewModel: HistoryViewModel = hiltViewModel(),
+    historyViewModel: HistoryViewModel = hiltViewModel(),
     sessionViewModel: SessionViewModel = hiltViewModel(),
+    settingsViewModel: SettingsViewModel = hiltViewModel(),
+    statusViewModel: StatusViewModel = hiltViewModel(),
 ) {
-    val historyCount by viewModel.historyCount.collectAsStateWithLifecycle()
     val sessionState by sessionViewModel.sessionState.collectAsStateWithLifecycle()
     val latestLine by sessionViewModel.latestLine.collectAsStateWithLifecycle()
-    val snackbarHostState = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
-    val captureCancelledMessage = stringResource(R.string.home_capture_cancelled)
-    val overlayNeededMessage = stringResource(R.string.perm_overlay_needed_for_start)
-    val context = LocalContext.current
+    val translated by sessionViewModel.translatedLine.collectAsStateWithLifecycle()
+    val failure by sessionViewModel.translationFailure.collectAsStateWithLifecycle()
+    val notice by sessionViewModel.notice.collectAsStateWithLifecycle()
+    val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
+    val online by statusViewModel.online.collectAsStateWithLifecycle()
+    val history by historyViewModel.history.collectAsStateWithLifecycle()
+    val controller = rememberSessionController()
 
-    var overlayGranted by remember { mutableStateOf(hasOverlayPermission(context)) }
-    var notificationsGranted by remember {
-        mutableStateOf(hasNotificationPermission(context))
-    }
+    val phase = resolveSessionPhase(sessionState, latestLine, translated, failure)
+    val running = sessionState == SessionState.RUNNING
+    val readiness = resolveEngineReadiness(
+        mode = settings.aiMode,
+        cloudOptIn = settings.cloudTranslationOptIn,
+        hasApiKey = settings.onlineApiKey.isNotBlank(),
+    )
 
-    // Re-check permission state every time the user comes back from a system screen.
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            if (event == Lifecycle.Event.ON_RESUME) {
-                overlayGranted = hasOverlayPermission(context)
-                notificationsGranted = hasNotificationPermission(context)
+    Column(
+        modifier = Modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(GlSpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(GlSpacing.lg),
+    ) {
+        // Brand header
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            LogoMark(size = 52.dp)
+            Column(modifier = Modifier.padding(start = GlSpacing.md)) {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.headlineMedium,
+                    color = GlColors.TextPrimary,
+                )
+                Text(
+                    text = stringResource(R.string.home_subtitle),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = GlColors.TextSecondary,
+                )
             }
         }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
-    }
 
-    val projectionLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.StartActivityForResult(),
-    ) { result ->
-        if (result.resultCode == Activity.RESULT_OK && result.data != null) {
-            val intent = ScreenCaptureService.startIntent(
-                context,
-                result.resultCode,
-                result.data!!,
-            )
-            ContextCompat.startForegroundService(context, intent)
-        } else {
-            scope.launch { snackbarHostState.showSnackbar(captureCancelledMessage) }
-        }
-    }
-
-    val notificationLauncher = rememberLauncherForActivityResult(
-        ActivityResultContracts.RequestPermission(),
-    ) { granted -> notificationsGranted = granted }
-
-    Column(modifier = Modifier.fillMaxSize()) {
-        Column(
-            modifier = Modifier
-                .weight(1f)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    Text(
-                        text = stringResource(R.string.home_headline),
-                        style = MaterialTheme.typography.titleLarge,
+        // Smart status card: follows the real session signals.
+        GlCard(elevated = true, contentPadding = PaddingValues(GlSpacing.xl)) {
+            AnimatedContent(
+                targetState = phase,
+                transitionSpec = { fadeIn(tween(220)) togetherWith fadeOut(tween(140)) },
+                label = "phase",
+            ) { current ->
+                Column(verticalArrangement = Arrangement.spacedBy(GlSpacing.sm)) {
+                    StatusChip(
+                        label = phaseLabel(current),
+                        tone = phaseTone(current),
+                        pulsing = phaseIsLive(current),
                     )
-                    Spacer(modifier = Modifier.height(8.dp))
                     Text(
-                        text = stringResource(R.string.home_description),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = stringResource(
-                            when (sessionState) {
-                                SessionState.STOPPED -> R.string.home_status_stopped
-                                SessionState.RUNNING -> R.string.home_status_running
-                                SessionState.ERROR -> R.string.home_status_error
-                            },
-                        ),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                    if (sessionState == SessionState.RUNNING) {
-                        val translated by sessionViewModel.translatedLine.collectAsStateWithLifecycle()
-                        val failure by sessionViewModel.translationFailure.collectAsStateWithLifecycle()
-                        val notice by sessionViewModel.notice.collectAsStateWithLifecycle()
-                        notice?.let {
-                            Spacer(modifier = Modifier.height(8.dp))
-                            Text(
-                                text = stringResource(
-                                    when (it) {
-                                        SessionNotice.ONLINE_NOT_CONFIGURED ->
-                                            R.string.overlay_notice_online_not_configured
-                                        SessionNotice.FELL_BACK_TO_LOCAL ->
-                                            R.string.overlay_notice_fell_back_local
-                                    },
-                                ),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.tertiary,
-                            )
-                        }
-                        when {
-                            translated != null -> {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = translated!!.translated,
-                                    style = MaterialTheme.typography.bodyLarge,
-                                    color = MaterialTheme.colorScheme.primary,
-                                )
-                                Text(
-                                    text = stringResource(
-                                        R.string.home_latest_ocr,
-                                        translated!!.original,
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                            failure != null -> {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = stringResource(R.string.home_translation_failed),
-                                    style = MaterialTheme.typography.bodySmall,
-                                    color = MaterialTheme.colorScheme.error,
-                                )
-                            }
-                            latestLine != null -> {
-                                Spacer(modifier = Modifier.height(8.dp))
-                                Text(
-                                    text = stringResource(
-                                        R.string.home_latest_ocr,
-                                        latestLine!!.text,
-                                    ),
-                                    style = MaterialTheme.typography.bodySmall,
-                                )
-                            }
-                        }
-                    }
-                    Spacer(modifier = Modifier.height(12.dp))
-                    SessionButton(
-                        sessionState = sessionState,
-                        onStart = {
-                            // Never start a session the user cannot watch:
-                            // without the overlay permission the translation
-                            // window cannot appear, so ask for it first and
-                            // send him straight to the right system screen.
-                            if (!hasOverlayPermission(context)) {
-                                scope.launch {
-                                    snackbarHostState.showSnackbar(overlayNeededMessage)
-                                }
-                                runCatching {
-                                    context.startActivity(
-                                        Intent(
-                                            Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                                            Uri.parse("package:${context.packageName}"),
-                                        ),
-                                    )
-                                }
-                            } else {
-                                val projectionManager =
-                                    context.getSystemService(MediaProjectionManager::class.java)
-                                projectionLauncher.launch(
-                                    projectionManager.createScreenCaptureIntent(),
-                                )
-                            }
+                        text = if (current == SessionPhase.ERROR && failure != null && running) {
+                            stringResource(R.string.home_translation_failed)
+                        } else {
+                            phaseDescription(current)
                         },
-                        onStop = {
-                            context.startService(ScreenCaptureService.stopIntent(context))
-                        },
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = GlColors.TextPrimary,
                     )
                 }
             }
 
-            SectionTitle(stringResource(R.string.home_permissions_title))
-            PermissionCard(
-                icon = Icons.Filled.Notifications,
-                title = stringResource(R.string.perm_overlay),
-                description = stringResource(R.string.perm_overlay_needed),
-                granted = overlayGranted,
-                grantedLabel = stringResource(R.string.perm_granted),
-                actionLabel = stringResource(R.string.perm_overlay_open_settings),
-                onAction = {
-                    val intent = Intent(
-                        Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
-                        Uri.parse("package:${context.packageName}"),
-                    )
-                    context.startActivity(intent)
-                },
-            )
-            PermissionCard(
-                icon = Icons.Filled.Notifications,
-                title = stringResource(R.string.perm_notifications),
-                description = stringResource(R.string.perm_notifications_needed),
-                granted = notificationsGranted,
-                grantedLabel = stringResource(R.string.perm_granted),
-                actionLabel = stringResource(R.string.perm_grant),
-                onAction = {
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                        notificationLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    }
-                },
-            )
-
-            SectionTitle(stringResource(R.string.home_how_title))
-            Card(modifier = Modifier.fillMaxWidth()) {
-                Column(modifier = Modifier.padding(16.dp)) {
-                    listOf(
-                        R.string.home_how_step1,
-                        R.string.home_how_step2,
-                        R.string.home_how_step3,
-                        R.string.home_how_step4,
-                    ).forEachIndexed { index, stepRes ->
+            val shown = translated
+            AnimatedVisibility(visible = running && shown != null) {
+                if (shown != null) {
+                    Column(modifier = Modifier.padding(top = GlSpacing.md)) {
                         Text(
-                            text = stringResource(
-                                R.string.home_how_step_format,
-                                index + 1,
-                                stringResource(stepRes),
-                            ),
-                            style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier.padding(vertical = 2.dp),
+                            text = shown.translated,
+                            style = MaterialTheme.typography.titleMedium,
+                            color = GlColors.Secondary,
+                        )
+                        Text(
+                            text = shown.original,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = GlColors.TextSecondary,
                         )
                     }
                 }
             }
 
-            SectionTitle(stringResource(R.string.home_sections_title))
-            val entries = listOf(
-                NavEntry(
-                    GameLingoRoutes.TRANSLATION_SETTINGS,
-                    R.string.nav_translation_settings,
-                    Icons.Filled.Settings,
-                ),
-                NavEntry(GameLingoRoutes.OCR_SETTINGS, R.string.nav_ocr_settings, Icons.Filled.Search),
-                NavEntry(GameLingoRoutes.AI_SETTINGS, R.string.nav_ai_settings, Icons.Filled.Face),
-                NavEntry(
-                    GameLingoRoutes.OVERLAY_SETTINGS,
-                    R.string.nav_overlay_settings,
-                    Icons.Filled.Create,
-                ),
-                NavEntry(GameLingoRoutes.HISTORY, R.string.nav_history, Icons.Filled.List),
-                NavEntry(GameLingoRoutes.VOICE, R.string.nav_voice, Icons.Filled.PlayArrow),
-                NavEntry(GameLingoRoutes.ABOUT, R.string.nav_about, Icons.Filled.Info),
-            )
-            entries.forEach { entry ->
-                Card(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { onNavigate(entry.route) },
-                ) {
-                    ListItem(
-                        leadingContent = {
-                            Icon(imageVector = entry.icon, contentDescription = null)
+            notice?.let {
+                Text(
+                    text = stringResource(
+                        when (it) {
+                            SessionNotice.ONLINE_NOT_CONFIGURED ->
+                                R.string.overlay_notice_online_not_configured
+                            SessionNotice.FELL_BACK_TO_LOCAL ->
+                                R.string.overlay_notice_fell_back_local
                         },
-                        headlineContent = { Text(stringResource(entry.titleRes)) },
-                        trailingContent = {
-                            Icon(
-                                imageVector = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                                contentDescription = null,
-                            )
-                        },
+                    ),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = GlColors.Accent,
+                    modifier = Modifier.padding(top = GlSpacing.md),
+                )
+            }
+
+            Column(
+                modifier = Modifier.padding(top = GlSpacing.xl),
+                verticalArrangement = Arrangement.spacedBy(GlSpacing.sm),
+            ) {
+                // The loudest element on the screen: start, or stop while running.
+                if (running) {
+                    GlButton(
+                        text = stringResource(R.string.home_stop),
+                        onClick = controller.stop,
+                        style = GlButtonStyle.Danger,
+                        icon = Icons.Filled.Close,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                    GlButton(
+                        text = stringResource(R.string.home_open_session),
+                        onClick = { onNavigate(GameLingoRoutes.SESSION) },
+                        style = GlButtonStyle.Secondary,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                } else {
+                    GlButton(
+                        text = stringResource(R.string.home_start),
+                        onClick = controller.start,
+                        icon = Icons.Filled.PlayArrow,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(60.dp),
                     )
                 }
             }
+        }
 
-            Text(
-                text = stringResource(R.string.home_history_count, historyCount),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // Status grid
+        val translationValue = stringResource(
+            when (sessionState) {
+                SessionState.STOPPED -> R.string.value_stopped
+                SessionState.RUNNING -> R.string.value_running
+                SessionState.ERROR -> R.string.value_error
+            },
+        )
+        val translationTone = when (sessionState) {
+            SessionState.STOPPED -> StatusTone.Neutral
+            SessionState.RUNNING -> StatusTone.Success
+            SessionState.ERROR -> StatusTone.Error
+        }
+        val needsOnline = settings.aiMode == AiMode.ONLINE
+        Column(verticalArrangement = Arrangement.spacedBy(GlSpacing.md)) {
+            Row(
+                modifier = Modifier.height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(GlSpacing.md),
+            ) {
+                StatusTile(
+                    icon = Icons.Filled.PlayArrow,
+                    title = stringResource(R.string.tile_translation),
+                    value = translationValue,
+                    tone = translationTone,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                )
+                StatusTile(
+                    icon = Icons.Filled.Search,
+                    title = stringResource(R.string.tile_ocr),
+                    value = stringResource(
+                        if (running) R.string.value_ocr_active else R.string.value_ocr_ready,
+                    ),
+                    tone = if (running) StatusTone.Success else StatusTone.Info,
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                )
+            }
+            Row(
+                modifier = Modifier.height(IntrinsicSize.Max),
+                horizontalArrangement = Arrangement.spacedBy(GlSpacing.md),
+            ) {
+                StatusTile(
+                    icon = Icons.Filled.Share,
+                    title = stringResource(R.string.tile_internet),
+                    value = stringResource(
+                        if (online) R.string.value_online else R.string.value_offline,
+                    ),
+                    tone = when {
+                        online -> StatusTone.Success
+                        needsOnline -> StatusTone.Error
+                        else -> StatusTone.Neutral
+                    },
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                )
+                StatusTile(
+                    icon = Icons.Filled.Face,
+                    title = stringResource(R.string.tile_ai),
+                    value = engineReadinessShort(readiness),
+                    tone = engineReadinessTone(readiness),
+                    modifier = Modifier
+                        .weight(1f)
+                        .fillMaxHeight(),
+                )
+            }
+        }
+
+        // Missing permissions (only when something is actually missing)
+        AnimatedVisibility(visible = !controller.permissions.allGranted) {
+            GlCard {
+                Text(
+                    text = stringResource(R.string.home_permissions_missing_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = GlColors.TextPrimary,
+                )
+                if (!controller.permissions.overlayGranted) {
+                    PermissionRow(
+                        title = stringResource(R.string.perm_overlay),
+                        description = stringResource(R.string.perm_overlay_needed),
+                        actionLabel = stringResource(R.string.perm_overlay_open_settings),
+                        onAction = controller.openOverlaySettings,
+                    )
+                }
+                if (!controller.permissions.notificationsGranted) {
+                    PermissionRow(
+                        title = stringResource(R.string.perm_notifications),
+                        description = stringResource(R.string.perm_notifications_needed),
+                        actionLabel = stringResource(R.string.perm_grant),
+                        onAction = controller.requestNotifications,
+                    )
+                }
+            }
+        }
+
+        // Last saved translation
+        SectionHeader(stringResource(R.string.home_last_title))
+        val last = history.firstOrNull()
+        GlCard(
+            onClick = { onNavigate(GameLingoRoutes.HISTORY) },
+        ) {
+            if (last == null) {
+                Text(
+                    text = stringResource(R.string.home_last_empty),
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = GlColors.TextSecondary,
+                )
+            } else {
+                Text(
+                    text = DateFormat.getDateTimeInstance().format(Date(last.createdAt)),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = GlColors.TextSecondary,
+                )
+                Text(
+                    text = last.translatedText,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = GlColors.TextPrimary,
+                    maxLines = 2,
+                    modifier = Modifier.padding(top = GlSpacing.xs),
+                )
+                Text(
+                    text = last.sourceText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = GlColors.TextSecondary,
+                    maxLines = 2,
+                )
+            }
+        }
+
+        // Shortcuts
+        Row(horizontalArrangement = Arrangement.spacedBy(GlSpacing.md)) {
+            ShortcutCard(
+                label = stringResource(R.string.home_shortcut_settings),
+                icon = Icons.Filled.Settings,
+                onClick = { onNavigate(GameLingoRoutes.SETTINGS) },
+                modifier = Modifier.weight(1f),
+            )
+            ShortcutCard(
+                label = stringResource(R.string.home_shortcut_history),
+                icon = Icons.AutoMirrored.Filled.List,
+                onClick = { onNavigate(GameLingoRoutes.HISTORY) },
+                modifier = Modifier.weight(1f),
             )
         }
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier.padding(16.dp),
-        )
     }
 }
 
-private data class NavEntry(
-    val route: String,
-    val titleRes: Int,
-    val icon: ImageVector,
-)
-
 @Composable
-private fun SectionTitle(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 8.dp),
-    )
-}
-
-@Composable
-private fun PermissionCard(
-    icon: ImageVector,
+private fun PermissionRow(
     title: String,
     description: String,
-    granted: Boolean,
-    grantedLabel: String,
     actionLabel: String,
     onAction: () -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Icon(
-                imageVector = if (granted) Icons.Filled.CheckCircle else Icons.Filled.Warning,
-                contentDescription = null,
-                tint = if (granted) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.error
-                },
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = GlSpacing.sm),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleSmall,
+                color = GlColors.TextPrimary,
             )
-            Column(
-                modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = 12.dp),
-            ) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(imageVector = icon, contentDescription = null)
-                    Text(
-                        text = title,
-                        style = MaterialTheme.typography.titleMedium,
-                        modifier = Modifier.padding(start = 8.dp),
-                    )
-                }
-                Text(
-                    text = if (granted) grantedLabel else description,
-                    style = MaterialTheme.typography.bodySmall,
-                    modifier = Modifier.padding(top = 4.dp),
-                )
-            }
-            if (!granted) {
-                OutlinedButton(onClick = onAction) {
-                    Text(actionLabel)
-                }
-            }
+            Text(
+                text = description,
+                style = MaterialTheme.typography.bodySmall,
+                color = GlColors.TextSecondary,
+            )
         }
+        GlTextButton(text = actionLabel, onClick = onAction)
     }
 }
 
-/** Start/stop button that follows the live session state. */
 @Composable
-private fun SessionButton(
-    sessionState: SessionState,
-    onStart: () -> Unit,
-    onStop: () -> Unit,
+private fun ShortcutCard(
+    label: String,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val running = sessionState == SessionState.RUNNING
-    Button(
-        onClick = if (running) onStop else onStart,
-        modifier = Modifier.fillMaxWidth(),
+    GlCard(
+        modifier = modifier,
+        onClick = onClick,
+        contentPadding = PaddingValues(GlSpacing.md),
     ) {
-        Icon(
-            imageVector = if (running) Icons.Filled.Close else Icons.Filled.PlayArrow,
-            contentDescription = null,
-        )
-        Text(
-            text = stringResource(
-                if (running) R.string.home_stop else R.string.home_start,
-            ),
-            modifier = Modifier.padding(start = 8.dp),
-        )
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            IconBadge(icon = icon, size = 36.dp)
+            Text(
+                text = label,
+                style = MaterialTheme.typography.titleSmall,
+                color = GlColors.TextPrimary,
+                modifier = Modifier.padding(start = GlSpacing.md),
+            )
+        }
     }
 }

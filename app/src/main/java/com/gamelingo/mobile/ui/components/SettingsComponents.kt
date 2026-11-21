@@ -5,9 +5,11 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
@@ -17,13 +19,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material3.Card
 import androidx.compose.material3.Icon
-import androidx.compose.material3.ListItem
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
+import androidx.compose.material3.RadioButtonDefaults
 import androidx.compose.material3.Slider
+import androidx.compose.material3.SliderDefaults
 import androidx.compose.material3.Switch
+import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -31,17 +34,24 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import com.gamelingo.mobile.core.model.OverlayColors
+import com.gamelingo.mobile.ui.theme.GlColors
+import com.gamelingo.mobile.ui.theme.GlShapes
+import com.gamelingo.mobile.ui.theme.GlSpacing
 
-/** Standard settings screen scaffold: a scrolling column of cards. */
+/** Standard screen scaffold: a scrolling column with the app's page padding and gaps. */
 @Composable
 fun SettingsColumn(content: @Composable () -> Unit) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+            .padding(GlSpacing.lg),
+        verticalArrangement = Arrangement.spacedBy(GlSpacing.md),
     ) {
         content()
     }
@@ -53,9 +63,51 @@ fun SectionHeader(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.titleSmall,
-        color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(top = 8.dp),
+        color = GlColors.Accent,
+        modifier = Modifier.padding(top = GlSpacing.sm, start = GlSpacing.xs),
     )
+}
+
+/** Secondary explanatory text under a control. */
+@Composable
+fun HintText(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier = modifier,
+    )
+}
+
+/** Label on the leading side, value on the trailing side. */
+@Composable
+fun InfoRow(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier,
+    valueColor: Color = GlColors.TextPrimary,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .heightIn(min = 36.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.weight(1f),
+        )
+        Text(
+            text = value,
+            style = MaterialTheme.typography.titleSmall,
+            color = valueColor,
+            textAlign = TextAlign.End,
+            modifier = Modifier.padding(start = GlSpacing.md),
+        )
+    }
 }
 
 @Composable
@@ -65,14 +117,37 @@ fun SwitchCard(
     onCheckedChange: (Boolean) -> Unit,
     subtitle: String? = null,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        ListItem(
-            headlineContent = { Text(title) },
-            supportingContent = subtitle?.let { { Text(it) } },
-            trailingContent = {
-                Switch(checked = checked, onCheckedChange = onCheckedChange)
-            },
-        )
+    GlCard(contentPadding = PaddingValues(horizontal = GlSpacing.lg, vertical = GlSpacing.md)) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .heightIn(min = GlSpacing.touchTarget),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = title,
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                )
+                if (subtitle != null) {
+                    HintText(subtitle)
+                }
+            }
+            Switch(
+                checked = checked,
+                onCheckedChange = onCheckedChange,
+                modifier = Modifier.padding(start = GlSpacing.md),
+                colors = SwitchDefaults.colors(
+                    checkedThumbColor = Color.White,
+                    checkedTrackColor = GlColors.PrimaryStrong,
+                    checkedBorderColor = GlColors.PrimaryStrong,
+                    uncheckedThumbColor = GlColors.TextSecondary,
+                    uncheckedTrackColor = GlColors.SurfaceElevated,
+                    uncheckedBorderColor = GlColors.OutlineStrong,
+                ),
+            )
+        }
     }
 }
 
@@ -85,23 +160,38 @@ fun SliderCard(
     onValueChange: (Float) -> Unit,
     subtitle: String? = null,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = title, style = MaterialTheme.typography.titleMedium)
-            subtitle?.let {
-                Text(text = it, style = MaterialTheme.typography.bodySmall)
-            }
+    GlCard {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                text = title,
+                style = MaterialTheme.typography.titleMedium,
+                color = MaterialTheme.colorScheme.onSurface,
+                modifier = Modifier.weight(1f),
+            )
             Text(
                 text = valueLabel,
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Slider(
-                value = value,
-                onValueChange = onValueChange,
-                valueRange = valueRange,
+                style = MaterialTheme.typography.titleSmall,
+                color = GlColors.Secondary,
+                modifier = Modifier.padding(start = GlSpacing.md),
             )
         }
+        if (subtitle != null) {
+            HintText(subtitle)
+        }
+        Slider(
+            value = value,
+            onValueChange = onValueChange,
+            valueRange = valueRange,
+            colors = SliderDefaults.colors(
+                thumbColor = GlColors.Primary,
+                activeTrackColor = GlColors.Primary,
+                inactiveTrackColor = GlColors.OutlineStrong,
+            ),
+        )
     }
 }
 
@@ -114,33 +204,95 @@ fun <T> RadioGroupCard(
     optionLabel: @Composable (T) -> String,
     onSelect: (T) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(vertical = 8.dp)) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-            Column(modifier = Modifier.selectableGroup()) {
-                options.forEach { option ->
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .selectable(
-                                selected = selected == option,
-                                onClick = { onSelect(option) },
-                                role = Role.RadioButton,
-                            )
-                            .padding(horizontal = 16.dp, vertical = 8.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        RadioButton(selected = selected == option, onClick = null)
-                        Text(
-                            text = optionLabel(option),
-                            modifier = Modifier.padding(start = 8.dp),
+    GlCard(contentPadding = PaddingValues(vertical = GlSpacing.sm)) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.padding(horizontal = GlSpacing.lg, vertical = GlSpacing.sm),
+        )
+        Column(modifier = Modifier.selectableGroup()) {
+            options.forEach { option ->
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .heightIn(min = GlSpacing.touchTarget)
+                        .selectable(
+                            selected = selected == option,
+                            onClick = { onSelect(option) },
+                            role = Role.RadioButton,
                         )
-                    }
+                        .padding(horizontal = GlSpacing.lg, vertical = GlSpacing.sm),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    RadioButton(
+                        selected = selected == option,
+                        onClick = null,
+                        colors = RadioButtonDefaults.colors(
+                            selectedColor = GlColors.Primary,
+                            unselectedColor = GlColors.TextSecondary,
+                        ),
+                    )
+                    Text(
+                        text = optionLabel(option),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        modifier = Modifier.padding(start = GlSpacing.md),
+                    )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * Pill-style segmented selector. The selected segment is filled and bold, so
+ * the state is readable without relying on color.
+ */
+@Composable
+fun <T> SegmentedSelector(
+    options: List<T>,
+    selected: T,
+    optionLabel: @Composable (T) -> String,
+    onSelect: (T) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier = modifier
+            .fillMaxWidth()
+            .clip(GlShapes.Medium)
+            .background(GlColors.Background)
+            .border(1.dp, GlColors.Outline, GlShapes.Medium)
+            .padding(GlSpacing.xs)
+            .selectableGroup(),
+        horizontalArrangement = Arrangement.spacedBy(GlSpacing.xs),
+    ) {
+        options.forEach { option ->
+            val isSelected = option == selected
+            Box(
+                modifier = Modifier
+                    .weight(1f)
+                    .heightIn(min = GlSpacing.touchTarget)
+                    .clip(GlShapes.Small)
+                    .background(if (isSelected) GlColors.PrimaryStrong else Color.Transparent)
+                    .selectable(
+                        selected = isSelected,
+                        onClick = { onSelect(option) },
+                        role = Role.RadioButton,
+                    )
+                    .padding(horizontal = GlSpacing.sm, vertical = GlSpacing.sm),
+                contentAlignment = Alignment.Center,
+            ) {
+                Text(
+                    text = optionLabel(option),
+                    style = if (isSelected) {
+                        MaterialTheme.typography.labelLarge
+                    } else {
+                        MaterialTheme.typography.labelMedium
+                    },
+                    color = if (isSelected) Color.White else GlColors.TextSecondary,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }
@@ -154,45 +306,44 @@ fun ColorSwatchRow(
     selected: Long,
     onSelect: (Long) -> Unit,
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            Text(text = title, style = MaterialTheme.typography.titleMedium)
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 12.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                colors.forEach { argb ->
-                    val isSelected = argb == selected
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(Color(argb.toInt()))
-                            .border(
-                                width = if (isSelected) 3.dp else 1.dp,
-                                color = if (isSelected) {
-                                    MaterialTheme.colorScheme.primary
-                                } else {
-                                    MaterialTheme.colorScheme.outline
-                                },
-                                shape = CircleShape,
-                            )
-                            .selectable(
-                                selected = isSelected,
-                                onClick = { onSelect(argb) },
-                                role = Role.RadioButton,
-                            ),
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        if (isSelected) {
-                            Icon(
-                                imageVector = Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = Color.White,
-                            )
-                        }
+    GlCard {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.titleMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+        )
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = GlSpacing.md),
+            horizontalArrangement = Arrangement.spacedBy(GlSpacing.md),
+        ) {
+            colors.forEach { argb ->
+                val isSelected = argb == selected
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color(argb.toInt()))
+                        .border(
+                            width = if (isSelected) 3.dp else 1.dp,
+                            color = if (isSelected) GlColors.Secondary else GlColors.OutlineStrong,
+                            shape = CircleShape,
+                        )
+                        .semantics { contentDescription = OverlayColors.formatArgbHex(argb) }
+                        .selectable(
+                            selected = isSelected,
+                            onClick = { onSelect(argb) },
+                            role = Role.RadioButton,
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    if (isSelected) {
+                        Icon(
+                            imageVector = Icons.Filled.Check,
+                            contentDescription = null,
+                            tint = Color.White,
+                        )
                     }
                 }
             }

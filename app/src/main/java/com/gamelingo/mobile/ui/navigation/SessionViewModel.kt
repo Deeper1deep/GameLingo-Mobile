@@ -18,4 +18,6 @@ class SessionViewModel @Inject constructor() : ViewModel() {
     val translatedLine: StateFlow<TranslatedLine?> = TranslationSessionBus.translatedLine
     val translationFailure: StateFlow<String?> = TranslationSessionBus.translationFailure
     val notice: StateFlow<SessionNotice?> = TranslationSessionBus.notice
+    val startedAtMillis: StateFlow<Long?> = TranslationSessionBus.startedAtMillis
+    val translatedCount: StateFlow<Int> = TranslationSessionBus.translatedCount
 }
