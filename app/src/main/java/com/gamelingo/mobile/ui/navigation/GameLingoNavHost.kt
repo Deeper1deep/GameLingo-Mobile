@@ -47,6 +47,7 @@ import com.gamelingo.mobile.ui.components.GlTab
 import com.gamelingo.mobile.ui.components.glScreenBackground
 import com.gamelingo.mobile.ui.screens.AboutScreen
 import com.gamelingo.mobile.ui.screens.AiSettingsScreen
+import com.gamelingo.mobile.ui.screens.DiagnosticsScreen
 import com.gamelingo.mobile.ui.screens.HistoryScreen
 import com.gamelingo.mobile.ui.screens.HomeScreen
 import com.gamelingo.mobile.ui.screens.OcrSettingsScreen
@@ -74,6 +75,7 @@ object GameLingoRoutes {
     const val UPDATES = "updates"
     const val ABOUT = "about"
     const val VOICE = "voice"
+    const val DIAGNOSTICS = "diagnostics"
 }
 
 private data class DestinationMeta(val route: String, val titleRes: Int)
@@ -90,6 +92,7 @@ private val destinationMeta = listOf(
     DestinationMeta(GameLingoRoutes.UPDATES, R.string.nav_update_center),
     DestinationMeta(GameLingoRoutes.ABOUT, R.string.nav_about),
     DestinationMeta(GameLingoRoutes.VOICE, R.string.nav_voice),
+    DestinationMeta(GameLingoRoutes.DIAGNOSTICS, R.string.nav_diagnostics),
 )
 
 /** Routes shown as bottom-navigation tabs; every other route is a pushed detail screen. */
@@ -231,6 +234,7 @@ fun GameLingoAppRoot(
                         composable(GameLingoRoutes.UPDATES) { UpdateCenterScreen() }
                         composable(GameLingoRoutes.ABOUT) { AboutScreen() }
                         composable(GameLingoRoutes.VOICE) { VoiceTranslationScreen() }
+                        composable(GameLingoRoutes.DIAGNOSTICS) { DiagnosticsScreen() }
                     }
                 }
             }
