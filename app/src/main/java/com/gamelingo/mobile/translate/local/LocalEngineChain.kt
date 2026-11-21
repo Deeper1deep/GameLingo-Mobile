@@ -38,37 +38,55 @@ class LocalEngineChain internal constructor(
 
     override val engineId: String = ENGINE_ID
 
+    /**
+     * An engine that threw an [Error] (native abort containment, linkage, OOM)
+     * is poisoned for the rest of the session: retrying a broken native engine
+     * per line would keep crashing. A plain [Exception] is transient (network,
+     * busy) and does not poison. Poisoned engines report as unavailable so
+     * routing and cache keys follow the engine that actually answers.
+     */
+    @Volatile
+    private var gemmaPoisoned = false
+
+    @Volatile
+    private var marianPoisoned = false
+
+    private fun gemmaUsable(): Boolean = !gemmaPoisoned && translateGemmaEngine.isAvailable()
+
+    private fun marianUsable(): Boolean = !marianPoisoned && marianEngine.isAvailable()
+
     /** True when at least one downloadable local AI model is verified on disk. */
-    override fun hasLocalAiModel(): Boolean =
-        translateGemmaEngine.isAvailable() || marianEngine.isAvailable()
+    override fun hasLocalAiModel(): Boolean = gemmaUsable() || marianUsable()
 
     /** Engine id the next line would actually use; the cache keys on this. */
     override fun plannedLocalEngineId(): String = when {
-        translateGemmaEngine.isAvailable() -> TranslateGemmaEngine.ENGINE_ID
-        marianEngine.isAvailable() -> LocalAiTranslationEngine.ENGINE_ID
+        gemmaUsable() -> TranslateGemmaEngine.ENGINE_ID
+        marianUsable() -> LocalAiTranslationEngine.ENGINE_ID
         else -> MlKitTranslationEngine.ENGINE_ID
     }
 
     override suspend fun ensureReady() = Unit
 
     override suspend fun translate(request: TranslationRequest): TranslationResult {
-        if (translateGemmaEngine.isAvailable()) {
+        // Throwable, not Exception: native engines fail with Errors
+        // (UnsatisfiedLinkError, OutOfMemoryError) that must degrade to the
+        // next engine, never kill the process. Cancellation still propagates.
+        if (gemmaUsable()) {
             try {
                 return translateGemmaEngine.translate(request)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
-            } catch (error: Exception) {
-                // Fall through to the fast engine for this line; the failure
-                // stays visible through the returned engine id and worker state.
+            } catch (failure: Throwable) {
+                if (failure is Error) gemmaPoisoned = true
             }
         }
-        if (marianEngine.isAvailable()) {
+        if (marianUsable()) {
             try {
                 return marianEngine.translate(request)
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
-            } catch (error: Exception) {
-                // Fall through to ML Kit for this line.
+            } catch (failure: Throwable) {
+                if (failure is Error) marianPoisoned = true
             }
         }
         return mlKitEngine.translate(request)
