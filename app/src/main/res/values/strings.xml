@@ -369,6 +369,8 @@
     <string name="local_ai_section">محرك الذكاء الاصطناعي المحلي</string>
     <string name="local_ai_wifi_only">تحميل النماذج عبر Wi-Fi فقط</string>
     <string name="local_ai_wifi_only_hint">على بيانات الموبايل هيسألك الأول بدل ما يستهلك الباقة</string>
+    <string name="local_ai_gemma_hd">محرك الجودة العالية TranslateGemma (متقدم)</string>
+    <string name="local_ai_gemma_hd_hint">نموذج 2GB أقوى لكنه أثقل. بيشتغل بس لما تفعّله والجهاز مش سخن، وإلا بيفضل Marian الأساسي</string>
     <string name="local_ai_auto_fallback">السماح بالرجوع لـ Gemini في الوضع التلقائي</string>
     <string name="local_ai_auto_fallback_hint">لو المحرك المحلي فشل في سطر، يجرب Gemini بشرط وجود مفتاح وموافقة السحابة</string>
     <string name="local_ai_license">الترخيص: %1$s</string>
