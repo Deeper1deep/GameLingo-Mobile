@@ -20,6 +20,7 @@ class LocalEngineChainTest {
         var available: Boolean,
         var answer: String = "ترجمة",
         var failure: Exception? = null,
+        var fatal: Error? = null,
     ) : LocalAiCandidate {
         var calls = 0
             private set
@@ -32,6 +33,7 @@ class LocalEngineChainTest {
 
         override suspend fun translate(request: TranslationRequest): TranslationResult {
             calls++
+            fatal?.let { throw it }
             failure?.let { throw it }
             return TranslationResult(translatedText = answer, engineId = engineId)
         }
@@ -161,5 +163,68 @@ class LocalEngineChainTest {
         chain.close()
         assertTrue(gemma.closed)
         assertTrue(marian.closed)
+    }
+
+    @Test
+    fun `marian Error degrades to mlkit and poisons marian for the session`() = runTest {
+        val marian = FakeCandidate(
+            LocalAiTranslationEngine.ENGINE_ID,
+            available = true,
+            fatal = OutOfMemoryError("native oom"),
+        )
+        val (triple, mlKit) = chain(marian = marian)
+        val (chain, _, marianRef) = triple
+        val first = chain.translate(TranslationRequest(text = "line one"))
+        assertEquals(MlKitTranslationEngine.ENGINE_ID, first.engineId)
+        assertEquals(1, marianRef.calls)
+        // Poisoned: later lines never touch the broken native engine again.
+        val second = chain.translate(TranslationRequest(text = "line two"))
+        assertEquals(MlKitTranslationEngine.ENGINE_ID, second.engineId)
+        assertEquals(1, marianRef.calls)
+        assertEquals(MlKitTranslationEngine.ENGINE_ID, chain.plannedLocalEngineId())
+        assertEquals(2, mlKit.calls)
+    }
+
+    @Test
+    fun `gemma Error degrades to marian and poisons gemma`() = runTest {
+        val gemma = FakeCandidate(
+            TranslateGemmaEngine.ENGINE_ID,
+            available = true,
+            fatal = UnsatisfiedLinkError("no litertlm"),
+        )
+        val marian = FakeCandidate(LocalAiTranslationEngine.ENGINE_ID, available = true, answer = "مصري")
+        val (triple, _) = chain(gemma = gemma, marian = marian)
+        val (chain, gemmaRef, marianRef) = triple
+        val result = chain.translate(TranslationRequest(text = "line"))
+        assertEquals("مصري", result.translatedText)
+        assertEquals(LocalAiTranslationEngine.ENGINE_ID, result.engineId)
+        assertEquals(1, gemmaRef.calls)
+        assertEquals(LocalAiTranslationEngine.ENGINE_ID, chain.plannedLocalEngineId())
+        chain.translate(TranslationRequest(text = "line again"))
+        assertEquals(1, gemmaRef.calls)
+        assertEquals(2, marianRef.calls)
+    }
+
+    @Test
+    fun `plain Exception degrades without poisoning the engine`() = runTest {
+        val marian = FakeCandidate(
+            LocalAiTranslationEngine.ENGINE_ID,
+            available = true,
+            failure = IOException("transient"),
+        )
+        val (triple, _) = chain(marian = marian)
+        val (chain, _, marianRef) = triple
+        chain.translate(TranslationRequest(text = "one"))
+        chain.translate(TranslationRequest(text = "two"))
+        // Not poisoned: a transient failure is retried on the next line.
+        assertEquals(2, marianRef.calls)
+    }
+
+    @Test
+    fun `translategemma memory gate refuses when free RAM is too low`() {
+        val model = 2_011_201_536L
+        assertFalse(TranslateGemmaEngine.hasEnoughMemory(model + 500_000_000L, model))
+        assertTrue(TranslateGemmaEngine.hasEnoughMemory(model + 2_000_000_000L, model))
+        assertFalse(TranslateGemmaEngine.hasEnoughMemory(0L, model))
     }
 }
