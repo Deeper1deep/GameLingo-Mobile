@@ -2,6 +2,7 @@ package com.gamelingo.mobile.translate
 
 import com.gamelingo.mobile.data.settings.AiMode
 import com.gamelingo.mobile.data.settings.AppSettings
+import com.gamelingo.mobile.translate.local.LocalAiRouter
 import java.io.IOException
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
@@ -33,6 +34,51 @@ class HybridTranslationEngineTest {
         override fun close() = Unit
     }
 
+    /** Fake local router: no downloadable AI model unless the test installs one. */
+    private class FakeLocalRouter(
+        private val delegate: TranslationEngine,
+        var hasModel: Boolean = false,
+        var failure: Exception? = null,
+    ) : LocalAiRouter {
+        var calls = 0
+            private set
+
+        override fun hasLocalAiModel(): Boolean = hasModel
+
+        override fun plannedLocalEngineId(): String = delegate.engineId
+
+        override suspend fun translate(request: TranslationRequest): TranslationResult {
+            calls++
+            failure?.let { throw it }
+            return delegate.translate(request)
+        }
+
+        override fun close() = Unit
+    }
+
+    private fun hybridEngine(
+        mode: AiMode,
+        apiKey: String = "key",
+        optIn: Boolean = true,
+        online: StubEngine = StubEngine("gemini-flash-lite"),
+        local: StubEngine = StubEngine("mlkit-ondevice"),
+        router: FakeLocalRouter = FakeLocalRouter(local),
+        autoOnlineFallback: Boolean = false,
+    ): HybridTranslationEngine {
+        val settings = FakeSettingsRepository(
+            AppSettings(
+                aiMode = mode,
+                onlineApiKey = apiKey,
+                cloudTranslationOptIn = optIn,
+                autoOnlineFallback = autoOnlineFallback,
+            ),
+        )
+        val engine = HybridTranslationEngine(online, local, router, settings)
+        // Deterministic backoff: no random jitter in tests.
+        engine.jitter = { 0 }
+        return engine
+    }
+
     private fun hybrid(
         mode: AiMode,
         apiKey: String = "key",
@@ -40,16 +86,7 @@ class HybridTranslationEngineTest {
         online: StubEngine = StubEngine("gemini-flash-lite"),
         local: StubEngine = StubEngine("mlkit-ondevice"),
     ): Triple<HybridTranslationEngine, StubEngine, StubEngine> {
-        val settings = FakeSettingsRepository(
-            AppSettings(
-                aiMode = mode,
-                onlineApiKey = apiKey,
-                cloudTranslationOptIn = optIn,
-            ),
-        )
-        val engine = HybridTranslationEngine(online, local, settings)
-        // Deterministic backoff: no random jitter in tests.
-        engine.jitter = { 0 }
+        val engine = hybridEngine(mode, apiKey, optIn, online, local)
         return Triple(engine, online, local)
     }
 
@@ -218,7 +255,8 @@ class HybridTranslationEngineTest {
         val settings = FakeSettingsRepository(
             AppSettings(aiMode = AiMode.ONLINE, onlineApiKey = "key", cloudTranslationOptIn = true),
         )
-        val engine2 = HybridTranslationEngine(healed, StubEngine("mlkit-ondevice"), settings)
+        val stub2 = StubEngine("mlkit-ondevice")
+        val engine2 = HybridTranslationEngine(healed, stub2, FakeLocalRouter(stub2), settings)
         engine2.sleep = { }
         val result = engine2.translate(TranslationRequest(text = "hi"))
         assertEquals("gemini-flash-lite", result.engineId)
@@ -301,5 +339,100 @@ class HybridTranslationEngineTest {
             .exceptionOrNull()
         assertTrue(thrown is CancellationException)
         assertEquals(0, local.calls)
+    }
+
+    @Test
+    fun `AUTO with a local AI model answers locally without touching online`() = runTest {
+        val online = StubEngine("gemini-flash-lite")
+        val local = StubEngine("translategemma-4b-v1")
+        val router = FakeLocalRouter(local, hasModel = true)
+        val engine = hybridEngine(AiMode.AUTO, online = online, local = local, router = router)
+        val result = engine.translate(TranslationRequest(text = "hi"))
+        assertEquals("translategemma-4b-v1", result.engineId)
+        assertEquals(1, router.calls)
+        assertEquals(0, online.calls)
+    }
+
+    @Test
+    fun `AUTO local-first failure stays local when the user disabled online fallback`() = runTest {
+        val online = StubEngine("gemini-flash-lite")
+        val local = StubEngine("translategemma-4b-v1")
+        val router = FakeLocalRouter(local, hasModel = true, failure = IOException("model crashed"))
+        val engine = hybridEngine(
+            AiMode.AUTO, online = online, local = local, router = router,
+            autoOnlineFallback = false,
+        )
+        val thrown = runCatching { engine.translate(TranslationRequest(text = "hi")) }
+            .exceptionOrNull()
+        assertTrue(thrown is IOException)
+        assertEquals(0, online.calls)
+    }
+
+    @Test
+    fun `AUTO local-first falls back online only under the user-enabled policy`() = runTest {
+        val online = StubEngine("gemini-flash-lite", answer = "ترجمة سحابية")
+        val local = StubEngine("translategemma-4b-v1")
+        val router = FakeLocalRouter(local, hasModel = true, failure = IOException("model crashed"))
+        val engine = hybridEngine(
+            AiMode.AUTO, online = online, local = local, router = router,
+            autoOnlineFallback = true,
+        )
+        engine.sleep = { }
+        val result = engine.translate(TranslationRequest(text = "hi"))
+        assertEquals("gemini-flash-lite", result.engineId)
+        assertEquals(1, online.calls)
+    }
+
+    @Test
+    fun `AUTO local-first fallback respects the cloud consent gate`() = runTest {
+        val online = StubEngine("gemini-flash-lite")
+        val local = StubEngine("translategemma-4b-v1")
+        val router = FakeLocalRouter(local, hasModel = true, failure = IOException("model crashed"))
+        val engine = hybridEngine(
+            AiMode.AUTO, optIn = false, online = online, local = local, router = router,
+            autoOnlineFallback = true,
+        )
+        val thrown = runCatching { engine.translate(TranslationRequest(text = "hi")) }
+            .exceptionOrNull()
+        // No cloud consent: the local failure surfaces, online stays untouched.
+        assertTrue(thrown is IOException)
+        assertEquals(0, online.calls)
+    }
+
+    @Test
+    fun `LOCAL mode routes through the local chain`() = runTest {
+        val online = StubEngine("gemini-flash-lite")
+        val local = StubEngine("local-ai-v1")
+        val router = FakeLocalRouter(local, hasModel = true)
+        val engine = hybridEngine(AiMode.LOCAL, online = online, local = local, router = router)
+        val result = engine.translate(TranslationRequest(text = "hi"))
+        assertEquals("local-ai-v1", result.engineId)
+        assertEquals(1, router.calls)
+        assertEquals(0, online.calls)
+    }
+
+    @Test
+    fun `plannedEngineId reflects the installed local AI model in AUTO and LOCAL`() = runTest {
+        val local = StubEngine("translategemma-4b-v1")
+        val router = FakeLocalRouter(local, hasModel = true)
+        val engine = hybridEngine(AiMode.AUTO, local = local, router = router)
+        assertEquals("translategemma-4b-v1", engine.plannedEngineId())
+        val engineLocal = hybridEngine(AiMode.LOCAL, local = local, router = router)
+        assertEquals("translategemma-4b-v1", engineLocal.plannedEngineId())
+    }
+
+    @Test
+    fun `AUTO local-first never swallows cancellation`() = runTest {
+        val online = StubEngine("gemini-flash-lite")
+        val local = StubEngine("translategemma-4b-v1")
+        val router = FakeLocalRouter(local, hasModel = true, failure = CancellationException("stale"))
+        val engine = hybridEngine(
+            AiMode.AUTO, online = online, local = local, router = router,
+            autoOnlineFallback = true,
+        )
+        val thrown = runCatching { engine.translate(TranslationRequest(text = "hi")) }
+            .exceptionOrNull()
+        assertTrue(thrown is CancellationException)
+        assertEquals(0, online.calls)
     }
 }
