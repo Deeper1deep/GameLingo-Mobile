@@ -30,6 +30,11 @@ class UpdateViewModel @Inject constructor(
         viewModelScope.launch { repository.checkNow() }
     }
 
+    /** User-triggered "Check for updates" from the Update Center. */
+    fun checkNow() {
+        viewModelScope.launch { repository.checkNow() }
+    }
+
     fun startDownload(release: LatestRelease, mandatory: Boolean) {
         viewModelScope.launch { repository.downloadAndVerify(release, mandatory) }
     }

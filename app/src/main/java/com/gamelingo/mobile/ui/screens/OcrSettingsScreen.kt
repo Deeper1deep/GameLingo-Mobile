@@ -1,27 +1,135 @@
 package com.gamelingo.mobile.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gamelingo.mobile.R
+import com.gamelingo.mobile.core.session.SessionState
 import com.gamelingo.mobile.data.settings.SettingsConstraints
 import com.gamelingo.mobile.data.settings.TextRegionPreset
+import com.gamelingo.mobile.ui.components.GlCard
+import com.gamelingo.mobile.ui.components.GlTextButton
+import com.gamelingo.mobile.ui.components.HintText
 import com.gamelingo.mobile.ui.components.RadioGroupCard
 import com.gamelingo.mobile.ui.components.SectionHeader
 import com.gamelingo.mobile.ui.components.SettingsColumn
 import com.gamelingo.mobile.ui.components.SliderCard
+import com.gamelingo.mobile.ui.components.StatusChip
+import com.gamelingo.mobile.ui.components.StatusTone
 import com.gamelingo.mobile.ui.components.SwitchCard
+import com.gamelingo.mobile.ui.navigation.SessionViewModel
 import com.gamelingo.mobile.ui.navigation.SettingsViewModel
+import com.gamelingo.mobile.ui.system.rememberSessionController
+import com.gamelingo.mobile.ui.theme.GlColors
+import com.gamelingo.mobile.ui.theme.GlShapes
+import com.gamelingo.mobile.ui.theme.GlSpacing
 import kotlin.math.roundToInt
 
 @Composable
 fun OcrSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
+    sessionViewModel: SessionViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    val sessionState by sessionViewModel.sessionState.collectAsStateWithLifecycle()
+    val controller = rememberSessionController()
+    val region = if (settings.restrictToTextRegion) {
+        settings.effectiveRegion
+    } else {
+        SettingsConstraints.FULL_SCREEN_REGION
+    }
+
     SettingsColumn {
+        // Real status of the capture pipeline and its permissions
+        SectionHeader(stringResource(R.string.ocr_status_title))
+        GlCard {
+            Text(
+                text = stringResource(R.string.ocr_projection),
+                style = MaterialTheme.typography.labelMedium,
+                color = GlColors.TextSecondary,
+            )
+            StatusChip(
+                label = stringResource(
+                    when (sessionState) {
+                        SessionState.RUNNING -> R.string.ocr_projection_active
+                        SessionState.STOPPED -> R.string.ocr_projection_inactive
+                        SessionState.ERROR -> R.string.ocr_projection_error
+                    },
+                ),
+                tone = when (sessionState) {
+                    SessionState.RUNNING -> StatusTone.Success
+                    SessionState.STOPPED -> StatusTone.Neutral
+                    SessionState.ERROR -> StatusTone.Error
+                },
+                pulsing = sessionState == SessionState.RUNNING,
+                modifier = Modifier.padding(top = GlSpacing.xs, bottom = GlSpacing.md),
+            )
+            Text(
+                text = stringResource(R.string.ocr_permissions_title),
+                style = MaterialTheme.typography.labelMedium,
+                color = GlColors.TextSecondary,
+            )
+            PermissionStateRow(
+                title = stringResource(R.string.perm_overlay),
+                granted = controller.permissions.overlayGranted,
+                actionLabel = stringResource(R.string.settings_permissions_manage),
+                onAction = controller.openOverlaySettings,
+            )
+            PermissionStateRow(
+                title = stringResource(R.string.perm_notifications),
+                granted = controller.permissions.notificationsGranted,
+                actionLabel = stringResource(R.string.perm_grant),
+                onAction = controller.requestNotifications,
+            )
+        }
+
+        // Where on the screen the OCR looks (driven by the real settings)
+        SectionHeader(stringResource(R.string.ocr_region_preview_title))
+        GlCard {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                RegionPreview(top = region.top, bottom = region.bottom)
+                Text(
+                    text = if (!settings.restrictToTextRegion) {
+                        stringResource(R.string.ocr_region_preview_off)
+                    } else if (region.top <= 0f && region.bottom >= 1f) {
+                        stringResource(R.string.ocr_region_preview_full)
+                    } else {
+                        stringResource(
+                            R.string.ocr_region_preview_band,
+                            (region.top * 100).roundToInt(),
+                            (region.bottom * 100).roundToInt(),
+                        )
+                    },
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = GlColors.TextPrimary,
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(start = GlSpacing.lg),
+                )
+            }
+        }
+
         SliderCard(
             title = stringResource(R.string.ocr_capture_interval),
             valueLabel = stringResource(
@@ -111,5 +219,58 @@ fun OcrSettingsScreen(
             checked = settings.batterySaverEnabled,
             onCheckedChange = viewModel::setBatterySaverEnabled,
         )
+    }
+}
+
+@Composable
+private fun PermissionStateRow(
+    title: String,
+    granted: Boolean,
+    actionLabel: String,
+    onAction: () -> Unit,
+) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = title,
+            style = MaterialTheme.typography.bodyMedium,
+            color = GlColors.TextPrimary,
+            modifier = Modifier.weight(1f),
+        )
+        if (granted) {
+            StatusChip(label = stringResource(R.string.perm_granted), tone = StatusTone.Success)
+        } else {
+            GlTextButton(text = actionLabel, onClick = onAction)
+        }
+    }
+}
+
+/** A tiny phone outline with the scanned band highlighted. */
+@Composable
+private fun RegionPreview(top: Float, bottom: Float) {
+    val topWeight = top.coerceIn(0f, 1f)
+    val bandWeight = (bottom - top).coerceIn(0.01f, 1f)
+    val bottomWeight = (1f - bottom).coerceIn(0f, 1f)
+    Box(
+        modifier = Modifier
+            .width(72.dp)
+            .height(128.dp)
+            .clip(GlShapes.Small)
+            .background(GlColors.Background)
+            .border(2.dp, GlColors.OutlineStrong, GlShapes.Small),
+    ) {
+        Column(modifier = Modifier.fillMaxSize()) {
+            if (topWeight > 0.001f) Spacer(Modifier.weight(topWeight))
+            Box(
+                modifier = Modifier
+                    .weight(bandWeight)
+                    .fillMaxWidth()
+                    .background(GlColors.Secondary.copy(alpha = 0.28f))
+                    .border(1.dp, GlColors.Secondary),
+            )
+            if (bottomWeight > 0.001f) Spacer(Modifier.weight(bottomWeight))
+        }
     }
 }
