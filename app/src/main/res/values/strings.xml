@@ -398,6 +398,15 @@
     <string name="diag_none">لسه</string>
     <string name="overlay_stop">✕ إيقاف</string>
     <string name="overlay_stop_cd">إيقاف جلسة الترجمة</string>
+    <string name="overlay_stop_hint">اضغط مطوّلًا للإيقاف</string>
+    <string name="overlay_stop_hint_cd">إظهار تلميح الإيقاف المطوّل</string>
+    <string name="diag_last_stop">آخر إيقاف</string>
+    <string name="diag_stop_fmt">%1$s (%2$s)</string>
+    <string name="diag_stop_user">ضغطة على زرار الإيقاف</string>
+    <string name="diag_stop_projection">النظام أنهى مشاركة الشاشة</string>
+    <string name="diag_stop_service">النظام قفل خدمة الالتقاط</string>
+    <string name="diag_stop_error">إيقاف بعد خطأ</string>
+    <string name="diag_stop_unknown">سبب غير معروف</string>
     <string name="local_ai_gemma_hd">محرك الجودة العالية TranslateGemma (متقدم)</string>
     <string name="local_ai_gemma_hd_hint">نموذج 2GB أقوى لكنه أثقل. بيشتغل بس لما تفعّله والجهاز مش سخن، وإلا بيفضل Marian الأساسي</string>
     <string name="local_ai_auto_fallback">السماح بالرجوع لـ Gemini في الوضع التلقائي</string>
