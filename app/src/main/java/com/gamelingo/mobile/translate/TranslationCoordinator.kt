@@ -71,6 +71,15 @@ class TranslationCoordinator @Inject constructor(
             // subtitle lines under fast dialogue. The UI keeps latestLine;
             // the pipeline gets every line.
             TranslationSessionBus.ocrLines.collect { line ->
+                // Lines buffered by a previous session (stop then a quick
+                // restart) belong to that session: never translate them into
+                // the new one.
+                val startedAt = TranslationSessionBus.startedAtMillis.value
+                if (TranslationSessionBus.state.value != SessionState.RUNNING ||
+                    (startedAt != null && line.capturedAtMillis < startedAt)
+                ) {
+                    return@collect
+                }
                 translationWorker.enqueue(line.text, line.capturedAtMillis)
             }
         }
@@ -118,6 +127,11 @@ class TranslationCoordinator @Inject constructor(
             modelVersion = installedVersionFor(plannedEngine),
             dictionaryVersion = dictionaryHolder.get().version,
             understandingVersion = understandingHolder.get().version,
+            // The user's pinned terms change the prompt, so they are part of
+            // the cache key: adding or editing a term never serves old lines.
+            glossarySignature = CacheContext.glossarySignatureOf(
+                settings.userGlossaryTerms.map { it.en to it.ar },
+            ),
         )
 
         if (settings.cacheEnabled) {
@@ -152,7 +166,7 @@ class TranslationCoordinator @Inject constructor(
                         // the prompt instead of guessing them. Mode-aware:
                         // the Egyptian layer never reaches an MSA prompt and
                         // vice versa.
-                        glossary = dictionaryHolder.get().glossaryTerms(request.text, arabicMode),
+                        glossary = mergedGlossary(request.text, arabicMode, settings),
                         arabicMode = arabicMode,
                         // Non-literal expressions as meaning hints for
                         // prompt-capable engines; empty for plain lines.
@@ -258,7 +272,7 @@ class TranslationCoordinator @Inject constructor(
     }
 
     private fun isLocalFallback(mode: AiMode, actualEngineId: String): Boolean =
-        mode != AiMode.LOCAL && actualEngineId == MlKitTranslationEngine.ENGINE_ID
+        mode != AiMode.LOCAL && baseEngineId(actualEngineId) == MlKitTranslationEngine.ENGINE_ID
 
     /** Tell the user when the engine that answered is not the one they picked. */
     private fun publishEngineNotice(mode: AiMode, actualEngineId: String) {

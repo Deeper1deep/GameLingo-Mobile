@@ -43,7 +43,7 @@ data class CacheContext(
      */
     fun accepts(engineId: String): Boolean = when (aiMode) {
         AiMode.AUTO -> true
-        AiMode.ONLINE, AiMode.LOCAL -> engineId == plannedEngineId
+        AiMode.ONLINE, AiMode.LOCAL -> baseEngineId(engineId) == plannedEngineId
     }
 
     companion object {
@@ -56,6 +56,22 @@ data class CacheContext(
          * serve a translation computed under the WRONG context. Use 64 bits
          * of SHA-256 over length-prefixed lines instead.
          */
+        fun glossarySignatureOf(terms: List<Pair<String, String>>): Long {
+            if (terms.isEmpty()) return 0L
+            val digest = java.security.MessageDigest.getInstance("SHA-256")
+            // Order-independent: the same set of pinned terms always hashes the same.
+            for ((en, ar) in terms.sortedBy { it.first.lowercase() }) {
+                digest.update(en.trim().lowercase().toByteArray(Charsets.UTF_8))
+                digest.update(0)
+                digest.update(ar.trim().toByteArray(Charsets.UTF_8))
+                digest.update(1)
+            }
+            val hash = digest.digest()
+            var out = 0L
+            for (i in 0 until 8) out = (out shl 8) or (hash[i].toLong() and 0xFF)
+            return if (out == 0L) 1L else out
+        }
+
         fun signatureOf(contextLines: List<String>): Long {
             if (contextLines.isEmpty()) return 0L
             val digest = java.security.MessageDigest.getInstance("SHA-256")

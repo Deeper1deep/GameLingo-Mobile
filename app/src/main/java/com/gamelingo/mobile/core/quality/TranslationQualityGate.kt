@@ -38,8 +38,19 @@ object TranslationQualityGate {
 
     // Arabic negation particles: standalone words, not substrings of other words.
     private val ARABIC_NEGATION = Regex(
-        """(?<![\p{IsArabic}])(لا|لم|لن|ليس|ليست|مش|ما|بدون|دون|غير|مستحيل|أبدًا|ابدًا)(?![\p{IsArabic}])""",
+        """(?<![\p{IsArabic}])(لا|لم|لن|ليس|ليست|مش|بدون|دون|غير|مستحيل|أبدًا|ابدًا)(?![\p{IsArabic}])""",
     )
+
+    // "ما" is both a negation particle and the question word ("ما الذي ..."),
+    // so it only counts as negation when the line is not a "ما ...؟" question.
+    private val ARABIC_MA = Regex("""(?<![\p{IsArabic}])ما(?![\p{IsArabic}])""")
+
+    private fun hasArabicNegation(text: String): Boolean {
+        if (ARABIC_NEGATION.containsMatchIn(text)) return true
+        val trimmed = text.trim()
+        val isMaQuestion = trimmed.startsWith("ما ") && (trimmed.endsWith("؟") || trimmed.endsWith("?"))
+        return ARABIC_MA.containsMatchIn(text) && !isMaQuestion
+    }
 
     fun inspect(source: String, translation: String): Inspection {
         val issues = mutableListOf<Issue>()
@@ -51,15 +62,22 @@ object TranslationQualityGate {
         if (asksQuestion && !answersQuestion) {
             issues += Issue.QUESTION_MARK_LOST
             // Safe local fix: restore the question mark the engine dropped.
-            text = text.trimEnd().trimEnd('.', '。') + "؟"
+            val trimmed = text.trimEnd()
+            text = if (trimmed.endsWith("!")) {
+                trimmed.trimEnd('!', '.', '。') + "؟!"
+            } else {
+                trimmed.trimEnd('.', '。', '…') + "؟"
+            }
             corrected = true
         }
 
-        if (ENGLISH_NEGATION.containsMatchIn(source) && !ARABIC_NEGATION.containsMatchIn(text)) {
+        if (ENGLISH_NEGATION.containsMatchIn(source) && !hasArabicNegation(text)) {
             issues += Issue.NEGATION_LOST
         }
 
-        if (text.trim().equals(source.trim(), ignoreCase = true)) {
+        // A single-word source (a name, "OK") legitimately stays the same.
+        val multiWord = source.trim().split(Regex("\\s+")).size >= 2
+        if (multiWord && text.trim().equals(source.trim(), ignoreCase = true)) {
             issues += Issue.UNTRANSLATED
         }
 

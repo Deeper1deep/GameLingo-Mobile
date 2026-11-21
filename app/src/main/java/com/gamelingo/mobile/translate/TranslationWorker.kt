@@ -317,6 +317,7 @@ class TranslationWorker(
     private fun classify(error: Exception): RequestState = when (error) {
         is QuotaExceededException -> RequestState.RATE_LIMITED
         is ApiAuthException, is OnlineNotConfiguredException -> RequestState.AUTH_ERROR
+        is ProviderRefusedException -> RequestState.PROVIDER_REFUSED
         is ProviderUnavailableException, is IOException -> RequestState.NETWORK_ERROR
         is com.gamelingo.mobile.translate.local.LocalAiTranslationEngine.ModelNotInstalledException,
         is com.gamelingo.mobile.translate.local.TranslateGemmaEngine.ModelNotInstalledException,

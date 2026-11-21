@@ -6,6 +6,9 @@ import com.gamelingo.mobile.R
 import com.gamelingo.mobile.core.status.EngineReadiness
 import com.gamelingo.mobile.core.status.SessionPhase
 import com.gamelingo.mobile.translate.GeminiTranslationEngine
+import com.gamelingo.mobile.translate.baseEngineId
+import com.gamelingo.mobile.translate.local.LocalAiTranslationEngine
+import com.gamelingo.mobile.translate.local.TranslateGemmaEngine
 import com.gamelingo.mobile.translate.MlKitTranslationEngine
 import com.gamelingo.mobile.ui.components.StatusTone
 
@@ -74,8 +77,10 @@ fun engineReadinessTone(readiness: EngineReadiness): StatusTone = when (readines
 
 /** Human name of the engine id recorded with a translation. */
 @Composable
-fun engineIdLabel(engineId: String): String = when (engineId) {
+fun engineIdLabel(engineId: String): String = when (baseEngineId(engineId)) {
     GeminiTranslationEngine.ENGINE_ID -> stringResource(R.string.engine_label_online)
     MlKitTranslationEngine.ENGINE_ID -> stringResource(R.string.engine_label_local)
+    LocalAiTranslationEngine.ENGINE_ID -> stringResource(R.string.engine_label_marian)
+    TranslateGemmaEngine.ENGINE_ID -> stringResource(R.string.engine_label_gemma)
     else -> stringResource(R.string.engine_label_other, engineId)
 }

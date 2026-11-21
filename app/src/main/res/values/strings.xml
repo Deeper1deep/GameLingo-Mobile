@@ -243,6 +243,8 @@
     <string name="session_overlay_hint">النافذة العائمة بتظهر فوق اللعبة طول ما الجلسة شغّالة، وتقدر تحركها بإيدك.</string>
     <string name="engine_label_online">Gemini (أونلاين)</string>
     <string name="engine_label_local">ML Kit (محلي)</string>
+    <string name="engine_label_marian">Marian (محلي)</string>
+    <string name="engine_label_gemma">Gemma (محلي)</string>
     <string name="engine_label_other">%1$s</string>
 
     <!-- Settings hub -->
