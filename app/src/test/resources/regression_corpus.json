@@ -1688,7 +1688,7 @@
         "hold to heal"
       ],
       "expect_msa_tokens": [
-        "حقيبة الإسعافات",
+        "حقيبة إسعافات",
         "اضغط مطوّلًا للعلاج"
       ],
       "expect_egy_tokens": [],
@@ -2125,7 +2125,7 @@
       "source": "Pick up a medkit and heal yourself.",
       "detect": [],
       "expect_msa_tokens": [
-        "حقيبة الإسعافات"
+        "حقيبة إسعافات"
       ],
       "expect_egy_tokens": [],
       "is_question": null,

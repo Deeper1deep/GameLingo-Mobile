@@ -586,8 +586,8 @@
     {
       "en": "equip health kit",
       "meaning_en": "interface prompt: equip the health kit",
-      "ar_msa": "جهّز حقيبة الإسعافات",
-      "ar_egy": "جهّز حقيبة الإسعافات"
+      "ar_msa": "جهّز حقيبة إسعافات",
+      "ar_egy": "جهّز حقيبة إسعافات"
     },
     {
       "en": "what's the plan",
