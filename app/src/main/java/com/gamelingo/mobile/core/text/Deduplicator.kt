@@ -27,11 +27,24 @@ class Deduplicator(
         if (previous != null && !expired &&
             TextSimilarity.similarity(key, previous) >= similarityThreshold
         ) {
+            // Still the same text on screen: keep the window sliding so a
+            // line that stays visible (an objective, a tutorial hint) is not
+            // re-delivered every [expiryMs]. Only text that went away and came
+            // back after the window counts as a genuine repeat.
+            lastDeliveredAt = clock()
             return false
         }
         lastDeliveredKey = key
         lastDeliveredAt = clock()
         return true
+    }
+
+    /**
+     * The screen did not change since the last delivery, so the delivered text
+     * is still on screen: keep it counted as recent.
+     */
+    fun touch() {
+        if (lastDeliveredKey != null) lastDeliveredAt = clock()
     }
 
     fun reset() {

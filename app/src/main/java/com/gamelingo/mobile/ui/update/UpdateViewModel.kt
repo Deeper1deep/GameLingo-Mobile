@@ -26,9 +26,7 @@ class UpdateViewModel @Inject constructor(
         viewModelScope.launch { repository.checkOnce() }
     }
 
-    fun retry() {
-        viewModelScope.launch { repository.checkNow() }
-    }
+    fun retry() = checkNow()
 
     /** User-triggered "Check for updates" from the Update Center. */
     fun checkNow() {

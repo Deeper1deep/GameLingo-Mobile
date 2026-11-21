@@ -187,8 +187,18 @@ private fun SettingsRepository.gemmaOptInFlag(): () -> Boolean {
     val optedIn = java.util.concurrent.atomic.AtomicBoolean(false)
     val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     scope.launch {
-        runCatching { settings.collect { optedIn.set(it.gemmaHdOptIn) } }
-            .onFailure { scope.cancel() }
+        // A failing settings read must not freeze the flag forever: keep the
+        // last known value and resubscribe after a pause.
+        while (true) {
+            try {
+                settings.collect { optedIn.set(it.gemmaHdOptIn) }
+                return@launch
+            } catch (cancelled: kotlinx.coroutines.CancellationException) {
+                throw cancelled
+            } catch (_: Exception) {
+                kotlinx.coroutines.delay(5_000L)
+            }
+        }
     }
     return { optedIn.get() }
 }

@@ -82,7 +82,9 @@ fun HistoryScreen(
     }
 
     val todayKey = dayKey(System.currentTimeMillis())
-    val yesterdayKey = dayKey(System.currentTimeMillis() - 24L * 60L * 60L * 1000L)
+    val yesterdayKey = dayKey(
+        Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, -1) }.timeInMillis,
+    )
     val groups = history.groupBy { dayKey(it.createdAt) }
 
     Column(
@@ -110,7 +112,11 @@ fun HistoryScreen(
             }
         }
         Text(
-            text = stringResource(R.string.home_history_count, totalCount),
+            text = if (query.isBlank() && totalCount > history.size && history.isNotEmpty()) {
+                stringResource(R.string.history_showing_recent, history.size, totalCount)
+            } else {
+                stringResource(R.string.home_history_count, totalCount)
+            },
             style = MaterialTheme.typography.bodySmall,
             color = GlColors.TextSecondary,
         )

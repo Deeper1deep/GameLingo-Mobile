@@ -22,4 +22,7 @@ class SessionViewModel @Inject constructor() : ViewModel() {
     val startedAtMillis: StateFlow<Long?> = TranslationSessionBus.startedAtMillis
     val translatedCount: StateFlow<Int> = TranslationSessionBus.translatedCount
     val sessionError: StateFlow<SessionError?> = TranslationSessionBus.error
+
+    /** Clears the remembered failure reason once the user has seen it. */
+    fun dismissError() = TranslationSessionBus.dismissError()
 }

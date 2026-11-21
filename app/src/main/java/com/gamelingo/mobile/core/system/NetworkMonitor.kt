@@ -53,6 +53,5 @@ class NetworkMonitor @Inject constructor(
     }.distinctUntilChanged()
 
     private fun hasInternet(capabilities: NetworkCapabilities): Boolean =
-        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) &&
-            capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        capabilities.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
 }

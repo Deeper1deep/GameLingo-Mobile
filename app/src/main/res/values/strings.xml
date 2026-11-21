@@ -32,6 +32,7 @@
     <string name="notif_channel_capture">التقاط الشاشة</string>
     <string name="notif_capture_title">GameLingo شغال</string>
     <string name="notif_capture_text">جاري قراءة النص الإنجليزي من الشاشة وترجمته على جهازك.</string>
+    <string name="history_showing_recent">يعرض آخر %1$d من %2$d ترجمة (استخدم البحث للباقي)</string>
     <string name="home_history_count">ترجمة محفوظة: %1$d</string>
     <string name="home_permissions_title">الأذونات المطلوبة</string>
     <string name="home_how_title">إزاي بيشتغل؟</string>
@@ -243,6 +244,7 @@
     <string name="session_overlay_hint">النافذة العائمة بتظهر فوق اللعبة طول ما الجلسة شغّالة، وتقدر تحركها بإيدك.</string>
     <string name="engine_label_online">Gemini (أونلاين)</string>
     <string name="engine_label_local">ML Kit (محلي)</string>
+    <string name="session_error_dismiss">تجاهل</string>
     <string name="engine_label_marian">Marian (محلي)</string>
     <string name="engine_label_gemma">Gemma (محلي)</string>
     <string name="engine_label_other">%1$s</string>
