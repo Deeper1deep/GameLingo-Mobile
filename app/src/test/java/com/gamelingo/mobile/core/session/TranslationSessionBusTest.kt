@@ -1,7 +1,12 @@
 package com.gamelingo.mobile.core.session
 
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.runCurrent
+import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -71,5 +76,35 @@ class TranslationSessionBusTest {
         TranslationSessionBus.dismissError()
         assertNull(TranslationSessionBus.error.value)
         assertEquals(SessionState.STOPPED, TranslationSessionBus.state.value)
+    }
+
+    @Test
+    fun `generation bumps on every start and every stop`() {
+        val before = TranslationSessionBus.currentGeneration()
+        TranslationSessionBus.onSessionStarted()
+        val afterStart = TranslationSessionBus.currentGeneration()
+        TranslationSessionBus.onSessionStopped()
+        val afterStop = TranslationSessionBus.currentGeneration()
+        assertTrue(afterStart > before)
+        assertTrue(afterStop > afterStart)
+    }
+
+    @Test
+    fun `ocrLines sheds the oldest lines and keeps the freshest 64`() = runTest {
+        val received = mutableListOf<OcrLine>()
+        // UNDISPATCHED subscribes before the first emission; a lazily started
+        // collector would miss everything (replay is 0 by design).
+        val collector = launch(start = kotlinx.coroutines.CoroutineStart.UNDISPATCHED) {
+            TranslationSessionBus.ocrLines.collect { received.add(it) }
+        }
+        // Emit faster than the collector drains: the buffer saturates and the
+        // stalest lines are shed, never the fresh ones.
+        repeat(100) { i -> TranslationSessionBus.onNewLine("line-$i", i.toLong()) }
+        runCurrent()
+        collector.cancelAndJoin()
+
+        assertEquals(64, received.size)
+        assertEquals("line-36", received.first().text)
+        assertEquals("line-99", received.last().text)
     }
 }
