@@ -1,0 +1,92 @@
+[
+  {
+    "case": "1",
+    "source": "Yeah, see you around.",
+    "raw_marian": "نعم، أراك في الجوار",
+    "idiom_replacement": null,
+    "gate_issues": [],
+    "gate_corrected": false,
+    "after": "نعم، أراك في الجوار",
+    "engine_ms": 319.7,
+    "postprocess_us": 41.8
+  },
+  {
+    "case": "2",
+    "source": "Good man. Hey, you stay out of trouble, alright?",
+    "raw_marian": "يا رجل جيد، أنت ابتعد عن المشاكل، حسناً؟",
+    "idiom_replacement": null,
+    "gate_issues": [],
+    "gate_corrected": false,
+    "after": "يا رجل جيد، أنت ابتعد عن المشاكل، حسناً؟",
+    "engine_ms": 663.0,
+    "postprocess_us": 31.7
+  },
+  {
+    "case": "3",
+    "source": "Military's gonna be out in force soon.",
+    "raw_marian": "الجيش سيكون خارج القوة قريباً",
+    "idiom_replacement": null,
+    "gate_issues": [],
+    "gate_corrected": false,
+    "after": "الجيش سيكون خارج القوة قريباً",
+    "engine_ms": 338.4,
+    "postprocess_us": 27.0
+  },
+  {
+    "case": "4",
+    "source": "The truth. I got no idea where he's hiding.",
+    "raw_marian": "الحقيقة، ليس لديّ أدنى فكرة أين يختبئ",
+    "idiom_replacement": null,
+    "gate_issues": [],
+    "gate_corrected": false,
+    "after": "الحقيقة، ليس لديّ أدنى فكرة أين يختبئ",
+    "engine_ms": 563.9,
+    "postprocess_us": 225.0
+  },
+  {
+    "case": "5",
+    "source": "Well, what did you tell her?",
+    "raw_marian": "حسناً، ماذا أخبرتها؟",
+    "idiom_replacement": null,
+    "gate_issues": [],
+    "gate_corrected": false,
+    "after": "حسناً، ماذا أخبرتها؟",
+    "engine_ms": 341.6,
+    "postprocess_us": 27.1
+  },
+  {
+    "case": "6",
+    "source": "You think she'd tell me?",
+    "raw_marian": "هل تعتقد أنها ستخبرني؟",
+    "idiom_replacement": "أتظن أنها ستخبرني",
+    "gate_issues": [
+      "QUESTION_MARK_LOST"
+    ],
+    "gate_corrected": true,
+    "after": "أتظن أنها ستخبرني؟",
+    "engine_ms": 334.9,
+    "postprocess_us": 35.5
+  },
+  {
+    "case": "7",
+    "source": "Marlene? What do the Fireflies need with Robert?",
+    "raw_marian": "ما الذي تحتاجه (الفايرفايرس) مع (روبرت)؟",
+    "idiom_replacement": null,
+    "gate_issues": [],
+    "gate_corrected": false,
+    "after": "ما الذي تحتاجه (الفايرفايرس) مع (روبرت)؟",
+    "engine_ms": 772.1,
+    "postprocess_us": 27.0
+  },
+  {
+    "case": "8",
+    "source": "Uh... Marlene. She's been asking around, trying to find him.",
+    "raw_marian": "(مارلين)، كانت تسأل في الأرجاء، تحاول إيجاده.",
+    "idiom_replacement": null,
+    "gate_issues": [],
+    "gate_corrected": false,
+    "after": "(مارلين)، كانت تسأل في الأرجاء، تحاول إيجاده.",
+    "engine_ms": 777.3,
+    "postprocess_us": 29.4
+  }
+]
