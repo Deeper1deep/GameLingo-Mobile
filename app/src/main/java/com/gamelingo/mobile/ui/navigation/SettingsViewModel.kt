@@ -88,6 +88,9 @@ class SettingsViewModel @Inject constructor(
     fun setGemmaHdOptIn(enabled: Boolean) =
         viewModelScope.launch { repository.setGemmaHdOptIn(enabled) }
 
+    fun setArabicTranslationMode(mode: com.gamelingo.mobile.data.settings.ArabicTranslationMode) =
+        viewModelScope.launch { repository.setArabicTranslationMode(mode) }
+
     // ---- Local AI engine section ----
 
     /** Per-model download/install state for the local AI cards. */
