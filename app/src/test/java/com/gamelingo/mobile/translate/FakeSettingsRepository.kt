@@ -70,6 +70,14 @@ class FakeSettingsRepository(
         state.value = state.value.copy(cloudTranslationOptIn = enabled)
     }
 
+    override suspend fun setAutoOnlineFallback(enabled: Boolean) {
+        state.value = state.value.copy(autoOnlineFallback = enabled)
+    }
+
+    override suspend fun setLocalAiWifiOnly(enabled: Boolean) {
+        state.value = state.value.copy(localAiWifiOnly = enabled)
+    }
+
     override suspend fun setRequestTimeoutSec(seconds: Int) {
         state.value = state.value.copy(requestTimeoutSec = seconds)
     }

@@ -3,6 +3,7 @@ package com.gamelingo.mobile.translate
 import com.gamelingo.mobile.data.settings.AiMode
 import com.gamelingo.mobile.data.settings.AppSettings
 import com.gamelingo.mobile.data.settings.SettingsRepository
+import com.gamelingo.mobile.translate.local.LocalAiRouter
 import java.util.concurrent.atomic.AtomicLong
 import javax.inject.Inject
 import javax.inject.Named
@@ -18,15 +19,19 @@ import kotlinx.coroutines.selects.select
  * Routes translation between the online Gemini engine and the on-device ML
  * Kit engine according to the user's AI mode:
  *
- * - LOCAL: always the on-device engine, never touches the network.
+ * - LOCAL: always the on-device chain (TranslateGemma HD -> Marian fast ->
+ *   ML Kit fallback), never touches the network for translation.
  * - ONLINE: Gemini only. Missing key or cloud consent is a visible
  *   [OnlineNotConfiguredException], never a silent local translation - the
  *   user explicitly asked for online quality and must know it is not ready.
- * - AUTO: Gemini when a key is configured and consent given, on-device
- *   otherwise; online failures fall back to the on-device engine and the
- *   history entry keeps the real engine id. After a quota (429) or
- *   availability (5xx) failure the online engine is skipped for
- *   [cooldownMs], so a burst of subtitle lines cannot hammer a spent quota.
+ * - AUTO with a local AI model installed (offline-first): the local chain is
+ *   primary and does NOT wait for Gemini; an online fallback happens only
+ *   when the user enabled it in settings AND the cloud gate is open.
+ * - AUTO without a local AI model (legacy): Gemini when a key is configured
+ *   and consent given, on-device otherwise; online failures fall back to the
+ *   on-device engine and the history entry keeps the real engine id. After a
+ *   quota (429) or availability (5xx) failure the online engine is skipped
+ *   for [cooldownMs], so a burst of subtitle lines cannot hammer a spent quota.
  *
  * Cancellation is never treated as a failure: a newer subtitle line simply
  * wins. Privacy gate: the online engine only runs when the user both entered
@@ -37,6 +42,7 @@ import kotlinx.coroutines.selects.select
 class HybridTranslationEngine @Inject constructor(
     @Named("online") private val onlineEngine: TranslationEngine,
     @Named("local") private val localEngine: TranslationEngine,
+    private val localChain: LocalAiRouter,
     private val settingsRepository: SettingsRepository,
 ) : TranslationEngine {
 
@@ -82,14 +88,19 @@ class HybridTranslationEngine @Inject constructor(
         val cloudAllowed =
             settings.cloudTranslationOptIn && settings.onlineApiKey.isNotBlank()
         return when (settings.aiMode) {
-            AiMode.LOCAL -> localEngine.translate(request)
+            AiMode.LOCAL -> localChain.translate(request)
             AiMode.ONLINE ->
                 if (cloudAllowed) {
                     translateOnlineWithRetry(request)
                 } else {
                     throw OnlineNotConfiguredException()
                 }
-            AiMode.AUTO -> translateAuto(request, cloudAllowed = cloudAllowed)
+            AiMode.AUTO ->
+                if (localChain.hasLocalAiModel()) {
+                    translateAutoLocalFirst(request, settings, cloudAllowed)
+                } else {
+                    translateAuto(request, cloudAllowed = cloudAllowed)
+                }
         }
     }
 
@@ -107,13 +118,47 @@ class HybridTranslationEngine @Inject constructor(
         val cloudAllowed =
             settings.cloudTranslationOptIn && settings.onlineApiKey.isNotBlank()
         return when (settings.aiMode) {
-            AiMode.LOCAL -> MlKitTranslationEngine.ENGINE_ID
+            AiMode.LOCAL -> localChain.plannedLocalEngineId()
             AiMode.ONLINE ->
                 if (cloudAllowed) GeminiTranslationEngine.ENGINE_ID
-                else MlKitTranslationEngine.ENGINE_ID // never runs: throws instead
+                else localChain.plannedLocalEngineId() // never runs: throws instead
             AiMode.AUTO ->
-                if (cloudAllowed && !inCooldown()) GeminiTranslationEngine.ENGINE_ID
-                else MlKitTranslationEngine.ENGINE_ID
+                if (localChain.hasLocalAiModel()) {
+                    localChain.plannedLocalEngineId()
+                } else if (cloudAllowed && !inCooldown()) {
+                    GeminiTranslationEngine.ENGINE_ID
+                } else {
+                    MlKitTranslationEngine.ENGINE_ID
+                }
+        }
+    }
+
+    /**
+     * Offline-first AUTO: the local chain answers; only a chain-wide failure
+     * (all on-device engines down for this line) may go online, and only when
+     * the user explicitly enabled that policy. A Gemini failure here never
+     * affects the local engines, and the local failure is never hidden.
+     */
+    private suspend fun translateAutoLocalFirst(
+        request: TranslationRequest,
+        settings: AppSettings,
+        cloudAllowed: Boolean,
+    ): TranslationResult {
+        return try {
+            localChain.translate(request)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (localError: Exception) {
+            if (cloudAllowed && settings.autoOnlineFallback && !inCooldown()) {
+                try {
+                    translateOnlineWithRetry(request)
+                } catch (onlineError: Exception) {
+                    coolDownOnlineIfNeeded(onlineError)
+                    throw onlineError
+                }
+            } else {
+                throw localError
+            }
         }
     }
 
@@ -240,6 +285,7 @@ class HybridTranslationEngine @Inject constructor(
     override fun close() {
         onlineEngine.close()
         localEngine.close()
+        localChain.close()
     }
 
     companion object {

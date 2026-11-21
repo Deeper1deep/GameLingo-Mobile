@@ -33,6 +33,14 @@ data class AppSettings(
      * notice instead of silently translating locally.
      */
     val cloudTranslationOptIn: Boolean = false,
+    /**
+     * AUTO mode with a local AI model installed: whether a local failure may
+     * fall back to the online provider. Default false per the offline-first
+     * rule: online fallback only happens under a clear user-controlled policy.
+     */
+    val autoOnlineFallback: Boolean = false,
+    /** Local model downloads prefer Wi-Fi; on mobile data the download asks first. */
+    val localAiWifiOnly: Boolean = true,
     val requestTimeoutSec: Int = SettingsConstraints.DEFAULT_TIMEOUT_SEC,
     val cacheEnabled: Boolean = true,
     val contextLines: Int = SettingsConstraints.DEFAULT_CONTEXT_LINES,
@@ -78,6 +86,8 @@ interface SettingsRepository {
     suspend fun migrateApiKeyIfNeeded()
 
     suspend fun setCloudTranslationOptIn(enabled: Boolean)
+    suspend fun setAutoOnlineFallback(enabled: Boolean)
+    suspend fun setLocalAiWifiOnly(enabled: Boolean)
     suspend fun setRequestTimeoutSec(seconds: Int)
     suspend fun setCacheEnabled(enabled: Boolean)
     suspend fun setContextLines(lines: Int)

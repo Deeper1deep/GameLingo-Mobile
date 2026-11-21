@@ -1,0 +1,48 @@
+{
+  "models": [
+    {
+      "id": "marian-enar",
+      "version": 1,
+      "modelName": "OPUS-MT EN-AR (Marian, int8)",
+      "license": "CC-BY-4.0",
+      "attribution": "OPUS-MT en-ar (Helsinki-NLP), ONNX conversion OptimaMT, CC-BY-4.0",
+      "dialectNote": "Fast lightweight MSA engine; Egyptian comes from the dictionary layer",
+      "files": [
+        {
+          "name": "encoder.onnx",
+          "url": "https://huggingface.co/OptimaMT/en-ar/resolve/main/onnx/encoder_model_quantized.onnx",
+          "sha256": "53c354d87ced44b39085fe8a46a25f09ea4578d442dbce9663f3977228f8a04e",
+          "size": 51773854
+        },
+        {
+          "name": "decoder.onnx",
+          "url": "https://huggingface.co/OptimaMT/en-ar/resolve/main/onnx/decoder_model_merged_quantized.onnx",
+          "sha256": "59308c4ec1a61954badad066c7b85a7876549ec91d0a9b22fa218afd872fb48d",
+          "size": 59077788
+        },
+        {
+          "name": "tokenizer.json",
+          "url": "https://github.com/Deeper1deep/GameLingo-Updates/releases/download/local-models-v1/enar_tokenizer.json",
+          "sha256": "bfd06b380607b64fe0bd6a9a5a1a4a3f5bf0c9a897631c590470df465ebfc932",
+          "size": 1789119
+        }
+      ]
+    },
+    {
+      "id": "translategemma-4b",
+      "version": 1,
+      "modelName": "TranslateGemma 4B IT (int4, LiteRT-LM)",
+      "license": "Gemma Terms of Use",
+      "attribution": "Google TranslateGemma 4B IT, Gemma Terms of Use apply (ai.google.dev/gemma/terms)",
+      "dialectNote": "Promptable LLM translator: the engine that produces realistic Egyptian",
+      "files": [
+        {
+          "name": "model.litertlm",
+          "url": "https://huggingface.co/barakplasma/translategemma-4b-it-android-task-quantized/resolve/main/artifacts/int4-generic/translategemma-4b-it-int4-generic.litertlm",
+          "sha256": "94d2edceddeefe94aeb81fa3446f0b392c91e62f187392e049d4f74b2bb2315b",
+          "size": 2011201536
+        }
+      ]
+    }
+  ]
+}
