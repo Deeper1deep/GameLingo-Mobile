@@ -103,12 +103,14 @@ class TranslationCoordinator @Inject constructor(
         // and must not be published into the new one.
         val generation = TranslationSessionBus.currentGeneration()
         val settings = settingsRepository.settings.first()
+        val arabicMode = settings.arabicTranslationMode
         val contextLines = contextMemory.snapshot().takeLast(settings.contextLines)
         val plannedEngine = hybridEngine.plannedEngineId()
         val cacheContext = CacheContext(
             aiMode = settings.aiMode,
             plannedEngineId = plannedEngine,
-            promptVersion = EgyptianDialectPrompt.PROMPT_VERSION,
+            arabicMode = arabicMode,
+            promptVersion = ArabicStylePrompt.promptVersionFor(arabicMode),
             contextSignature = CacheContext.signatureOf(contextLines),
             // A model or dictionary update changes the output for the same
             // input; key on both so an update never serves pre-update entries.
@@ -118,7 +120,7 @@ class TranslationCoordinator @Inject constructor(
 
         if (settings.cacheEnabled) {
             cache.get(request.text, cacheContext)?.let { hit ->
-                if (isStale(generation)) return ProcessorOutcome(hit.engineId, false)
+                if (!isPublishableNow(generation, arabicMode)) return ProcessorOutcome(hit.engineId, false)
                 publish(
                     original = request.text,
                     result = TranslationResult(
@@ -144,9 +146,12 @@ class TranslationCoordinator @Inject constructor(
                         text = request.text,
                         contextLines = contextLines,
                         // Feed the terminology layer: prompt-capable engines
-                        // (Gemini) render the established Egyptian gaming
-                        // terms into the prompt instead of guessing them.
-                        glossary = dictionaryHolder.get().glossaryTerms(request.text),
+                        // (Gemini) render the established gaming terms into
+                        // the prompt instead of guessing them. Mode-aware:
+                        // the Egyptian layer never reaches an MSA prompt and
+                        // vice versa.
+                        glossary = dictionaryHolder.get().glossaryTerms(request.text, arabicMode),
+                        arabicMode = arabicMode,
                     ),
                 )
             }
@@ -166,7 +171,11 @@ class TranslationCoordinator @Inject constructor(
                     ),
                 )
             }
-            if (!isStale(generation)) {
+            // Mode-change guard: if the user switched Arabic style while
+            // this line was in flight, its old-mode result must not appear
+            // over the new mode. The cache entry is still stored (keyed by
+            // mode, so it only ever serves the mode it belongs to).
+            if (isPublishableNow(generation, arabicMode)) {
                 publish(request.text, result, request.capturedAtMillis)
                 contextMemory.add(request.text)
                 publishEngineNotice(settings.aiMode, result.engineId)
@@ -204,6 +213,20 @@ class TranslationCoordinator @Inject constructor(
     private fun isStale(generation: Long): Boolean =
         TranslationSessionBus.state.value != SessionState.RUNNING ||
             TranslationSessionBus.currentGeneration() != generation
+
+    /** Live form of the pure gate [isPublishable]: session and mode still current. */
+    private suspend fun isPublishableNow(
+        generation: Long,
+        mode: com.gamelingo.mobile.data.settings.ArabicTranslationMode,
+    ): Boolean = isPublishable(
+        sessionRunning = TranslationSessionBus.state.value == SessionState.RUNNING,
+        capturedGeneration = generation,
+        currentGeneration = TranslationSessionBus.currentGeneration(),
+        requestMode = mode,
+        // A fresh settings read is cheap (DataStore caches its state) and
+        // needs no extra observer.
+        currentMode = settingsRepository.settings.first().arabicTranslationMode,
+    )
 
     /** Installed version of the model backing [plannedEngine], or 0 for engines without one. */
     private fun installedVersionFor(plannedEngine: String): Int = when (plannedEngine) {
@@ -251,9 +274,27 @@ class TranslationCoordinator @Inject constructor(
         }
     }
 
-    private companion object {
+    internal companion object {
         const val MAX_CONTEXT_LINES = 20
         const val MILLIS_PER_SECOND = 1_000L
         const val NANOS_PER_MS = 1_000_000L
+
+        /**
+         * Pure publish gate, unit-tested: an in-flight result appears only
+         * when the session that queued it is still current AND the Arabic
+         * style it was built for is still the user's choice. A mode switch
+         * mid-flight drops the old-mode result here instead of showing it
+         * over the new mode.
+         */
+        internal fun isPublishable(
+            sessionRunning: Boolean,
+            capturedGeneration: Long,
+            currentGeneration: Long,
+            requestMode: com.gamelingo.mobile.data.settings.ArabicTranslationMode,
+            currentMode: com.gamelingo.mobile.data.settings.ArabicTranslationMode,
+        ): Boolean =
+            sessionRunning &&
+                capturedGeneration == currentGeneration &&
+                requestMode == currentMode
     }
 }
