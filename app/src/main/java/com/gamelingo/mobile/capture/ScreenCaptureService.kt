@@ -3,6 +3,7 @@ package com.gamelingo.mobile.capture
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
+import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
@@ -22,6 +23,7 @@ import android.os.IBinder
 import android.view.Display
 import android.view.Surface
 import androidx.core.app.NotificationCompat
+import com.gamelingo.mobile.MainActivity
 import com.gamelingo.mobile.R
 import com.gamelingo.mobile.core.capture.BlockDynamicsTracker
 import com.gamelingo.mobile.core.capture.CaptureHealth
@@ -31,6 +33,8 @@ import com.gamelingo.mobile.core.capture.SubtitleBlockScorer
 import com.gamelingo.mobile.core.capture.translated
 import com.gamelingo.mobile.core.capture.FrameChangeDetector
 import com.gamelingo.mobile.core.capture.RegionMapper
+import com.gamelingo.mobile.core.capture.isDeadProjectionError
+import com.gamelingo.mobile.core.session.ResumeRequest
 import com.gamelingo.mobile.core.session.SessionError
 import com.gamelingo.mobile.core.session.TranslationSessionBus
 import com.gamelingo.mobile.core.text.Deduplicator
@@ -158,6 +162,7 @@ class ScreenCaptureService : Service() {
         // guarded releases, so reaching this point means it is safe to run
         // again; clear the flag so the next stop works.
         stopping.set(false)
+        ResumeRequest.onSessionStarting()
 
         val resultCode = intent.getIntExtra(EXTRA_RESULT_CODE, 0)
         val resultData: Intent? =
@@ -214,6 +219,10 @@ class ScreenCaptureService : Service() {
                     // user's own Stop button stops the projection too).
                     if (!stopping.get()) {
                         TranslationSessionBus.onSessionError(SessionError.PROJECTION_ENDED)
+                        // Offer a one-tap way back: the session died under
+                        // the user, so surface a resume notification.
+                        ResumeRequest.onUnexpectedInterruption()
+                        postResumeNotification()
                     }
                     stopCapture(CaptureHealth.StopReasons.PROJECTION_ENDED)
                 }
@@ -293,6 +302,19 @@ class ScreenCaptureService : Service() {
                 // their own, much larger budget (about 12 s of retries at the
                 // default capture interval) before the session is declared
                 // broken.
+                if (isDeadProjectionError(error)) {
+                    // The system already ended this projection: every retry
+                    // will throw the same SecurityException, and only fresh
+                    // user consent can replace it. Treat it exactly like a
+                    // projection-ended callback (which usually follows).
+                    Log.e(TAG, "projection is dead (non-current); ending session", error)
+                    CaptureHealth.onError("display rebuild: ${error.javaClass.simpleName}: ${error.message}")
+                    TranslationSessionBus.onSessionError(SessionError.PROJECTION_ENDED)
+                    ResumeRequest.onUnexpectedInterruption()
+                    postResumeNotification()
+                    stopCapture(CaptureHealth.StopReasons.PROJECTION_ENDED)
+                    return
+                }
                 Log.w(TAG, "display rebuild failed; retrying next tick", error)
                 CaptureHealth.onError("display rebuild: ${error.javaClass.simpleName}: ${error.message}")
                 if (rebuildFailureTracker.onFailure()) {
@@ -610,6 +632,46 @@ class ScreenCaptureService : Service() {
         }
     }
 
+    /**
+     * High-priority "translation stopped, tap to resume" alert. The system
+     * consent dialog cannot be relaunched from a service, so the tap opens
+     * MainActivity with EXTRA_AUTO_RESUME and the home screen re-asks consent
+     * immediately - two taps and the session is back.
+     */
+    private fun postResumeNotification() {
+        runCatching {
+            val manager =
+                getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+            manager.createNotificationChannel(
+                NotificationChannel(
+                    ALERTS_CHANNEL_ID,
+                    getString(R.string.notif_channel_alerts_name),
+                    NotificationManager.IMPORTANCE_HIGH,
+                ).apply {
+                    description = getString(R.string.notif_channel_alerts_desc)
+                },
+            )
+            val launch = Intent(this, MainActivity::class.java)
+                .putExtra(ResumeRequest.EXTRA_AUTO_RESUME, true)
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
+            val pending = PendingIntent.getActivity(
+                this,
+                RESUME_REQUEST_CODE,
+                launch,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+            val notification: Notification = NotificationCompat.Builder(this, ALERTS_CHANNEL_ID)
+                .setSmallIcon(android.R.drawable.ic_media_play)
+                .setContentTitle(getString(R.string.notif_resume_title))
+                .setContentText(getString(R.string.notif_resume_text))
+                .setContentIntent(pending)
+                .setAutoCancel(true)
+                .setPriority(NotificationCompat.PRIORITY_HIGH)
+                .build()
+            manager.notify(RESUME_NOTIFICATION_ID, notification)
+        }.onFailure { Log.w(TAG, "could not post resume notification", it) }
+    }
+
     private fun startForegroundWithNotification() {
         val notificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
@@ -665,6 +727,9 @@ class ScreenCaptureService : Service() {
         const val EXTRA_RESULT_DATA = "extra_result_data"
         private const val TAG = "ScreenCapture"
         private const val CHANNEL_ID = "screen_capture"
+        private const val ALERTS_CHANNEL_ID = "session_alerts"
+        private const val RESUME_NOTIFICATION_ID = 42
+        private const val RESUME_REQUEST_CODE = 4242
 
         /** About 12 s of rebuild retries at the default 600 ms interval. */
         private const val REBUILD_MAX_FAILURES = 20
