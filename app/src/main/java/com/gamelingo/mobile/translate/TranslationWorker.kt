@@ -15,10 +15,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.channels.Channel
 
 /** One subtitle line waiting for or undergoing translation. */
@@ -63,6 +65,7 @@ class TranslationWorker(
     private val dedupWindowMs: Long = DEFAULT_DEDUP_WINDOW_MS,
     private val watchdogIntervalMs: Long = DEFAULT_WATCHDOG_INTERVAL_MS,
     private val stallThresholdMs: Long = DEFAULT_STALL_THRESHOLD_MS,
+    private val maxQueueAgeMs: Long = DEFAULT_MAX_QUEUE_AGE_MS,
     dispatcher: CoroutineDispatcher = Dispatchers.Default,
     private val now: () -> Long = System::currentTimeMillis,
     private val logger: (String) -> Unit = { Log.d(TAG, it) },
@@ -175,6 +178,14 @@ class TranslationWorker(
         try {
             while (currentCoroutineContext().isActive) {
                 val request = synchronized(queueLock) { queue.pollFirst() }
+                if (request != null && now() - request.capturedAtMillis > maxQueueAgeMs) {
+                    // Max Queue Age: a subtitle this old is off screen by the
+                    // time its translation lands. Drop it and take the next
+                    // one; translating it would show stale text over new
+                    // dialogue.
+                    log("dropped #${request.id}: older than maxQueueAgeMs=$maxQueueAgeMs")
+                    continue
+                }
                 if (request == null) {
                     // Wait for the next enqueue's wakeup. The deque is
                     // re-checked before every wait, so a lost or conflated
@@ -262,7 +273,7 @@ class TranslationWorker(
      * dropped with a log line: re-running a poison line would loop the
      * recovery forever.
      */
-    private fun recoverOnce(reason: String) {
+    private suspend fun recoverOnce(reason: String) {
         if (!running.get()) return
         if (!recovering.compareAndSet(false, true)) return
         try {
@@ -272,7 +283,27 @@ class TranslationWorker(
             if (dropped != null) {
                 log("dropped stuck request #${dropped.id} during recovery")
             }
-            workerJob?.cancel()
+            // Never run two consumers: a consumer stuck in a non-cancellable
+            // native op (ONNX decode) keeps running after cancel(), so the
+            // replacement is launched only after the old one has actually
+            // finished. If it will not finish, the engine is wedged: stop
+            // the worker and surface it instead of splitting the engine.
+            val oldJob = workerJob
+            workerJob = null
+            val joined = withTimeoutOrNull(RECOVERY_JOIN_TIMEOUT_MS) {
+                oldJob?.cancelAndJoin()
+            }
+            if (oldJob != null && joined == null) {
+                log("consumer did not stop within ${RECOVERY_JOIN_TIMEOUT_MS}ms; engine wedged, worker stopped")
+                running.set(false)
+                synchronized(queueLock) { queue.clear() }
+                updateStatus(
+                    RequestState.ENGINE_STUCK,
+                    activeRequestId = null,
+                    error = "consumer_wedged",
+                )
+                return
+            }
             workerJob = scope.launch { consumeLoop() }
             lastProgressAtMillis = now()
             status = status.copy(recoveryCount = status.recoveryCount + 1)
@@ -287,7 +318,15 @@ class TranslationWorker(
         is QuotaExceededException -> RequestState.RATE_LIMITED
         is ApiAuthException, is OnlineNotConfiguredException -> RequestState.AUTH_ERROR
         is ProviderUnavailableException, is IOException -> RequestState.NETWORK_ERROR
-        else -> RequestState.NETWORK_ERROR
+        is com.gamelingo.mobile.translate.local.LocalAiTranslationEngine.ModelNotInstalledException,
+        is com.gamelingo.mobile.translate.local.TranslateGemmaEngine.ModelNotInstalledException,
+        -> RequestState.MODEL_MISSING
+        is com.gamelingo.mobile.translate.local.LocalAiTranslationEngine.EngineInitException,
+        is com.gamelingo.mobile.translate.local.TranslateGemmaEngine.EngineInitException,
+        -> RequestState.ENGINE_INIT_FAILED
+        is com.gamelingo.mobile.translate.local.LocalAiTranslationEngine.EmptyModelOutputException,
+        -> RequestState.EMPTY_RESULT
+        else -> RequestState.UNKNOWN
     }
 
     private fun updateStatus(
@@ -325,5 +364,11 @@ class TranslationWorker(
         const val DEFAULT_DEDUP_WINDOW_MS = 2_000L
         const val DEFAULT_WATCHDOG_INTERVAL_MS = 5_000L
         const val DEFAULT_STALL_THRESHOLD_MS = 60_000L
+
+        /** A queued line older than this is dropped at dequeue time. */
+        const val DEFAULT_MAX_QUEUE_AGE_MS = 10_000L
+
+        /** How long recovery waits for a cancelled consumer before giving up. */
+        const val RECOVERY_JOIN_TIMEOUT_MS = 15_000L
     }
 }
