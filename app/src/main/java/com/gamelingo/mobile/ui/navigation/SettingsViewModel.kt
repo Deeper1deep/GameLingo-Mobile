@@ -121,7 +121,10 @@ class SettingsViewModel @Inject constructor(
     /** Version of the active Egyptian dictionary. */
     fun dictionaryVersion(): Int = dictionaryHolder.get().version
 
-    fun refreshLocalAiStates() = localModelManager.refreshStates()
+    /** Off the main thread: a pre-marker install is hashed once on first read. */
+    fun refreshLocalAiStates() = viewModelScope.launch(kotlinx.coroutines.Dispatchers.IO) {
+        localModelManager.refreshStates()
+    }
 
     /** Starts a consented model download; Wi-Fi preference comes from settings. */
     fun downloadLocalModel(modelId: String) = viewModelScope.launch {

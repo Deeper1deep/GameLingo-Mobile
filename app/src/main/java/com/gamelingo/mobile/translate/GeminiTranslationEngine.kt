@@ -77,13 +77,13 @@ class GeminiTranslationEngine @Inject constructor(
         // sentence as if complete shows the user a wrong line. Treat it as a
         // provider failure so the chain degrades visibly to a full answer.
         if (finishReason == FINISH_MAX_TOKENS) {
-            throw ProviderUnavailableException("Gemini truncated the translation (MAX_TOKENS)")
+            throw ProviderRefusedException("Gemini truncated the translation (MAX_TOKENS)")
         }
         if (finishReason != null && finishReason != FINISH_STOP) {
             // SAFETY / RECITATION / OTHER: the line was refused. With
             // BLOCK_NONE this should be rare; when it still happens, degrade
             // visibly instead of passing silence off as a translation.
-            throw ProviderUnavailableException("Gemini refused the line ($finishReason)")
+            throw ProviderRefusedException("Gemini refused the line ($finishReason)")
         }
         val translated = candidate
             ?.content

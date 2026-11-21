@@ -342,28 +342,46 @@ class ScreenCaptureService : Service() {
             PixelFormat.RGBA_8888,
             2,
         )
-        val existing = virtualDisplay
-        if (existing == null) {
-            runCatching { imageReader?.close() }
-            virtualDisplay = projection.createVirtualDisplay(
-                "gamelingo-capture",
-                width,
-                height,
-                densityDpi,
-                DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                reader.surface,
-                null,
-                null,
-            )
-        } else {
-            // Reuse the live display: resize first so its output matches the
-            // new geometry, then swap the surface atomically, then retire the
-            // old reader (its surface must outlive the swap).
-            val oldReader = imageReader
-            existing.resize(width, height, densityDpi)
-            existing.setSurface(reader.surface)
-            imageReader = null
-            runCatching { oldReader?.close() }
+        try {
+            val existing = virtualDisplay
+            var reused = false
+            if (existing != null) {
+                // Reuse the live display: resize first so its output matches
+                // the new geometry, then swap the surface atomically, then
+                // retire the old reader (its surface must outlive the swap).
+                val oldReader = imageReader
+                try {
+                    existing.resize(width, height, densityDpi)
+                    existing.setSurface(reader.surface)
+                    imageReader = null
+                    runCatching { oldReader?.close() }
+                    reused = true
+                } catch (error: RuntimeException) {
+                    // The display could not be resized: drop it and create a
+                    // fresh one below instead of retrying a dead display.
+                    Log.w(TAG, "virtual display resize failed, recreating", error)
+                    runCatching { existing.release() }
+                    virtualDisplay = null
+                }
+            }
+            if (!reused) {
+                runCatching { imageReader?.close() }
+                imageReader = null
+                virtualDisplay = projection.createVirtualDisplay(
+                    "gamelingo-capture",
+                    width,
+                    height,
+                    densityDpi,
+                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                    reader.surface,
+                    null,
+                    null,
+                )
+            }
+        } catch (error: Exception) {
+            // Never leak the new reader when the display could not take it.
+            runCatching { reader.close() }
+            throw error
         }
         imageReader = reader
         currentGeometry = latest
@@ -443,14 +461,27 @@ class ScreenCaptureService : Service() {
     private fun reportStallIfNeeded() {
         if (mediaProjection == null || currentGeometry == null) return
         val snapshot = CaptureHealth.snapshot()
+        val now = System.currentTimeMillis()
         val lastFrame = snapshot.lastFrameAcquiredAt
-        if (lastFrame <= 0L) return
-        val stalledFor = System.currentTimeMillis() - lastFrame
+        if (lastFrame <= 0L) {
+            // No frame has EVER arrived: a starved session, the worst stall.
+            val startedAt = TranslationSessionBus.startedAtMillis.value ?: return
+            val waited = now - startedAt
+            if (waited < NO_FIRST_FRAME_MS) return
+            if (now - lastStallReportAt < NO_FIRST_FRAME_MS) return
+            lastStallReportAt = now
+            Log.w(TAG, "no frame since session start (${waited}ms)")
+            CaptureHealth.onError("capture stalled: no frame since the session started (${waited}ms)")
+            return
+        }
+        // A VirtualDisplay produces no frames while the screen is static (a
+        // paused game, a menu), so a gap after earlier frames is normal and
+        // not an error. It is only logged, once per gap.
+        val stalledFor = now - lastFrame
         if (stalledFor < STALL_REPORT_MS) return
-        if (System.currentTimeMillis() - lastStallReportAt < STALL_REPORT_MS) return
-        lastStallReportAt = System.currentTimeMillis()
-        Log.w(TAG, "no frames for ${stalledFor}ms while capturing")
-        CaptureHealth.onError("capture stalled: no frames for ${stalledFor}ms")
+        if (now - lastStallReportAt < STALL_REPORT_MS) return
+        lastStallReportAt = now
+        Log.d(TAG, "no new frames for ${stalledFor}ms (static screen or idle display)")
     }
 
     private suspend fun processFrame(
@@ -473,6 +504,7 @@ class ScreenCaptureService : Service() {
                 // Battery saver skipped this frame. Stamp it: a session whose
                 // OCR keeps being skipped must look starved, not healthy.
                 CaptureHealth.onOcrSkipped()
+                deduplicator.touch()
                 return
             }
 
@@ -737,6 +769,7 @@ class ScreenCaptureService : Service() {
 
         /** Watchdog: report when no frame arrived for this long while capturing. */
         private const val STALL_REPORT_MS = 5_000L
+        private const val NO_FIRST_FRAME_MS = 8_000L
 
         /** Floor for the capture tick delay when OCR outlasts the interval. */
         private const val MIN_TICK_DELAY_MS = 50L

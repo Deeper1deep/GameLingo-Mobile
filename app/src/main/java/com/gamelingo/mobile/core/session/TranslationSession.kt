@@ -98,6 +98,9 @@ enum class RequestState {
      */
     ENGINE_STUCK,
 
+    /** The provider answered but refused or truncated the line (safety block, MAX_TOKENS). */
+    PROVIDER_REFUSED,
+
     /** Anything that did not fit a known class. */
     UNKNOWN,
 }

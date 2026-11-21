@@ -44,6 +44,7 @@ import com.gamelingo.mobile.core.status.resolveSessionPhase
 import com.gamelingo.mobile.ui.components.GlButton
 import com.gamelingo.mobile.ui.components.GlButtonStyle
 import com.gamelingo.mobile.ui.components.GlCard
+import com.gamelingo.mobile.ui.components.GlTextButton
 import com.gamelingo.mobile.ui.components.LogoMark
 import com.gamelingo.mobile.ui.components.SkeletonBox
 import com.gamelingo.mobile.ui.components.StatusChip
@@ -74,11 +75,17 @@ fun SessionScreen(
     val notice by sessionViewModel.notice.collectAsStateWithLifecycle()
     val startedAt by sessionViewModel.startedAtMillis.collectAsStateWithLifecycle()
     val count by sessionViewModel.translatedCount.collectAsStateWithLifecycle()
+    val sessionError by sessionViewModel.sessionError.collectAsStateWithLifecycle()
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
     val controller = rememberSessionController()
 
-    val phase = resolveSessionPhase(sessionState, latestLine, translated, failure)
     val running = sessionState == SessionState.RUNNING
+    // A failure reason outlives the teardown that flips the state to STOPPED.
+    val phase = if (!running && sessionError != null) {
+        SessionPhase.ERROR
+    } else {
+        resolveSessionPhase(sessionState, latestLine, translated, failure)
+    }
     val readiness = resolveEngineReadiness(
         mode = settings.aiMode,
         cloudOptIn = settings.cloudTranslationOptIn,
@@ -125,7 +132,9 @@ fun SessionScreen(
         if (!running) {
             IdleCard(
                 isError = phase == SessionPhase.ERROR,
+                errorMessageRes = sessionError?.let { sessionErrorMessageRes(it) },
                 onStart = controller.start,
+                onDismissError = sessionViewModel::dismissError,
             )
             return@Column
         }
@@ -282,7 +291,12 @@ fun SessionScreen(
 }
 
 @Composable
-private fun IdleCard(isError: Boolean, onStart: () -> Unit) {
+private fun IdleCard(
+    isError: Boolean,
+    @androidx.annotation.StringRes errorMessageRes: Int?,
+    onStart: () -> Unit,
+    onDismissError: () -> Unit,
+) {
     GlCard(elevated = true, contentPadding = PaddingValues(GlSpacing.xl)) {
         Column(
             modifier = Modifier.fillMaxWidth(),
@@ -297,7 +311,11 @@ private fun IdleCard(isError: Boolean, onStart: () -> Unit) {
             )
             Text(
                 text = stringResource(
-                    if (isError) R.string.phase_error_desc else R.string.session_idle_body,
+                    when {
+                        isError && errorMessageRes != null -> errorMessageRes
+                        isError -> R.string.phase_error_desc
+                        else -> R.string.session_idle_body
+                    },
                 ),
                 style = MaterialTheme.typography.bodyMedium,
                 color = GlColors.TextSecondary,
@@ -308,6 +326,12 @@ private fun IdleCard(isError: Boolean, onStart: () -> Unit) {
                 icon = Icons.Filled.PlayArrow,
                 modifier = Modifier.fillMaxWidth(),
             )
+            if (isError && errorMessageRes != null) {
+                GlTextButton(
+                    text = stringResource(R.string.session_error_dismiss),
+                    onClick = onDismissError,
+                )
+            }
         }
     }
 }

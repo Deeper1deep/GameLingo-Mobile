@@ -6,6 +6,9 @@ import com.gamelingo.mobile.R
 import com.gamelingo.mobile.core.status.EngineReadiness
 import com.gamelingo.mobile.core.status.SessionPhase
 import com.gamelingo.mobile.translate.GeminiTranslationEngine
+import com.gamelingo.mobile.translate.baseEngineId
+import com.gamelingo.mobile.translate.local.LocalAiTranslationEngine
+import com.gamelingo.mobile.translate.local.TranslateGemmaEngine
 import com.gamelingo.mobile.translate.MlKitTranslationEngine
 import com.gamelingo.mobile.ui.components.StatusTone
 
@@ -74,8 +77,31 @@ fun engineReadinessTone(readiness: EngineReadiness): StatusTone = when (readines
 
 /** Human name of the engine id recorded with a translation. */
 @Composable
-fun engineIdLabel(engineId: String): String = when (engineId) {
+fun engineIdLabel(engineId: String): String = when (baseEngineId(engineId)) {
     GeminiTranslationEngine.ENGINE_ID -> stringResource(R.string.engine_label_online)
     MlKitTranslationEngine.ENGINE_ID -> stringResource(R.string.engine_label_local)
+    LocalAiTranslationEngine.ENGINE_ID -> stringResource(R.string.engine_label_marian)
+    TranslateGemmaEngine.ENGINE_ID -> stringResource(R.string.engine_label_gemma)
     else -> stringResource(R.string.engine_label_other, engineId)
+}
+
+/** User-facing explanation of why a session ended, shared by every screen that shows it. */
+@androidx.annotation.StringRes
+fun sessionErrorMessageRes(error: com.gamelingo.mobile.core.session.SessionError): Int = when (error) {
+    com.gamelingo.mobile.core.session.SessionError.MISSING_CONSENT_DATA ->
+        R.string.session_error_missing_consent
+    com.gamelingo.mobile.core.session.SessionError.FOREGROUND_START_FAILED ->
+        R.string.session_error_foreground_failed
+    com.gamelingo.mobile.core.session.SessionError.PROJECTION_REJECTED ->
+        R.string.session_error_projection_rejected
+    com.gamelingo.mobile.core.session.SessionError.CAPTURE_PERSISTENT_FAILURE ->
+        R.string.session_error_capture_persistent
+    com.gamelingo.mobile.core.session.SessionError.SETTINGS_UNAVAILABLE ->
+        R.string.session_error_settings_unavailable
+    com.gamelingo.mobile.core.session.SessionError.OVERLAY_PERMISSION_LOST ->
+        R.string.session_error_overlay_permission
+    com.gamelingo.mobile.core.session.SessionError.OVERLAY_WINDOW_FAILED ->
+        R.string.session_error_overlay_window
+    com.gamelingo.mobile.core.session.SessionError.PROJECTION_ENDED ->
+        R.string.session_error_projection_ended
 }

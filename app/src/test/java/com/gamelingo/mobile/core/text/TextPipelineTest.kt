@@ -169,4 +169,26 @@ class DeduplicatorTest {
         dedup.reset()
         assertTrue(dedup.shouldDeliver("hello"))
     }
+
+    @Test
+    fun `visible line keeps sliding the duplicate window`() {
+        var now = 0L
+        val dedup = Deduplicator(expiryMs = 1_000L, clock = { now })
+        assertTrue(dedup.shouldDeliver("Capture the flag"))
+        now = 800L
+        assertFalse(dedup.shouldDeliver("Capture the flag"))
+        now = 1_500L // 700 ms after the last sighting
+        assertFalse(dedup.shouldDeliver("Capture the flag"))
+    }
+
+    @Test
+    fun `touch keeps the last line recent`() {
+        var now = 0L
+        val dedup = Deduplicator(expiryMs = 1_000L, clock = { now })
+        assertTrue(dedup.shouldDeliver("Capture the flag"))
+        now = 900L
+        dedup.touch()
+        now = 1_500L
+        assertFalse(dedup.shouldDeliver("Capture the flag"))
+    }
 }

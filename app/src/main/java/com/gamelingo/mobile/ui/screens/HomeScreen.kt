@@ -46,7 +46,6 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gamelingo.mobile.R
 import com.gamelingo.mobile.core.session.ResumeRequest
-import com.gamelingo.mobile.core.session.SessionError
 import com.gamelingo.mobile.core.session.SessionNotice
 import com.gamelingo.mobile.core.session.SessionState
 import com.gamelingo.mobile.core.status.SessionPhase
@@ -112,8 +111,14 @@ fun HomeScreen(
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    val phase = resolveSessionPhase(sessionState, latestLine, translated, failure)
     val running = sessionState == SessionState.RUNNING
+    // The teardown after a failure flips the state back to STOPPED while the
+    // reason is kept, so the failure must be judged by the reason, not the state.
+    val phase = if (!running && sessionError != null) {
+        SessionPhase.ERROR
+    } else {
+        resolveSessionPhase(sessionState, latestLine, translated, failure)
+    }
     val readiness = resolveEngineReadiness(
         mode = settings.aiMode,
         cloudOptIn = settings.cloudTranslationOptIn,
@@ -192,31 +197,18 @@ text = when {
                             current == SessionPhase.ERROR && failure != null && running ->
                                 stringResource(R.string.home_translation_failed)
                             current == SessionPhase.ERROR && sessionError != null ->
-                                stringResource(
-                                    when (sessionError!!) {
-                                        SessionError.MISSING_CONSENT_DATA ->
-                                            R.string.session_error_missing_consent
-                                        SessionError.FOREGROUND_START_FAILED ->
-                                            R.string.session_error_foreground_failed
-                                        SessionError.PROJECTION_REJECTED ->
-                                            R.string.session_error_projection_rejected
-                                        SessionError.CAPTURE_PERSISTENT_FAILURE ->
-                                            R.string.session_error_capture_persistent
-                                        SessionError.SETTINGS_UNAVAILABLE ->
-                                            R.string.session_error_settings_unavailable
-                                        SessionError.OVERLAY_PERMISSION_LOST ->
-                                            R.string.session_error_overlay_permission
-                                        SessionError.OVERLAY_WINDOW_FAILED ->
-                                            R.string.session_error_overlay_window
-                                        SessionError.PROJECTION_ENDED ->
-                                            R.string.session_error_projection_ended
-                                    },
-                                )
+                                stringResource(sessionErrorMessageRes(sessionError!!))
                             else -> phaseDescription(current)
                         },
                         style = MaterialTheme.typography.bodyLarge,
                         color = GlColors.TextPrimary,
                     )
+                    if (current == SessionPhase.ERROR && !running && sessionError != null) {
+                        GlTextButton(
+                            text = stringResource(R.string.session_error_dismiss),
+                            onClick = sessionViewModel::dismissError,
+                        )
+                    }
                 }
             }
 

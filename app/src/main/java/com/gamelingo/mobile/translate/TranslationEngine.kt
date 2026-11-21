@@ -51,3 +51,10 @@ interface TranslationEngine {
 
     fun close()
 }
+
+/**
+ * The engine an id belongs to, without the post-processing tags the pipeline
+ * appends ("+dict", "+idiom", "+qc"). Always compare engines through this:
+ * a tagged id is still the same engine.
+ */
+fun baseEngineId(engineId: String): String = engineId.substringBefore('+')

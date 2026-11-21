@@ -84,7 +84,13 @@ class LocalModelManager @Inject constructor(
 
     private val downloadMutex = Mutex()
 
-    private val _states = MutableStateFlow(readAllStates())
+    // Starts empty on purpose: reading the real state can hash multi-GB model
+    // files (pre-marker installs), which must never run in a constructor on
+    // whatever thread injected this. refreshStates() fills it off the main thread.
+    private val _states = MutableStateFlow<Map<String, LocalAiModelState>>(emptyMap())
+
+    /** Verified install directory per model, so the per-line checks do not hit the disk each time. */
+    private val verifiedDirs = java.util.concurrent.ConcurrentHashMap<String, File>()
 
     /** Per-model observable state for the settings screen. */
     val states: StateFlow<Map<String, LocalAiModelState>> = _states.asStateFlow()
@@ -111,6 +117,16 @@ class LocalModelManager @Inject constructor(
      * not installed instead of loading corrupt weights.
      */
     fun modelDir(modelId: String): File? {
+        verifiedDirs[modelId]?.let { cached ->
+            if (cached.isDirectory) return cached
+            verifiedDirs.remove(modelId)
+        }
+        val found = resolveModelDir(modelId)
+        if (found != null) verifiedDirs[modelId] = found
+        return found
+    }
+
+    private fun resolveModelDir(modelId: String): File? {
         val spec = spec(modelId) ?: return null
         val root = File(context.filesDir, MODEL_ROOT)
         val dirs = root.listFiles { f -> f.isDirectory && f.name.startsWith("${modelId}_v") }
@@ -214,6 +230,7 @@ class LocalModelManager @Inject constructor(
                 // Completion marker: only a fully verified install carries it,
                 // and modelDir refuses directories without it (see modelDir).
                 File(targetDir, VERIFIED_MARKER).writeText("${spec.version}")
+                verifiedDirs.remove(modelId)
                 cleanupOldVersions(modelId, keepVersion = spec.version)
                 emitState(modelId, LocalAiModelState.Installed(spec.version, installedSizeBytes(modelId)))
             } catch (cancelled: CancellationException) {
@@ -237,6 +254,7 @@ class LocalModelManager @Inject constructor(
                 val root = File(context.filesDir, MODEL_ROOT)
                 root.listFiles { f -> f.isDirectory && f.name.startsWith("${modelId}_v") }
                     ?.forEach { it.deleteRecursively() }
+                verifiedDirs.remove(modelId)
                 emitState(modelId, LocalAiModelState.NotInstalled)
             }
         }
@@ -259,6 +277,7 @@ class LocalModelManager @Inject constructor(
 
     /** Recomputes all states from disk (app start / settings open). */
     fun refreshStates() {
+        verifiedDirs.clear()
         _states.value = readAllStates()
     }
 
