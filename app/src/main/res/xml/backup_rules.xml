@@ -5,6 +5,4 @@
     <exclude domain="file" path="datastore/gamelingo_secrets.preferences_pb" />
     <!-- Downloaded AI models are large and re-downloadable. -->
     <exclude domain="file" path="local_ai" />
-    <!-- Downloaded update APKs. -->
-    <exclude domain="cache" path="." />
 </full-backup-content>
