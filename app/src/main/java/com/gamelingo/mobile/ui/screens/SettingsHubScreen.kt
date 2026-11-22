@@ -106,6 +106,12 @@ fun SettingsHubScreen(
             onClick = { onNavigate(GameLingoRoutes.OVERLAY_SETTINGS) },
         )
         GlNavRow(
+            icon = Icons.Filled.Face,
+            title = stringResource(R.string.style_editor_open),
+            subtitle = stringResource(R.string.style_editor_open_sub),
+            onClick = { onNavigate(GameLingoRoutes.OVERLAY_STYLE) },
+        )
+        GlNavRow(
             icon = Icons.Filled.PlayArrow,
             title = stringResource(R.string.nav_voice),
             subtitle = stringResource(R.string.settings_voice_sub),
