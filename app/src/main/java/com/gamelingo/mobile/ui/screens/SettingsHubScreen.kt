@@ -78,6 +78,8 @@ fun SettingsHubScreen(
             color = GlColors.TextPrimary,
         )
 
+        OptimizeCard()
+
         SectionHeader(stringResource(R.string.settings_section_features))
         GlNavRow(
             icon = Icons.Filled.Settings,
