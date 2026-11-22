@@ -15,6 +15,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
@@ -24,6 +25,17 @@ private val Context.settingsDataStore: DataStore<Preferences> by preferencesData
     name = "gamelingo_settings",
 )
 
+/**
+ * The encrypted API key lives in its own DataStore file, excluded from cloud
+ * backup and device transfer (res/xml/backup_rules.xml, data_extraction_rules.xml):
+ * its ciphertext is bound to this device's Keystore and is useless (and a
+ * needless leak surface) anywhere else. Everything else stays in
+ * "gamelingo_settings" and is backed up normally.
+ */
+private val Context.secretsDataStore: DataStore<Preferences> by preferencesDataStore(
+    name = "gamelingo_secrets",
+)
+
 @Singleton
 class DataStoreSettingsRepository @Inject constructor(
     @ApplicationContext context: Context,
@@ -31,6 +43,7 @@ class DataStoreSettingsRepository @Inject constructor(
 ) : SettingsRepository {
 
     private val dataStore = context.settingsDataStore
+    private val secretStore = context.secretsDataStore
     private val migrationDone = java.util.concurrent.atomic.AtomicBoolean(false)
 
     // flowOn(IO) is load-bearing: the map resolves the API key, which can
@@ -38,7 +51,7 @@ class DataStoreSettingsRepository @Inject constructor(
     // thread: the overlay service and Compose screens collect on the main
     // thread, and a blocking keystore call there froze the app on session
     // start (v0.2.0 hotfix).
-    override val settings: Flow<AppSettings> = dataStore.data.map { prefs ->
+    override val settings: Flow<AppSettings> = combine(dataStore.data, secretStore.data) { prefs, secrets ->
         val region = SettingsConstraints.clampRegionFractions(
             top = prefs[KEY_REGION_TOP] ?: SettingsConstraints.DEFAULT_REGION_TOP,
             bottom = prefs[KEY_REGION_BOTTOM] ?: SettingsConstraints.DEFAULT_REGION_BOTTOM,
@@ -60,7 +73,7 @@ class DataStoreSettingsRepository @Inject constructor(
             ignoreUnstableText = prefs[KEY_IGNORE_UNSTABLE] ?: true,
             batterySaverEnabled = prefs[KEY_BATTERY_SAVER] ?: true,
             aiMode = parseEnumOrDefault(prefs[KEY_AI_MODE], AiMode.AUTO),
-            onlineApiKey = resolveApiKey(prefs),
+            onlineApiKey = resolveApiKey(prefs, secrets),
             cloudTranslationOptIn = prefs[KEY_CLOUD_OPT_IN] ?: false,
             autoOnlineFallback = prefs[KEY_AUTO_ONLINE_FALLBACK] ?: false,
             localAiWifiOnly = prefs[KEY_LOCAL_AI_WIFI_ONLY] ?: true,
@@ -157,44 +170,88 @@ class DataStoreSettingsRepository @Inject constructor(
         } else {
             withContext(Dispatchers.IO) { apiKeyCipher.encrypt(trimmed) }
         }
-        dataStore.edit { prefs ->
+        // New location first; only then drop the legacy copies, so a crash
+        // in between can never leave the user with no key at all.
+        secretStore.edit { secrets ->
             if (encrypted == null) {
-                prefs.remove(KEY_ONLINE_API_KEY_ENC)
+                secrets.remove(KEY_ONLINE_API_KEY_ENC)
             } else {
-                prefs[KEY_ONLINE_API_KEY_ENC] = encrypted
+                secrets[KEY_ONLINE_API_KEY_ENC] = encrypted
             }
-            // The plaintext slot is legacy: never write it again.
+        }
+        dataStore.edit { prefs ->
+            prefs.remove(KEY_ONLINE_API_KEY_ENC)
             prefs.remove(KEY_ONLINE_API_KEY)
         }
     }
 
     /**
-     * Reads the encrypted key, falling back to a not-yet-migrated plaintext
-     * value so the key keeps working between the update and the one-time
-     * migration. A corrupt or undecryptable value reads as no key.
+     * Reads the key from the secrets store, falling back to a not-yet-migrated
+     * legacy value (encrypted or plaintext) so the key keeps working between
+     * the update and the one-time migration. A corrupt or undecryptable value
+     * - for example ciphertext restored onto another device - reads as no key.
      */
-    private fun resolveApiKey(prefs: Preferences): String {
-        val encrypted = prefs[KEY_ONLINE_API_KEY_ENC]
+    private fun resolveApiKey(prefs: Preferences, secrets: Preferences): String {
+        val encrypted = secrets[KEY_ONLINE_API_KEY_ENC] ?: prefs[KEY_ONLINE_API_KEY_ENC]
         if (encrypted != null) {
             return apiKeyCipher.decrypt(encrypted).orEmpty()
         }
         return prefs[KEY_ONLINE_API_KEY].orEmpty()
     }
 
+    /**
+     * One-time, race-safe move of the key into the secrets store.
+     *  - never overwrites a key the user saved meanwhile (decided inside the
+     *    atomic secrets edit);
+     *  - legacy plaintext is removed only after the new copy decrypts back;
+     *  - an undecryptable legacy ciphertext (restored from another device) is
+     *    discarded instead of being copied forward;
+     *  - a failure leaves the legacy value in place and allows a retry.
+     */
     override suspend fun migrateApiKeyIfNeeded() {
         if (!migrationDone.compareAndSet(false, true)) return
-        val snapshot = dataStore.data.first()
-        val plaintext = snapshot[KEY_ONLINE_API_KEY].orEmpty()
-        if (plaintext.isBlank()) return
-        if (!snapshot[KEY_ONLINE_API_KEY_ENC].isNullOrBlank()) {
-            // Already migrated; just drop the legacy plaintext copy.
-            dataStore.edit { it.remove(KEY_ONLINE_API_KEY) }
-            return
-        }
-        val encrypted = runCatching { apiKeyCipher.encrypt(plaintext) }.getOrNull() ?: return
-        dataStore.edit { prefs ->
-            prefs[KEY_ONLINE_API_KEY_ENC] = encrypted
-            prefs.remove(KEY_ONLINE_API_KEY)
+        try {
+            val snapshot = dataStore.data.first()
+            val legacyEnc = snapshot[KEY_ONLINE_API_KEY_ENC]
+            val plaintext = snapshot[KEY_ONLINE_API_KEY].orEmpty()
+            if (legacyEnc.isNullOrBlank() && plaintext.isBlank()) return
+
+            val usableLegacyEnc = legacyEnc?.takeIf { it.isNotBlank() && apiKeyCipher.decrypt(it) != null }
+            val candidate: String? = usableLegacyEnc ?: if (plaintext.isNotBlank()) {
+                runCatching { apiKeyCipher.encrypt(plaintext) }.getOrNull()
+                    ?.takeIf { apiKeyCipher.decrypt(it) == plaintext }
+            } else {
+                null
+            }
+            if (candidate == null) {
+                if (plaintext.isNotBlank()) {
+                    // Could not encrypt: keep the working plaintext, try again later.
+                    migrationDone.set(false)
+                } else {
+                    // Only an undecryptable ciphertext remained: it can never work here.
+                    dataStore.edit { it.remove(KEY_ONLINE_API_KEY_ENC) }
+                }
+                return
+            }
+            secretStore.edit { secrets ->
+                if (secrets[KEY_ONLINE_API_KEY_ENC].isNullOrBlank()) {
+                    secrets[KEY_ONLINE_API_KEY_ENC] = candidate
+                }
+            }
+            val stored = secretStore.data.first()[KEY_ONLINE_API_KEY_ENC]
+            if (!stored.isNullOrBlank() && apiKeyCipher.decrypt(stored) != null) {
+                dataStore.edit { prefs ->
+                    prefs.remove(KEY_ONLINE_API_KEY_ENC)
+                    prefs.remove(KEY_ONLINE_API_KEY)
+                }
+            } else {
+                migrationDone.set(false)
+            }
+        } catch (cancelled: kotlinx.coroutines.CancellationException) {
+            migrationDone.set(false)
+            throw cancelled
+        } catch (_: Exception) {
+            migrationDone.set(false)
         }
     }
 

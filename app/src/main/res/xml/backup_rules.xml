@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Android 6-11 auto backup. The API-key store is bound to this device's
+     Keystore: never back it up. Non-sensitive settings are kept. -->
+<full-backup-content>
+    <exclude domain="file" path="datastore/gamelingo_secrets.preferences_pb" />
+    <!-- Downloaded AI models are large and re-downloadable. -->
+    <exclude domain="file" path="local_ai" />
+    <!-- Downloaded update APKs. -->
+    <exclude domain="cache" path="." />
+</full-backup-content>
