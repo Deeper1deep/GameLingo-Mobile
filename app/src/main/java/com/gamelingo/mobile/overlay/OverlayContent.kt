@@ -40,6 +40,12 @@ data class OverlayUiState(
     val notice: SessionNotice? = null,
     /** True while a session runs: shows the stop affordance. */
     val sessionRunning: Boolean = false,
+    /**
+     * The last translation was hidden because its source text left the
+     * screen. Nothing is drawn except the small stop affordance: no stale
+     * line, no waiting hint over the game.
+     */
+    val cleared: Boolean = false,
 )
 
 /**
@@ -71,8 +77,11 @@ fun OverlayContent(
         modifier = Modifier
             .widthIn(max = maxWidthDp.dp)
             .padding(horizontal = 12.dp, vertical = 6.dp)
-            .background(background, RoundedCornerShape(12.dp))
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+            .background(
+                if (state.cleared && state.notice == null) Color.Transparent else background,
+                RoundedCornerShape(12.dp),
+            )
+            .padding(horizontal = 16.dp, vertical = if (state.cleared) 2.dp else 10.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // In-session stop affordance: without it the user must leave the game
@@ -144,6 +153,8 @@ fun OverlayContent(
                     )
                 }
             }
+
+            state.cleared -> Unit
 
             else -> Text(
                 text = stringResource(R.string.overlay_waiting),

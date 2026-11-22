@@ -249,7 +249,20 @@ class OverlayService : Service() {
         }
         serviceScope.launch {
             TranslationSessionBus.translatedLine.collect { line ->
-                if (line != null) {
+                if (line == null) {
+                    // The source text left the screen (or the session ended):
+                    // clear the content. The initial null before any line is
+                    // not a clear - the waiting hint stays until a first line.
+                    val current = uiState.value
+                    if (current.translated != null || current.failure != null) {
+                        uiState.value = current.copy(
+                            original = null,
+                            translated = null,
+                            failure = null,
+                            cleared = true,
+                        )
+                    }
+                } else {
                     // The permission can be revoked while the session runs;
                     // the system then drops the window silently. Detect it on
                     // the next line and surface the reason instead of letting
@@ -262,6 +275,8 @@ class OverlayService : Service() {
                     uiState.value = OverlayUiState(
                         original = line.original,
                         translated = line.translated,
+                        sessionRunning = uiState.value.sessionRunning,
+                        notice = uiState.value.notice,
                     )
                     PipelineTiming.endToEnd("overlay_displayed", line.capturedAtMillis)
                 }
@@ -269,9 +284,10 @@ class OverlayService : Service() {
         }
         serviceScope.launch {
             TranslationSessionBus.translationFailure.collect { failure ->
-                if (failure != null) {
-                    uiState.value = uiState.value.copy(failure = failure)
-                }
+                uiState.value = uiState.value.copy(
+                    failure = failure,
+                    cleared = if (failure != null) false else uiState.value.cleared,
+                )
             }
         }
         serviceScope.launch {

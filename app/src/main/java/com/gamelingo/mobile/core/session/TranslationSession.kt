@@ -148,6 +148,8 @@ object TranslationSessionBus {
      * buffered SharedFlow instead. Conflating worker input was dropping
      * subtitles under fast dialogue.
      */
+    private val presence = com.gamelingo.mobile.core.text.TextPresenceTracker()
+
     private val _ocrLines = MutableSharedFlow<OcrLine>(
         extraBufferCapacity = OCR_LINES_BUFFER,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -194,6 +196,7 @@ object TranslationSessionBus {
 
     fun onSessionStarted() {
         generationCounter.incrementAndGet()
+        presence.reset()
         _error.value = null
         if (_state.value != SessionState.RUNNING) {
             _startedAtMillis.value = System.currentTimeMillis()
@@ -204,6 +207,7 @@ object TranslationSessionBus {
 
     fun onSessionStopped() {
         generationCounter.incrementAndGet()
+        presence.reset()
         _state.value = SessionState.STOPPED
         _startedAtMillis.value = null
         _translatedCount.value = 0
@@ -234,15 +238,24 @@ object TranslationSessionBus {
         // never the fresh one; tryEmit never blocks the capture loop.
         _ocrLines.tryEmit(line)
         _translationFailure.value = null
+        presence.onLinePublished(text, capturedAtMillis)
     }
 
+    /**
+     * Shows a finished translation - unless its source text is already gone
+     * or was replaced by a newer line, in which case the result is stale and
+     * must never reach the screen.
+     *
+     * @return true when the translation was published to the UI.
+     */
     fun onTranslated(
         original: String,
         translated: String,
         engineId: String,
         fromCache: Boolean,
         capturedAtMillis: Long,
-    ) {
+    ): Boolean {
+        if (!presence.acceptTranslation(original)) return false
         _translatedLine.value = TranslatedLine(
             original = original,
             translated = translated,
@@ -252,7 +265,37 @@ object TranslationSessionBus {
         )
         _translationFailure.value = null
         _translatedCount.update { it + 1 }
+        return true
     }
+
+    /**
+     * One OCR pass read [text] (blank when it found nothing). Hides the
+     * translation once the source is confirmed gone.
+     *
+     * @return true when the translation was just cleared: the capture side
+     * must then forget its duplicate/stability memory so the same subtitle
+     * reappearing is translated again.
+     */
+    fun onTextObserved(text: String, nowMillis: Long): Boolean =
+        applyDecision(presence.observe(text, nowMillis))
+
+    /** The frame is identical to the previous one (OCR skipped). */
+    fun onFrameUnchanged(nowMillis: Long): Boolean =
+        applyDecision(presence.onUnchangedFrame(nowMillis))
+
+    /** Frame-less heartbeat: confirms an absence on a static screen. */
+    fun onHeartbeat(nowMillis: Long): Boolean =
+        applyDecision(presence.tick(nowMillis))
+
+    private fun applyDecision(decision: com.gamelingo.mobile.core.text.TextPresenceTracker.Decision): Boolean =
+        when (decision) {
+            is com.gamelingo.mobile.core.text.TextPresenceTracker.Decision.Clear -> {
+                _translatedLine.value = null
+                _translationFailure.value = null
+                true
+            }
+            com.gamelingo.mobile.core.text.TextPresenceTracker.Decision.None -> false
+        }
 
     fun onTranslationFailed(original: String) {
         _translationFailure.value = original

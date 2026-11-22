@@ -54,6 +54,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -114,6 +115,15 @@ class ScreenCaptureService : Service() {
     private val frameChangeDetector = FrameChangeDetector()
     private val stabilityTracker = TextStabilityTracker()
     private val deduplicator = Deduplicator()
+
+    /**
+     * Set by the heartbeat when a translation was cleared (its source text is
+     * gone): the capture loop then forgets its duplicate/stability memory so
+     * the same subtitle appearing again is translated again. Consumed on the
+     * capture loop's own thread, which owns those trackers.
+     */
+    private val resetLineGates = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var heartbeatJob: kotlinx.coroutines.Job? = null
     private val failureTracker = FailureTracker()
 
     /** Separate, larger budget for display rebuilds (full-screen/rotation). */
@@ -255,6 +265,22 @@ class ScreenCaptureService : Service() {
         lastStallReportAt = 0L
         startService(OverlayService.startIntent(this))
         captureJob = serviceScope.launch { captureLoop() }
+        heartbeatJob?.cancel()
+        heartbeatJob = serviceScope.launch { presenceHeartbeat() }
+    }
+
+    /**
+     * Cheap heartbeat (no OCR, no bitmap): a static screen produces no frames,
+     * so after the subtitle vanishes nothing else would ever confirm the
+     * absence. Four checks a second of a few comparisons is negligible.
+     */
+    private suspend fun presenceHeartbeat() {
+        while (currentCoroutineContext().isActive) {
+            delay(PRESENCE_HEARTBEAT_MS)
+            if (TranslationSessionBus.onHeartbeat(System.currentTimeMillis())) {
+                resetLineGates.set(true)
+            }
+        }
     }
 
     /** The display facts the capture surface must match right now. */
@@ -496,6 +522,10 @@ class ScreenCaptureService : Service() {
         // happens below: the finally owns recycling, never the success path.
         var ocrBitmap: Bitmap? = null
         try {
+            if (resetLineGates.compareAndSet(true, false)) {
+                deduplicator.reset()
+                stabilityTracker.reset()
+            }
             val shouldRunOcr = !settings.batterySaverEnabled ||
                 PipelineTiming.timed("change_detect") {
                     frameChangeDetector.hasChanged(fullBitmap.toDownsampledBytes())
@@ -505,6 +535,10 @@ class ScreenCaptureService : Service() {
                 // OCR keeps being skipped must look starved, not healthy.
                 CaptureHealth.onOcrSkipped()
                 deduplicator.touch()
+                if (TranslationSessionBus.onFrameUnchanged(System.currentTimeMillis())) {
+                    deduplicator.reset()
+                    stabilityTracker.reset()
+                }
                 return
             }
 
@@ -552,6 +586,13 @@ class ScreenCaptureService : Service() {
                 "smart=${settings.smartTextDetection}",
             )
             val text = TextNormalizer.normalize(rawText)
+            // Presence first, before any early return: an EMPTY read is the
+            // signal that the subtitle left the screen, and the dedupe and
+            // stability gates below must not hide it from the lifecycle.
+            if (TranslationSessionBus.onTextObserved(text, System.currentTimeMillis())) {
+                deduplicator.reset()
+                stabilityTracker.reset()
+            }
             if (text.isEmpty()) return
 
             if (settings.ignoreUnstableText && !stabilityTracker.offer(text)) return
@@ -622,6 +663,8 @@ class ScreenCaptureService : Service() {
         Log.i(TAG, "stopCapture: tearing down (reason=$reason)")
         captureJob?.cancel()
         captureJob = null
+        heartbeatJob?.cancel()
+        heartbeatJob = null
         settingsJob?.cancel()
         settingsJob = null
         cachedSettings = null
@@ -770,6 +813,9 @@ class ScreenCaptureService : Service() {
         /** Watchdog: report when no frame arrived for this long while capturing. */
         private const val STALL_REPORT_MS = 5_000L
         private const val NO_FIRST_FRAME_MS = 8_000L
+
+        /** Presence heartbeat period: far below OCR cost, fine for the 1 s grace. */
+        private const val PRESENCE_HEARTBEAT_MS = 250L
 
         /** Floor for the capture tick delay when OCR outlasts the interval. */
         private const val MIN_TICK_DELAY_MS = 50L

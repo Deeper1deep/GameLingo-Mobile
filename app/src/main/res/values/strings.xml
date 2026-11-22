@@ -146,6 +146,10 @@
     <string name="about_updates">التحديثات بتتسحب من مستودع GameLingo-Updates، مستقل عن سورس الكود، مع التحقق من SHA-256 والتوقيع قبل التثبيت.</string>
     <string name="about_stack_title">التقنيات</string>
     <string name="about_stack_body">Kotlin وJetpack Compose وMaterial 3 وRoom وDataStore وMediaProjection وخدمة في المقدمة وOCR محلي على الجهاز.</string>
+    <string name="about_copyright_prefix" translatable="false">© 2026 </string>
+    <string name="about_developer_handle" translatable="false">@Deeper</string>
+    <string name="about_developer_cd">فتح حساب المطور على تيليجرام</string>
+    <string name="about_contact_developer">تواصل مع المطور</string>
     <string name="about_open_repo">فتح مستودع الكود</string>
     <string name="about_open_updates">فتح مستودع التحديثات</string>
 

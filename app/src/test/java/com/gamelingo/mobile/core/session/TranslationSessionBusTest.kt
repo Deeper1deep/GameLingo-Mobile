@@ -107,4 +107,43 @@ class TranslationSessionBusTest {
         assertEquals("line-36", received.first().text)
         assertEquals("line-99", received.last().text)
     }
+
+    @Test
+    fun `a translation is published while its line is still the active one`() {
+        TranslationSessionBus.onSessionStarted()
+        TranslationSessionBus.onNewLine("Get in the car now", 1_000L)
+        assertTrue(TranslationSessionBus.onTranslated("Get in the car now", "اركب السيارة الآن", "e", false, 1_000L))
+        assertEquals("اركب السيارة الآن", TranslationSessionBus.translatedLine.value?.translated)
+    }
+
+    @Test
+    fun `a stale result for a replaced line never reaches the screen`() {
+        TranslationSessionBus.onSessionStarted()
+        TranslationSessionBus.onNewLine("Get in the car now", 1_000L)
+        TranslationSessionBus.onNewLine("We are out of time", 1_500L)
+        assertEquals(false, TranslationSessionBus.onTranslated("Get in the car now", "قديمة", "e", false, 1_000L))
+        assertNull(TranslationSessionBus.translatedLine.value)
+    }
+
+    @Test
+    fun `confirmed absence clears the translation and refuses the late result`() {
+        TranslationSessionBus.onSessionStarted()
+        TranslationSessionBus.onNewLine("Get in the car now", 0L)
+        TranslationSessionBus.onTranslated("Get in the car now", "اركب", "e", false, 0L)
+        TranslationSessionBus.onTextObserved("Get in the car now", 100L)
+        TranslationSessionBus.onTextObserved("", 400L)
+        TranslationSessionBus.onTextObserved("", 800L)
+        assertTrue(TranslationSessionBus.onTextObserved("", 1_300L))
+        assertNull(TranslationSessionBus.translatedLine.value)
+        assertEquals(false, TranslationSessionBus.onTranslated("Get in the car now", "متأخرة", "e", false, 0L))
+    }
+
+    @Test
+    fun `a session restart refuses results from the old session`() {
+        TranslationSessionBus.onSessionStarted()
+        TranslationSessionBus.onNewLine("Get in the car now", 0L)
+        TranslationSessionBus.onSessionStopped()
+        TranslationSessionBus.onSessionStarted()
+        assertEquals(false, TranslationSessionBus.onTranslated("Get in the car now", "قديمة", "e", false, 0L))
+    }
 }
