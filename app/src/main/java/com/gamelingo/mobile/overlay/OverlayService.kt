@@ -277,6 +277,9 @@ class OverlayService : Service() {
                         translated = line.translated,
                         sessionRunning = uiState.value.sessionRunning,
                         notice = uiState.value.notice,
+                        sourceColors = line.sourceColors,
+                        glossary = settingsState.value.userGlossaryTerms
+                            .associate { it.en.trim().lowercase() to it.ar },
                     )
                     PipelineTiming.endToEnd("overlay_displayed", line.capturedAtMillis)
                 }

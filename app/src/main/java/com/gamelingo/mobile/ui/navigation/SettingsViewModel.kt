@@ -202,6 +202,9 @@ class SettingsViewModel @Inject constructor(
     fun setOverlayBackgroundColor(argb: Long) =
         viewModelScope.launch { repository.setOverlayBackgroundColor(argb) }
 
+    fun setPreserveSourceColors(enabled: Boolean) =
+        viewModelScope.launch { repository.setPreserveSourceColors(enabled) }
+
     fun setOverlayPosition(position: OverlayPosition) =
         viewModelScope.launch { repository.setOverlayPosition(position) }
 }

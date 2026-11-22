@@ -4,8 +4,18 @@ package com.gamelingo.mobile.core.capture
 data class RecognizedBlock(
     val text: String,
     val rect: PixelRect,
+    /** Individual words with their own boxes; empty when the engine gave none. */
+    val words: List<RecognizedWord> = emptyList(),
 )
 
+/** One recognized word and its box, for per-word colour sampling. */
+data class RecognizedWord(val text: String, val rect: PixelRect)
+
 /** @return this rectangle moved by [dx]/[dy] pixels. */
+fun RecognizedBlock.shifted(dx: Int, dy: Int): RecognizedBlock = copy(
+    rect = rect.translated(dx, dy),
+    words = words.map { it.copy(rect = it.rect.translated(dx, dy)) },
+)
+
 fun PixelRect.translated(dx: Int, dy: Int): PixelRect =
     PixelRect(left = left + dx, top = top + dy, right = right + dx, bottom = bottom + dy)

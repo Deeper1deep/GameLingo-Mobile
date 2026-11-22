@@ -261,6 +261,8 @@
     <string name="settings_voice_sub">قريبًا</string>
     <string name="settings_updates_sub">الإصدار الحالي %1$s</string>
     <string name="settings_about_sub">معلومات التطبيق والمستودعات</string>
+    <string name="overlay_original_colors">الاحتفاظ بألوان النص الأصلي</string>
+    <string name="overlay_original_colors_hint">يقرأ ألوان الكلمات من لقطة الشاشة محليًا على جهازك (أسماء الأغراض والشخصيات مثلًا). الإنجليزي يحتفظ بألوانه كاملة، والعربي يتلوّن فقط حين تكون الكلمة مؤكدة (من قاموسك الخاص أو اسم يبقى بحروفه). غير ذلك يبقى بلون النص المعتاد.</string>
     <!-- Optimize My App -->
     <string name="optimize_title">أفضل الإعدادات</string>
     <string name="optimize_hint">يفحص جهازك فعليًا (الرام، البطارية، الحرارة) ويضبط إعدادات الأداء المناسبة. لا يغيّر إعدادات الخصوصية ولا مظهر الترجمة، ويمكنك الرجوع لإعداداتك السابقة بضغطة.</string>

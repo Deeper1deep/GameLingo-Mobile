@@ -134,6 +134,8 @@ data class TranslatedLine(
     val capturedAtMillis: Long,
     val subtitleId: Long = 0L,
     val generation: Long = 0L,
+    /** Colours detected on the source words (empty unless the feature is on). */
+    val sourceColors: List<com.gamelingo.mobile.core.color.SourceWordColor> = emptyList(),
 )
 
 /**
@@ -245,7 +247,14 @@ object TranslationSessionBus {
      */
     private val lifecycleLock = Any()
 
-    fun onNewLine(text: String, capturedAtMillis: Long) {
+    /** Source-word colours of the live appearance, keyed by its subtitle id. */
+    private var liveColors: Pair<Long, List<com.gamelingo.mobile.core.color.SourceWordColor>>? = null
+
+    fun onNewLine(
+        text: String,
+        capturedAtMillis: Long,
+        sourceColors: List<com.gamelingo.mobile.core.color.SourceWordColor> = emptyList(),
+    ) {
         synchronized(lifecycleLock) {
             // Register the appearance BEFORE the line can reach the worker:
             // a result can then never arrive for a source nobody tracks.
@@ -257,6 +266,7 @@ object TranslationSessionBus {
                 generation = generationCounter.get(),
             )
             _latestLine.value = line
+            liveColors = if (sourceColors.isEmpty()) null else subtitleId to sourceColors
             // Buffered, DROP_OLDEST: a saturated buffer sheds the stalest line,
             // never the fresh one; tryEmit never blocks the capture loop.
             _ocrLines.tryEmit(line)
@@ -301,6 +311,7 @@ object TranslationSessionBus {
             capturedAtMillis = capturedAtMillis,
             subtitleId = subtitleId,
             generation = generation,
+            sourceColors = liveColors?.takeIf { it.first == subtitleId }?.second.orEmpty(),
         )
         _translationFailure.value = null
         _translatedCount.update { it + 1 }

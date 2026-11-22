@@ -118,6 +118,10 @@ class FakeSettingsRepository(
         state.value = state.value.copy(overlayBackgroundColor = argb)
     }
 
+    override suspend fun setPreserveSourceColors(enabled: Boolean) {
+        state.value = state.value.copy(preserveSourceColors = enabled)
+    }
+
     override suspend fun setOverlayPosition(position: OverlayPosition) {
         state.value = state.value.copy(overlayPosition = position)
     }

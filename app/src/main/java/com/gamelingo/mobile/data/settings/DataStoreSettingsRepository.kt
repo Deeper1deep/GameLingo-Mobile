@@ -58,6 +58,7 @@ class DataStoreSettingsRepository @Inject constructor(
         )
         AppSettings(
             showOriginalText = prefs[KEY_SHOW_ORIGINAL] ?: true,
+            preserveSourceColors = prefs[KEY_PRESERVE_COLORS] ?: false,
             captureIntervalMs = SettingsConstraints.clampCaptureIntervalMs(
                 prefs[KEY_CAPTURE_INTERVAL_MS] ?: SettingsConstraints.DEFAULT_CAPTURE_INTERVAL_MS,
             ),
@@ -309,12 +310,17 @@ class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { it[KEY_OVERLAY_BG_COLOR] = argb }
     }
 
+    override suspend fun setPreserveSourceColors(enabled: Boolean) {
+        dataStore.edit { it[KEY_PRESERVE_COLORS] = enabled }
+    }
+
     override suspend fun setOverlayPosition(position: OverlayPosition) {
         dataStore.edit { it[KEY_OVERLAY_POSITION] = position.name }
     }
 
     private companion object {
         val KEY_SHOW_ORIGINAL = booleanPreferencesKey("show_original_text")
+        val KEY_PRESERVE_COLORS = booleanPreferencesKey("preserve_source_colors")
         val KEY_CAPTURE_INTERVAL_MS = longPreferencesKey("capture_interval_ms")
         val KEY_RESTRICT_TO_REGION = booleanPreferencesKey("restrict_to_text_region")
         val KEY_SMART_TEXT_DETECTION = booleanPreferencesKey("smart_text_detection")

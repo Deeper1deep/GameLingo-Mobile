@@ -30,7 +30,7 @@ import com.gamelingo.mobile.core.capture.CaptureHealth
 import com.gamelingo.mobile.core.capture.DisplayGeometry
 import com.gamelingo.mobile.core.capture.FailureTracker
 import com.gamelingo.mobile.core.capture.SubtitleBlockScorer
-import com.gamelingo.mobile.core.capture.translated
+import com.gamelingo.mobile.core.capture.shifted
 import com.gamelingo.mobile.core.capture.FrameChangeDetector
 import com.gamelingo.mobile.core.capture.RegionMapper
 import com.gamelingo.mobile.core.capture.isDeadProjectionError
@@ -563,14 +563,14 @@ class ScreenCaptureService : Service() {
             }
 
             val ocrStartNanos = System.nanoTime()
+            var shiftedBlocks: List<com.gamelingo.mobile.core.capture.RecognizedBlock> = emptyList()
             val rawText = if (settings.smartTextDetection) {
             // Smart mode: read positioned blocks, shift them into full-frame
             // coordinates, and let the scorer pick the real subtitle over
             // static corner watermarks and HUD labels, merging wrapped lines.
             val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(workingBitmap, 0))
-            val shifted = blocks.map { block ->
-                block.copy(rect = block.rect.translated(0, cropTop))
-            }
+            val shifted = blocks.map { block -> block.shifted(0, cropTop) }
+            shiftedBlocks = shifted
             val subtitle = SubtitleBlockScorer.selectSubtitle(
                 blocks = shifted,
                 frameWidth = geometry.width,
@@ -602,9 +602,18 @@ class ScreenCaptureService : Service() {
             if (settings.ignoreUnstableText && !stabilityTracker.offer(text)) return
             if (settings.dedupEnabled && !deduplicator.shouldDeliver(text)) return
 
+            // Colours only for a line that is really being published (new
+            // text), and only when the user asked: the pixel pass is cheap
+            // but not free, and the frame is recycled in the finally below.
+            val sourceColors = if (settings.preserveSourceColors) {
+                detectSourceColors(fullBitmap, shiftedBlocks, text)
+            } else {
+                emptyList()
+            }
             TranslationSessionBus.onNewLine(
                 text = text,
                 capturedAtMillis = System.currentTimeMillis(),
+                sourceColors = sourceColors,
             )
             CaptureHealth.onLinePublished()
             PipelineTiming.mark("line_published", 0, "len=${text.length}")
@@ -616,6 +625,38 @@ class ScreenCaptureService : Service() {
             }
             if (!fullBitmap.isRecycled) fullBitmap.recycle()
         }
+    }
+
+    /**
+     * Samples the glyph colour of each word of the published subtitle from the
+     * captured frame. Only chromatic colours are kept (white/grey is the
+     * default look). Bounded work: at most [MAX_COLOR_WORDS] words, each box
+     * sampled at a capped size.
+     */
+    private fun detectSourceColors(
+        frame: Bitmap,
+        blocks: List<com.gamelingo.mobile.core.capture.RecognizedBlock>,
+        publishedText: String,
+    ): List<com.gamelingo.mobile.core.color.SourceWordColor> {
+        if (blocks.isEmpty()) return emptyList()
+        val wanted = publishedText.lowercase()
+        val out = ArrayList<com.gamelingo.mobile.core.color.SourceWordColor>()
+        for (word in blocks.asSequence().flatMap { it.words.asSequence() }) {
+            if (out.size >= MAX_COLOR_WORDS) break
+            if (!wanted.contains(word.text.lowercase())) continue
+            val left = word.rect.left.coerceIn(0, frame.width - 1)
+            val top = word.rect.top.coerceIn(0, frame.height - 1)
+            val w = (word.rect.right - left).coerceIn(2, MAX_WORD_SAMPLE_PX).coerceAtMost(frame.width - left)
+            val h = (word.rect.bottom - top).coerceIn(2, MAX_WORD_SAMPLE_PX).coerceAtMost(frame.height - top)
+            if (w < 2 || h < 2) continue
+            val pixels = IntArray(w * h)
+            runCatching { frame.getPixels(pixels, 0, w, left, top, w, h) }.getOrNull() ?: continue
+            val color = com.gamelingo.mobile.core.color.SourceColorDetector.dominantTextColor(pixels, w, h)
+            if (color != null && com.gamelingo.mobile.core.color.SourceColorDetector.isChromatic(color)) {
+                out += com.gamelingo.mobile.core.color.SourceWordColor(word.text, color)
+            }
+        }
+        return out
     }
 
     /** Converts an RGBA_8888 ImageReader frame into a Bitmap, handling row padding. */
@@ -820,6 +861,8 @@ class ScreenCaptureService : Service() {
 
         /** Presence heartbeat period: far below OCR cost, fine for the 1 s grace. */
         private const val PRESENCE_HEARTBEAT_MS = 250L
+        private const val MAX_COLOR_WORDS = 24
+        private const val MAX_WORD_SAMPLE_PX = 96
 
         /** Floor for the capture tick delay when OCR outlasts the interval. */
         private const val MIN_TICK_DELAY_MS = 50L

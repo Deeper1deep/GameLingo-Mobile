@@ -61,6 +61,12 @@ fun OverlaySettingsScreen(
             checked = settings.showOriginalText,
             onCheckedChange = viewModel::setShowOriginalText,
         )
+        SwitchCard(
+            title = stringResource(R.string.overlay_original_colors),
+            checked = settings.preserveSourceColors,
+            onCheckedChange = viewModel::setPreserveSourceColors,
+        )
+        HintText(stringResource(R.string.overlay_original_colors_hint))
         SliderCard(
             title = stringResource(R.string.overlay_text_size),
             valueLabel = stringResource(R.string.overlay_text_size_value, settings.overlayTextSizeSp),

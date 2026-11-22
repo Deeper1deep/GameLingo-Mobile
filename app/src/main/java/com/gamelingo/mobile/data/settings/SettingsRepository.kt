@@ -8,6 +8,12 @@ data class AppSettings(
     // Translation
     val showOriginalText: Boolean = true,
     /**
+     * Keep the colours the game drew words in (item names, speakers) in the
+     * overlay. Off = one text colour. Colours are read locally from the
+     * captured frame; no pixels leave the device.
+     */
+    val preserveSourceColors: Boolean = false,
+    /**
      * Arabic style of every translation. Default EGYPTIAN_ARABIC: the
      * project's established behavior, kept for existing users on update.
      */
@@ -125,4 +131,5 @@ interface SettingsRepository {
     suspend fun setOverlayTextColor(argb: Long)
     suspend fun setOverlayBackgroundColor(argb: Long)
     suspend fun setOverlayPosition(position: OverlayPosition)
+    suspend fun setPreserveSourceColors(enabled: Boolean)
 }

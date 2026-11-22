@@ -2,6 +2,7 @@ package com.gamelingo.mobile.ocr
 
 import com.gamelingo.mobile.core.capture.PixelRect
 import com.gamelingo.mobile.core.capture.RecognizedBlock
+import com.gamelingo.mobile.core.capture.RecognizedWord
 import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.Text
@@ -32,6 +33,12 @@ class MlKitTextRecognizerEngine @Inject constructor() : TextRecognizerEngine {
                 RecognizedBlock(
                     text = block.text,
                     rect = PixelRect(box.left, box.top, box.right, box.bottom),
+                    words = block.lines.flatMap { line ->
+                        line.elements.mapNotNull { element ->
+                            val wb = element.boundingBox ?: return@mapNotNull null
+                            RecognizedWord(element.text, PixelRect(wb.left, wb.top, wb.right, wb.bottom))
+                        }
+                    },
                 )
             }
         }

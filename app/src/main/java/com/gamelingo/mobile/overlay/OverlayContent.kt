@@ -46,7 +46,31 @@ data class OverlayUiState(
      * line, no waiting hint over the game.
      */
     val cleared: Boolean = false,
+    /** Source-word colours for this line; empty = single text colour. */
+    val sourceColors: List<com.gamelingo.mobile.core.color.SourceWordColor> = emptyList(),
+    /** Arabic renderings the user pinned, used to colour the translation only when certain. */
+    val glossary: Map<String, String> = emptyMap(),
 )
+
+/** Builds a string with per-range colours; ranges are clamped and applied in order. */
+internal fun coloredText(
+    text: String,
+    spans: List<com.gamelingo.mobile.core.color.ColorSpan>,
+): androidx.compose.ui.text.AnnotatedString =
+    androidx.compose.ui.text.buildAnnotatedString {
+        append(text)
+        spans.forEach { span ->
+            val start = span.start.coerceIn(0, text.length)
+            val end = span.end.coerceIn(start, text.length)
+            if (end > start) {
+                addStyle(
+                    androidx.compose.ui.text.SpanStyle(color = androidx.compose.ui.graphics.Color(span.argb)),
+                    start,
+                    end,
+                )
+            }
+        }
+    }
 
 /**
  * The floating translation window's content: the Arabic translation on the
@@ -134,8 +158,19 @@ fun OverlayContent(
 
             state.translated != null -> {
                 // First line: the Arabic translation, right-to-left.
+                val keepColors = settings.preserveSourceColors && state.sourceColors.isNotEmpty()
+                val arabicSpans = if (keepColors) {
+                    com.gamelingo.mobile.core.color.ColorAligner.forTranslation(
+                        original = state.original.orEmpty(),
+                        translated = state.translated,
+                        colored = state.sourceColors,
+                        lookup = { state.glossary[it] },
+                    )
+                } else {
+                    emptyList()
+                }
                 Text(
-                    text = state.translated,
+                    text = coloredText(state.translated, arabicSpans),
                     color = textColor,
                     fontSize = settings.overlayTextSizeSp.sp,
                     fontWeight = FontWeight.Bold,
@@ -144,8 +179,15 @@ fun OverlayContent(
                 )
                 // Second line: the original English, left-to-right.
                 if (settings.showOriginalText && !state.original.isNullOrBlank()) {
+                    val originalSpans = if (keepColors) {
+                        com.gamelingo.mobile.core.color.ColorAligner.forOriginal(
+                            state.original, state.sourceColors,
+                        )
+                    } else {
+                        emptyList()
+                    }
                     Text(
-                        text = state.original,
+                        text = coloredText(state.original, originalSpans),
                         color = textColor.copy(alpha = 0.7f),
                         fontSize = (settings.overlayTextSizeSp - 5).coerceAtLeast(10).sp,
                         textAlign = TextAlign.Center,
