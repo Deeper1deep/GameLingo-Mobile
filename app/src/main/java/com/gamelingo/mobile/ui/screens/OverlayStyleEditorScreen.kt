@@ -157,9 +157,9 @@ fun OverlayStyleEditorScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             },
             onSelect = { f -> editStyle { it.copy(font = f) } },
         )
-        SwitchCard(stringResource(R.string.style_bold), draft.style.bold) { v -> editStyle { it.copy(bold = v) } }
-        SwitchCard(stringResource(R.string.style_shadow), draft.style.shadowEnabled) { v -> editStyle { it.copy(shadowEnabled = v) } }
-        SwitchCard(stringResource(R.string.style_lock), draft.style.positionLocked) { v -> editStyle { it.copy(positionLocked = v) } }
+        SwitchCard(stringResource(R.string.style_bold), draft.style.bold, onCheckedChange = { v -> editStyle { it.copy(bold = v) } })
+        SwitchCard(stringResource(R.string.style_shadow), draft.style.shadowEnabled, onCheckedChange = { v -> editStyle { it.copy(shadowEnabled = v) } })
+        SwitchCard(stringResource(R.string.style_lock), draft.style.positionLocked, onCheckedChange = { v -> editStyle { it.copy(positionLocked = v) } })
 
         SliderCard(
             title = stringResource(R.string.style_size, draft.textSizeSp), valueLabel = "",

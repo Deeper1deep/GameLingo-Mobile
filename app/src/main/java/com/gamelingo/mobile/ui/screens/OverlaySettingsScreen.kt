@@ -16,6 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -63,7 +65,7 @@ fun OverlaySettingsScreen(
             onCheckedChange = viewModel::setShowOriginalText,
         )
         com.gamelingo.mobile.ui.components.GlNavRow(
-            icon = androidx.compose.material.icons.Icons.Filled.Create,
+            icon = Icons.Filled.Create,
             title = stringResource(R.string.style_editor_open),
             subtitle = stringResource(R.string.style_editor_open_sub),
             onClick = onOpenEditor,
