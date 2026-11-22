@@ -29,6 +29,10 @@ data class QueuedRequest(
     val text: String,
     val capturedAtMillis: Long,
     val enqueuedAtMillis: Long,
+    /** The subtitle appearance this request was made for (0 = untracked). */
+    val subtitleId: Long = 0L,
+    /** The session generation it was captured in (0 = untracked). */
+    val generation: Long = 0L,
 )
 
 /** What the per-request processor reports back to the worker. */
@@ -135,6 +139,7 @@ class TranslationWorker(
         activeRequest = null
         synchronized(queueLock) { queue.clear() }
         lastEnqueuedText = null
+        lastEnqueuedSubtitleId = 0L
         updateStatus(RequestState.IDLE, activeRequestId = null)
         log("worker stopped")
     }
@@ -144,10 +149,19 @@ class TranslationWorker(
      * window is skipped; a full queue drops its oldest line, never the new
      * one. Safe to call from any thread; never blocks the caller.
      */
-    fun enqueue(text: String, capturedAtMillis: Long) {
+    fun enqueue(
+        text: String,
+        capturedAtMillis: Long,
+        subtitleId: Long = 0L,
+        generation: Long = 0L,
+    ) {
         if (!running.get()) return
         val at = now()
-        if (text == lastEnqueuedText && at - lastEnqueuedAtMillis < dedupWindowMs) {
+        // The same sentence appearing again is a NEW appearance (different
+        // subtitleId) and must be translated; only a repeat of the same
+        // appearance (or an untracked repeat) is a duplicate.
+        val sameAppearance = subtitleId == 0L || subtitleId == lastEnqueuedSubtitleId
+        if (sameAppearance && text == lastEnqueuedText && at - lastEnqueuedAtMillis < dedupWindowMs) {
             return
         }
         val request = QueuedRequest(
@@ -155,6 +169,8 @@ class TranslationWorker(
             text = text,
             capturedAtMillis = capturedAtMillis,
             enqueuedAtMillis = at,
+            subtitleId = subtitleId,
+            generation = generation,
         )
         synchronized(queueLock) {
             if (queue.size >= queueCapacity) {
@@ -168,6 +184,7 @@ class TranslationWorker(
         wakeup.trySend(Unit)
         log("enqueued #${request.id} len=${text.length} depth=${queueSize()}")
         lastEnqueuedText = text
+        lastEnqueuedSubtitleId = subtitleId
         lastEnqueuedAtMillis = at
         updateStatus(RequestState.QUEUED, activeRequestId = activeRequest?.id)
     }

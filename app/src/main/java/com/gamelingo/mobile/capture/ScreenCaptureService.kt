@@ -526,10 +526,14 @@ class ScreenCaptureService : Service() {
                 deduplicator.reset()
                 stabilityTracker.reset()
             }
+            // Battery saver may skip OCR on an unchanged frame, but never the
+            // pass that could notice the tracked text is gone: a static frame
+            // is not proof the subtitle is still there.
             val shouldRunOcr = !settings.batterySaverEnabled ||
                 PipelineTiming.timed("change_detect") {
                     frameChangeDetector.hasChanged(fullBitmap.toDownsampledBytes())
-                }
+                } ||
+                TranslationSessionBus.needsOcrVerification(System.currentTimeMillis())
             if (!shouldRunOcr) {
                 // Battery saver skipped this frame. Stamp it: a session whose
                 // OCR keeps being skipped must look starved, not healthy.

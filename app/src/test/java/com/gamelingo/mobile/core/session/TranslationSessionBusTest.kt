@@ -33,7 +33,10 @@ class TranslationSessionBusTest {
     @Test
     fun `a new line is published with its timestamp`() {
         TranslationSessionBus.onNewLine("Get in the car!", 1_000L)
-        assertEquals(OcrLine("Get in the car!", 1_000L), TranslationSessionBus.latestLine.value)
+        val line = TranslationSessionBus.latestLine.value!!
+        assertEquals("Get in the car!", line.text)
+        assertEquals(1_000L, line.capturedAtMillis)
+        assertTrue(line.subtitleId != TranslationSessionBus.NO_ID)
     }
 
     @Test
@@ -145,5 +148,50 @@ class TranslationSessionBusTest {
         TranslationSessionBus.onSessionStopped()
         TranslationSessionBus.onSessionStarted()
         assertEquals(false, TranslationSessionBus.onTranslated("Get in the car now", "قديمة", "e", false, 0L))
+    }
+
+    @Test
+    fun `the same sentence appearing again gets a new subtitle id`() {
+        TranslationSessionBus.onSessionStarted()
+        TranslationSessionBus.onNewLine("Get in the car!", 1_000L)
+        val first = TranslationSessionBus.latestLine.value!!
+        TranslationSessionBus.onTextObserved("", 1_100L)
+        TranslationSessionBus.onTextObserved("", 3_500L)
+        TranslationSessionBus.onNewLine("Get in the car!", 4_000L)
+        val second = TranslationSessionBus.latestLine.value!!
+        assertTrue(second.subtitleId > first.subtitleId)
+        assertTrue(!TranslationSessionBus.isSubtitleActive(first.subtitleId))
+        assertTrue(TranslationSessionBus.isSubtitleActive(second.subtitleId))
+    }
+
+    @Test
+    fun `a result for a gone subtitle is refused even when the text matches the new one`() {
+        TranslationSessionBus.onSessionStarted()
+        val gen = TranslationSessionBus.currentGeneration()
+        TranslationSessionBus.onNewLine("Run!", 1_000L)
+        val old = TranslationSessionBus.latestLine.value!!
+        TranslationSessionBus.onNewLine("Run!", 1_050L)
+        val now = TranslationSessionBus.latestLine.value!!
+        assertTrue(!TranslationSessionBus.onTranslated("Run!", "اجري", "e", false, 1_000L, old.subtitleId, gen))
+        assertTrue(TranslationSessionBus.onTranslated("Run!", "اجري", "e", false, 1_050L, now.subtitleId, gen))
+    }
+
+    @Test
+    fun `a stale failure never shows over a live line`() {
+        TranslationSessionBus.onSessionStarted()
+        val gen = TranslationSessionBus.currentGeneration()
+        TranslationSessionBus.onNewLine("first line", 1_000L)
+        val old = TranslationSessionBus.latestLine.value!!
+        TranslationSessionBus.onNewLine("second line", 1_500L)
+        TranslationSessionBus.onTranslationFailed("first line", old.subtitleId, gen)
+        assertNull(TranslationSessionBus.translationFailure.value)
+    }
+
+    @Test
+    fun `a result from another generation is refused`() {
+        TranslationSessionBus.onSessionStarted()
+        TranslationSessionBus.onNewLine("Hello", 1_000L)
+        val line = TranslationSessionBus.latestLine.value!!
+        assertTrue(!TranslationSessionBus.onTranslated("Hello", "مرحبا", "e", false, 1_000L, line.subtitleId, 999_999L))
     }
 }

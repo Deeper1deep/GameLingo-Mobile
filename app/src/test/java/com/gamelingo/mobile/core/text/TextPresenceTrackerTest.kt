@@ -26,7 +26,7 @@ class TextPresenceTrackerTest {
         assertEquals(Decision.None, t.observe("", 400))
         assertEquals(State.DISAPPEARING, t.state)
         assertEquals(Decision.None, t.observe("", 600)) // 2 misses but only 400 ms
-        assertEquals(Decision.Clear(a), t.observe("", 1_300))
+        assertCleared(a, t.observe("", 1_300))
         assertEquals(State.CLEARED, t.state)
     }
 
@@ -49,7 +49,7 @@ class TextPresenceTrackerTest {
             cleared = t.observe("", now)
             now += 100
         }
-        assertEquals(Decision.Clear(a), cleared)
+        assertCleared(a, cleared)
     }
 
     @Test
@@ -59,7 +59,7 @@ class TextPresenceTrackerTest {
         t.observe(a, 100)
         t.observe("Chapter two begins", 400)
         t.observe("Chapter two begins", 800)
-        assertEquals(Decision.Clear(a), t.observe("Chapter two begins", 1_200))
+        assertCleared(a, t.observe("Chapter two begins", 1_200))
     }
 
     @Test
@@ -87,7 +87,7 @@ class TextPresenceTrackerTest {
         // Now only the second remains.
         t.observe(second, 400)
         t.observe(second, 800)
-        assertEquals(Decision.Clear(first), t.observe(second, 1_300))
+        assertCleared(first, t.observe(second, 1_300))
     }
 
     @Test
@@ -96,7 +96,7 @@ class TextPresenceTrackerTest {
         shown(t)
         t.observe("", 300)
         t.observe("", 700)
-        assertEquals(Decision.Clear(a), t.observe("", 1_300))
+        assertCleared(a, t.observe("", 1_300))
         t.onLinePublished(a, 2_000)
         assertTrue(t.acceptTranslation(a))
         assertEquals(State.VISIBLE, t.state)
@@ -109,7 +109,7 @@ class TextPresenceTrackerTest {
         assertEquals(State.TRANSLATING, t.state)
         t.observe("", 300)
         t.observe("", 700)
-        assertEquals(Decision.Clear(a), t.observe("", 1_200))
+        assertCleared(a, t.observe("", 1_200))
         assertFalse("the late result must not appear", t.acceptTranslation(a))
     }
 
@@ -150,7 +150,7 @@ class TextPresenceTrackerTest {
         t.observe("", 300) // the last frame the display ever produced
         assertEquals(Decision.None, t.tick(500)) // quiet period not over
         assertEquals(Decision.None, t.tick(800)) // grace not over
-        assertEquals(Decision.Clear(a), t.tick(1_100))
+        assertCleared(a, t.tick(1_100))
     }
 
     @Test
@@ -169,7 +169,7 @@ class TextPresenceTrackerTest {
         t.observe(a, 0)
         t.observe("", 800)
         assertEquals(1_600L, t.effectiveGraceMs())
-        assertEquals(Decision.Clear(a), t.observe("", 1_600))
+        assertCleared(a, t.observe("", 1_600))
     }
 
     @Test
@@ -200,7 +200,7 @@ class TextPresenceTrackerTest {
         gone.observe(a, 0)
         gone.observe("", 300)
         assertEquals(Decision.None, gone.onUnchangedFrame(600))
-        assertEquals(Decision.Clear(a), gone.onUnchangedFrame(1_200))
+        assertCleared(a, gone.onUnchangedFrame(1_200))
     }
 
     @Test
@@ -210,5 +210,10 @@ class TextPresenceTrackerTest {
         assertEquals(Decision.None, t.observe("Get in the car rlght now", 200))
         assertEquals(State.VISIBLE, t.state)
         assertTrue(t.acceptTranslation("Get in the car rlght now"))
+    }
+
+    private fun assertCleared(original: String, decision: Decision) {
+        assertTrue("expected Clear($original) but was $decision",
+            decision is Decision.Clear && decision.original == original)
     }
 }
