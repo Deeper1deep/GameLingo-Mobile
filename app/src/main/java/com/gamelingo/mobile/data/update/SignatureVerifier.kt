@@ -30,6 +30,14 @@ class SignatureVerifier @Inject constructor(
         context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0)?.packageName
     }.getOrNull()
 
+    /** The versionCode declared inside a downloaded APK file. */
+    @Suppress("DEPRECATION")
+    fun apkVersionCode(apk: File): Long? = runCatching {
+        context.packageManager.getPackageArchiveInfo(apk.absolutePath, 0)?.let { info ->
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) info.longVersionCode else info.versionCode.toLong()
+        }
+    }.getOrNull()
+
     /** SHA-256 of the certificate embedded in a downloaded APK file. */
     fun apkCertSha256(apk: File): String? = runCatching {
         val info = context.packageManager.getPackageArchiveInfo(apk.absolutePath, signingFlags())
