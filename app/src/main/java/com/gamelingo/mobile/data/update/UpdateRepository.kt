@@ -4,6 +4,7 @@ import android.content.Context
 import com.gamelingo.mobile.BuildConfig
 import com.gamelingo.mobile.core.update.LatestRelease
 import com.gamelingo.mobile.core.update.UpdateDecision
+import com.gamelingo.mobile.core.update.UpdateGuards
 import com.gamelingo.mobile.core.update.UpdateDecider
 import com.gamelingo.mobile.core.util.Sha256
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -127,6 +128,12 @@ class UpdateRepository @Inject constructor(
 
     private suspend fun downloadAndVerifyLocked(release: LatestRelease, mandatory: Boolean) {
         updatesDir.mkdirs()
+        // Storage first: a download that cannot fit would fail late and leave
+        // a partial file; refuse before a single byte is written.
+        if (!UpdateGuards.hasEnoughStorage(updatesDir.usableSpace, release.fileSizeBytes)) {
+            _state.value = UpdateUiState.Failed(UpdateError.WRITE_FAILED, mandatory)
+            return
+        }
         // Clear older downloaded APKs only; nothing else lives in this directory.
         updatesDir.listFiles()?.forEach { it.delete() }
         val tempFile = File(updatesDir, APK_TEMP_FILE_NAME)
@@ -165,6 +172,16 @@ class UpdateRepository @Inject constructor(
             _state.value = UpdateUiState.Failed(UpdateError.SIGNATURE_MISMATCH, mandatory)
             return
         }
+        if (!UpdateGuards.versionAcceptable(
+                signatureVerifier.apkVersionCode(tempFile),
+                release.latestVersionCode.toLong(),
+                BuildConfig.VERSION_CODE.toLong(),
+            )
+        ) {
+            tempFile.delete()
+            _state.value = UpdateUiState.Failed(UpdateError.BAD_METADATA, mandatory)
+            return
+        }
         // Fully verified: atomically move into the install slot.
         dest.delete()
         if (!tempFile.renameTo(dest)) {
@@ -175,9 +192,33 @@ class UpdateRepository @Inject constructor(
         _state.value = UpdateUiState.ReadyToInstall(release, dest.absolutePath)
     }
 
-    /** The verified APK file referenced by a ReadyToInstall state, if still present. */
-    fun verifiedApk(state: UpdateUiState.ReadyToInstall): File? =
-        File(state.apkPath).takeIf { it.exists() }
+    /**
+     * The APK to hand to the installer - re-verified right now. The file sat
+     * on disk between the download check and the user's tap, so checksum,
+     * package, signing certificate and version are all checked again; any
+     * mismatch deletes the file and reports the failure instead of installing.
+     */
+    fun verifiedApk(state: UpdateUiState.ReadyToInstall): File? {
+        val file = File(state.apkPath).takeIf { it.exists() } ?: return null
+        val release = state.release
+        val failure = when {
+            !Sha256.matches(file, release.sha256) -> UpdateError.CHECKSUM_MISMATCH
+            signatureVerifier.apkPackageName(file) != BuildConfig.APPLICATION_ID -> UpdateError.PACKAGE_MISMATCH
+            !signatureVerifier.isGenuineUpdate(file) -> UpdateError.SIGNATURE_MISMATCH
+            !UpdateGuards.versionAcceptable(
+                signatureVerifier.apkVersionCode(file),
+                release.latestVersionCode.toLong(),
+                BuildConfig.VERSION_CODE.toLong(),
+            ) -> UpdateError.BAD_METADATA
+            else -> null
+        }
+        if (failure != null) {
+            file.delete()
+            _state.value = UpdateUiState.Failed(failure, mandatory = false)
+            return null
+        }
+        return file
+    }
 
     /** Dismiss a non-mandatory prompt; mandatory updates stay on screen. */
     fun dismiss() {

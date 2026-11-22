@@ -78,6 +78,8 @@ fun SettingsHubScreen(
             color = GlColors.TextPrimary,
         )
 
+        OptimizeCard()
+
         SectionHeader(stringResource(R.string.settings_section_features))
         GlNavRow(
             icon = Icons.Filled.Settings,
@@ -102,6 +104,12 @@ fun SettingsHubScreen(
             title = stringResource(R.string.nav_overlay_settings),
             subtitle = stringResource(R.string.settings_overlay_sub),
             onClick = { onNavigate(GameLingoRoutes.OVERLAY_SETTINGS) },
+        )
+        GlNavRow(
+            icon = Icons.Filled.Face,
+            title = stringResource(R.string.style_editor_open),
+            subtitle = stringResource(R.string.style_editor_open_sub),
+            onClick = { onNavigate(GameLingoRoutes.OVERLAY_STYLE) },
         )
         GlNavRow(
             icon = Icons.Filled.PlayArrow,

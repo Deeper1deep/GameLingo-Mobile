@@ -202,6 +202,24 @@ class SettingsViewModel @Inject constructor(
     fun setOverlayBackgroundColor(argb: Long) =
         viewModelScope.launch { repository.setOverlayBackgroundColor(argb) }
 
+    /** Applies a whole appearance (editor "Apply" and preset taps). */
+    fun applyAppearance(a: com.gamelingo.mobile.core.overlay.OverlayAppearance) {
+        val s = a.sanitized()
+        viewModelScope.launch {
+            repository.setOverlayTextColor(s.textColor)
+            repository.setOverlayBackgroundColor(s.backgroundColor)
+            repository.setOverlayOpacity(s.opacity)
+            repository.setOverlayTextSizeSp(s.textSizeSp)
+            repository.setOverlayStyle(s.style)
+        }
+    }
+
+    fun saveCustomPreset(a: com.gamelingo.mobile.core.overlay.OverlayAppearance?) =
+        viewModelScope.launch { repository.setCustomOverlayPreset(a) }
+
+    fun setPreserveSourceColors(enabled: Boolean) =
+        viewModelScope.launch { repository.setPreserveSourceColors(enabled) }
+
     fun setOverlayPosition(position: OverlayPosition) =
         viewModelScope.launch { repository.setOverlayPosition(position) }
 }

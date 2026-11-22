@@ -326,6 +326,23 @@ class TranslationWorkerTest {
     }
 
     @Test
+    fun `the same sentence as a new appearance is not a duplicate`() = runTest {
+        val processor = FakeProcessor { ok(it.text) }
+        val w = worker(processor)
+        w.start()
+        w.enqueue("Run!", 0, subtitleId = 1L)
+        w.enqueue("Run!", 1, subtitleId = 1L)
+        runCurrent()
+        assertEquals(1, processor.calls.size)
+        // Disappeared and came back inside the window: a new subtitle id.
+        w.enqueue("Run!", 2, subtitleId = 2L)
+        runCurrent()
+        assertEquals(2, processor.calls.size)
+        assertEquals(listOf(1L, 2L), processor.calls.map { it.subtitleId })
+        w.stop()
+    }
+
+    @Test
     fun `cancellation inside the processor always propagates`() = runTest {
         val processor = FakeProcessor { throw CancellationException("superseded") }
         val w = worker(processor, enableWatchdog = true)

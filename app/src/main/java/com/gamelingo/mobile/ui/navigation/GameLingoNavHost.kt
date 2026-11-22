@@ -52,6 +52,7 @@ import com.gamelingo.mobile.ui.screens.HistoryScreen
 import com.gamelingo.mobile.ui.screens.HomeScreen
 import com.gamelingo.mobile.ui.screens.OcrSettingsScreen
 import com.gamelingo.mobile.ui.screens.OverlaySettingsScreen
+import com.gamelingo.mobile.ui.screens.OverlayStyleEditorScreen
 import com.gamelingo.mobile.ui.screens.SessionScreen
 import com.gamelingo.mobile.ui.screens.SettingsHubScreen
 import com.gamelingo.mobile.ui.screens.SplashScreen
@@ -72,6 +73,7 @@ object GameLingoRoutes {
     const val OCR_SETTINGS = "settings/ocr"
     const val AI_SETTINGS = "settings/ai"
     const val OVERLAY_SETTINGS = "settings/overlay"
+    const val OVERLAY_STYLE = "settings/overlay/style"
     const val UPDATES = "updates"
     const val ABOUT = "about"
     const val VOICE = "voice"
@@ -89,6 +91,7 @@ private val destinationMeta = listOf(
     DestinationMeta(GameLingoRoutes.OCR_SETTINGS, R.string.nav_ocr_settings),
     DestinationMeta(GameLingoRoutes.AI_SETTINGS, R.string.nav_ai_settings),
     DestinationMeta(GameLingoRoutes.OVERLAY_SETTINGS, R.string.nav_overlay_settings),
+    DestinationMeta(GameLingoRoutes.OVERLAY_STYLE, R.string.nav_overlay_style),
     DestinationMeta(GameLingoRoutes.UPDATES, R.string.nav_update_center),
     DestinationMeta(GameLingoRoutes.ABOUT, R.string.nav_about),
     DestinationMeta(GameLingoRoutes.VOICE, R.string.nav_voice),
@@ -230,7 +233,10 @@ fun GameLingoAppRoot(
                         composable(GameLingoRoutes.TRANSLATION_SETTINGS) { TranslationSettingsScreen() }
                         composable(GameLingoRoutes.OCR_SETTINGS) { OcrSettingsScreen() }
                         composable(GameLingoRoutes.AI_SETTINGS) { AiSettingsScreen() }
-                        composable(GameLingoRoutes.OVERLAY_SETTINGS) { OverlaySettingsScreen() }
+                        composable(GameLingoRoutes.OVERLAY_SETTINGS) {
+                            OverlaySettingsScreen(onOpenEditor = { navigateTo(GameLingoRoutes.OVERLAY_STYLE) })
+                        }
+                        composable(GameLingoRoutes.OVERLAY_STYLE) { OverlayStyleEditorScreen() }
                         composable(GameLingoRoutes.UPDATES) { UpdateCenterScreen() }
                         composable(GameLingoRoutes.ABOUT) { AboutScreen() }
                         composable(GameLingoRoutes.VOICE) { VoiceTranslationScreen() }

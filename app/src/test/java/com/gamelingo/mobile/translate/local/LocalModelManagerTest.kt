@@ -152,6 +152,28 @@ class LocalModelManagerTest {
     }
 
     @Test
+    fun `delete releases engine resources before the files go`() = runTest {
+        serveGood()
+        manager.download(FAKE_MODEL, preferWifi = false)
+        var filesPresentAtRelease: Boolean? = null
+        manager.addReleaseListener(FAKE_MODEL) {
+            filesPresentAtRelease = manager.modelDir(FAKE_MODEL) != null
+        }
+        manager.deleteModel(FAKE_MODEL)
+        assertEquals(true, filesPresentAtRelease)
+        assertNull(manager.modelDir(FAKE_MODEL))
+    }
+
+    @Test
+    fun `a failing release listener never blocks the delete`() = runTest {
+        serveGood()
+        manager.download(FAKE_MODEL, preferWifi = false)
+        manager.addReleaseListener(FAKE_MODEL) { error("native close failed") }
+        manager.deleteModel(FAKE_MODEL)
+        assertNull(manager.modelDir(FAKE_MODEL))
+    }
+
+    @Test
     fun `a newer verified version cleans up older installs`() = runTest {
         serveGood()
         manager.download(FAKE_MODEL, preferWifi = false)

@@ -16,6 +16,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Create
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -43,6 +45,7 @@ import com.gamelingo.mobile.ui.theme.GlSpacing
 @Composable
 fun OverlaySettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
+    onOpenEditor: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     SettingsColumn {
@@ -61,6 +64,18 @@ fun OverlaySettingsScreen(
             checked = settings.showOriginalText,
             onCheckedChange = viewModel::setShowOriginalText,
         )
+        com.gamelingo.mobile.ui.components.GlNavRow(
+            icon = Icons.Filled.Create,
+            title = stringResource(R.string.style_editor_open),
+            subtitle = stringResource(R.string.style_editor_open_sub),
+            onClick = onOpenEditor,
+        )
+        SwitchCard(
+            title = stringResource(R.string.overlay_original_colors),
+            checked = settings.preserveSourceColors,
+            onCheckedChange = viewModel::setPreserveSourceColors,
+        )
+        HintText(stringResource(R.string.overlay_original_colors_hint))
         SliderCard(
             title = stringResource(R.string.overlay_text_size),
             valueLabel = stringResource(R.string.overlay_text_size_value, settings.overlayTextSizeSp),

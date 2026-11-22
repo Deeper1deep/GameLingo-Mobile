@@ -243,6 +243,14 @@ class LocalModelManager @Inject constructor(
         }
     }
 
+    private val releaseListeners =
+        java.util.concurrent.ConcurrentHashMap<String, java.util.concurrent.CopyOnWriteArrayList<() -> Unit>>()
+
+    /** Engines register here so deleting [modelId] first releases their native resources. */
+    fun addReleaseListener(modelId: String, release: () -> Unit) {
+        releaseListeners.getOrPut(modelId) { java.util.concurrent.CopyOnWriteArrayList() }.add(release)
+    }
+
     /**
      * Deletes one installed model and its partial downloads. Serialized with
      * downloads on the same mutex so a delete can never race an in-flight
@@ -250,6 +258,10 @@ class LocalModelManager @Inject constructor(
      */
     suspend fun deleteModel(modelId: String) {
         downloadMutex.withLock {
+            // Release native sessions/mappings of the model BEFORE its files
+            // go: an engine holding an open (or mapped) file would otherwise
+            // keep the storage, or read a half-deleted model.
+            releaseListeners[modelId]?.toList()?.forEach { release -> runCatching { release() } }
             withContext(Dispatchers.IO) {
                 val root = File(context.filesDir, MODEL_ROOT)
                 root.listFiles { f -> f.isDirectory && f.name.startsWith("${modelId}_v") }

@@ -80,7 +80,12 @@ class TranslationCoordinator @Inject constructor(
                 ) {
                     return@collect
                 }
-                translationWorker.enqueue(line.text, line.capturedAtMillis)
+                translationWorker.enqueue(
+                    text = line.text,
+                    capturedAtMillis = line.capturedAtMillis,
+                    subtitleId = line.subtitleId,
+                    generation = line.generation,
+                )
             }
         }
         // The worker follows the session: a stopped session stops it
@@ -111,7 +116,16 @@ class TranslationCoordinator @Inject constructor(
         // Session generation guard: if the session stops or restarts while
         // this request is in flight, its result belongs to the old session
         // and must not be published into the new one.
-        val generation = TranslationSessionBus.currentGeneration()
+        val generation = if (request.generation != TranslationSessionBus.NO_ID) {
+            request.generation
+        } else {
+            TranslationSessionBus.currentGeneration()
+        }
+        // The subtitle may have left the screen while the request waited in
+        // the queue: translating a gone line only burns tokens and battery.
+        if (isStale(generation) || !TranslationSessionBus.isSubtitleActive(request.subtitleId)) {
+            return ProcessorOutcome("skipped-stale", false)
+        }
         val settings = settingsRepository.settings.first()
         val arabicMode = settings.arabicTranslationMode
         val contextLines = contextMemory.snapshot().takeLast(settings.contextLines)
@@ -145,6 +159,8 @@ class TranslationCoordinator @Inject constructor(
                         fromCache = true,
                     ),
                     capturedAtMillis = request.capturedAtMillis,
+                    subtitleId = request.subtitleId,
+                    generation = generation,
                 )
                 contextMemory.add(request.text, request.capturedAtMillis)
                 return ProcessorOutcome(
@@ -180,14 +196,25 @@ class TranslationCoordinator @Inject constructor(
             // lost question mark) are fixed and tagged "+qc"; anything else
             // publishes once exactly as the engine produced it.
             val inspection = com.gamelingo.mobile.core.quality.TranslationQualityGate
-                .inspect(request.text, result.translatedText)
-            val finalResult = if (inspection.corrected) {
-                result.copy(
+                .inspect(request.text, result.translatedText, arabicMode)
+            // A flagged output for a line that is, as a whole, one known
+            // expression ("This is us.") is replaced by that expression's
+            // reference rendering: local, deterministic, no second engine call.
+            val knownRendering = if (inspection.issues.any { it in REPLACEABLE_ISSUES }) {
+                understandingHolder.get().exactLineRendering(request.text, arabicMode)
+            } else {
+                null
+            }
+            val finalResult = when {
+                knownRendering != null -> result.copy(
+                    translatedText = knownRendering,
+                    engineId = "${result.engineId}+idiom",
+                )
+                inspection.corrected -> result.copy(
                     translatedText = inspection.text,
                     engineId = "${result.engineId}+qc",
                 )
-            } else {
-                result
+                else -> result
             }
             PipelineTiming.mark(
                 "engine",
@@ -210,7 +237,10 @@ class TranslationCoordinator @Inject constructor(
             // over the new mode. The cache entry is still stored (keyed by
             // mode, so it only ever serves the mode it belongs to).
             if (isPublishableNow(generation, arabicMode)) {
-                publish(request.text, finalResult, request.capturedAtMillis)
+                publish(
+                    request.text, finalResult, request.capturedAtMillis,
+                    request.subtitleId, generation,
+                )
                 contextMemory.add(request.text, request.capturedAtMillis)
                 publishEngineNotice(settings.aiMode, finalResult.engineId)
             }
@@ -221,7 +251,9 @@ class TranslationCoordinator @Inject constructor(
         } catch (timeout: TimeoutCancellationException) {
             // The provider hit the user's timeout: a visible failure. The
             // worker classifies the state; checked before CancellationException.
-            if (!isStale(generation)) TranslationSessionBus.onTranslationFailed(request.text)
+            if (!isStale(generation)) TranslationSessionBus.onTranslationFailed(
+                request.text, request.subtitleId, generation,
+            )
             throw timeout
         } catch (cancelled: CancellationException) {
             // Session stop or worker recovery: never misreport as a failure.
@@ -234,7 +266,9 @@ class TranslationCoordinator @Inject constructor(
                     TranslationSessionBus.onNotice(SessionNotice.ONLINE_NOT_CONFIGURED)
                 else -> Unit
             }
-            if (!isStale(generation)) TranslationSessionBus.onTranslationFailed(request.text)
+            if (!isStale(generation)) TranslationSessionBus.onTranslationFailed(
+                request.text, request.subtitleId, generation,
+            )
             throw error
         }
     }
@@ -285,6 +319,8 @@ class TranslationCoordinator @Inject constructor(
         original: String,
         result: TranslationResult,
         capturedAtMillis: Long,
+        subtitleId: Long = TranslationSessionBus.NO_ID,
+        generation: Long = TranslationSessionBus.NO_ID,
     ) {
         TranslationSessionBus.onTranslated(
             original = original,
@@ -292,6 +328,8 @@ class TranslationCoordinator @Inject constructor(
             engineId = result.engineId,
             fromCache = result.fromCache,
             capturedAtMillis = capturedAtMillis,
+            subtitleId = subtitleId,
+            generation = generation,
         )
         // History is best-effort: a Room failure must never crash the app or
         // swallow a translation the user is waiting for.
@@ -340,6 +378,14 @@ class TranslationCoordinator @Inject constructor(
 
     internal companion object {
         const val MAX_CONTEXT_LINES = 20
+
+        /** Gate findings that justify swapping in a known whole-line rendering. */
+        val REPLACEABLE_ISSUES = setOf(
+            com.gamelingo.mobile.core.quality.TranslationQualityGate.Issue.PRONOUN_US_MISREAD,
+            com.gamelingo.mobile.core.quality.TranslationQualityGate.Issue.NEGATION_LOST,
+            com.gamelingo.mobile.core.quality.TranslationQualityGate.Issue.UNTRANSLATED,
+            com.gamelingo.mobile.core.quality.TranslationQualityGate.Issue.REGISTER_LEAK,
+        )
         const val MILLIS_PER_SECOND = 1_000L
         const val NANOS_PER_MS = 1_000_000L
 

@@ -1,6 +1,6 @@
 {
-  "version": 3,
-  "notes": "v3: gaming world layers (factions/weapons/military/missions) for the deep-engine brief; v2: layered mode-aware glossaries.",
+  "version": 4,
+  "notes": "v4: health kit, civilians, military terms; v3: gaming world layers (factions/weapons/military/missions) for the deep-engine brief; v2: layered mode-aware glossaries.",
   "line_overrides": [
     {
       "en": "holy shit!",
@@ -852,7 +852,16 @@
       "egy": "ابن الوسخة"
     }
   ],
-  "common_glossary": [],
+  "common_glossary": [
+    {
+      "en": "health kit",
+      "ar": "حقيبة إسعافات"
+    },
+    {
+      "en": "first aid kit",
+      "ar": "حقيبة إسعافات أولية"
+    }
+  ],
   "msa_glossary": [
     {
       "en": "police",
@@ -1028,6 +1037,26 @@
     {
       "en": "evac",
       "ar": "إخلاء"
+    },
+    {
+      "en": "military",
+      "ar": "الجيش"
+    },
+    {
+      "en": "civilians",
+      "ar": "المدنيون"
+    },
+    {
+      "en": "civilian",
+      "ar": "مدني"
+    },
+    {
+      "en": "soldiers",
+      "ar": "الجنود"
+    },
+    {
+      "en": "curfew",
+      "ar": "حظر التجول"
     }
   ],
   "missions": [

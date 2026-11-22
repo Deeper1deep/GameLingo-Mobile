@@ -185,6 +185,9 @@ class OverlayService : Service() {
         var dragging = false
         val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
         view.setOnTouchListener { _, event ->
+            // Locked position: dragging is off, but touches still fall through
+            // to Compose so the stop control keeps working.
+            if (settingsState.value.overlayStyle.positionLocked) return@setOnTouchListener false
             val params = layoutParams ?: return@setOnTouchListener false
             val screenHeight = resources.displayMetrics.heightPixels
             val screenWidth = resources.displayMetrics.widthPixels
@@ -249,7 +252,20 @@ class OverlayService : Service() {
         }
         serviceScope.launch {
             TranslationSessionBus.translatedLine.collect { line ->
-                if (line != null) {
+                if (line == null) {
+                    // The source text left the screen (or the session ended):
+                    // clear the content. The initial null before any line is
+                    // not a clear - the waiting hint stays until a first line.
+                    val current = uiState.value
+                    if (current.translated != null || current.failure != null) {
+                        uiState.value = current.copy(
+                            original = null,
+                            translated = null,
+                            failure = null,
+                            cleared = true,
+                        )
+                    }
+                } else {
                     // The permission can be revoked while the session runs;
                     // the system then drops the window silently. Detect it on
                     // the next line and surface the reason instead of letting
@@ -262,6 +278,11 @@ class OverlayService : Service() {
                     uiState.value = OverlayUiState(
                         original = line.original,
                         translated = line.translated,
+                        sessionRunning = uiState.value.sessionRunning,
+                        notice = uiState.value.notice,
+                        sourceColors = line.sourceColors,
+                        glossary = settingsState.value.userGlossaryTerms
+                            .associate { it.en.trim().lowercase() to it.ar },
                     )
                     PipelineTiming.endToEnd("overlay_displayed", line.capturedAtMillis)
                 }
@@ -269,9 +290,10 @@ class OverlayService : Service() {
         }
         serviceScope.launch {
             TranslationSessionBus.translationFailure.collect { failure ->
-                if (failure != null) {
-                    uiState.value = uiState.value.copy(failure = failure)
-                }
+                uiState.value = uiState.value.copy(
+                    failure = failure,
+                    cleared = if (failure != null) false else uiState.value.cleared,
+                )
             }
         }
         serviceScope.launch {

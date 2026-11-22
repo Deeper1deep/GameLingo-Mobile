@@ -16,6 +16,7 @@ import javax.inject.Inject
 import javax.inject.Singleton
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.fold
 import kotlinx.coroutines.sync.Mutex
@@ -56,6 +57,13 @@ class TranslateGemmaEngine @Inject constructor(
     @Volatile
     private var engine: Engine? = null
 
+    /** Engines whose close was requested while a generation still used them. */
+    private val pendingClose = java.util.concurrent.ConcurrentLinkedQueue<Engine>()
+
+    init {
+        modelManager.addReleaseListener(LocalModelManager.MODEL_TRANSLATEGEMMA) { close() }
+    }
+
     override fun isAvailable(): Boolean = modelManager.isInstalled(LocalModelManager.MODEL_TRANSLATEGEMMA)
 
     override suspend fun ensureReady() {
@@ -81,14 +89,19 @@ class TranslateGemmaEngine @Inject constructor(
                 // Throwable containment: LiteRT-LM init failures surface as
                 // Errors (linkage, native checks), which the chain turns into a
                 // visible degrade instead of a process crash.
+                var created: Engine? = null
                 val newEngine = try {
-                    val created = Engine(config)
+                    created = Engine(config)
                     created.initialize()
+                    kotlinx.coroutines.currentCoroutineContext().ensureActive()
                     created
-                } catch (cancelled: Throwable) {
+                } catch (failure: Throwable) {
+                    // A half-initialised native engine must be released, not
+                    // dropped: it holds the model mapping (~2 GB).
+                    runCatching { created?.close() }
                     engine = null
-                    if (cancelled is kotlinx.coroutines.CancellationException) throw cancelled
-                    throw EngineInitException(cancelled)
+                    if (failure is kotlinx.coroutines.CancellationException) throw failure
+                    throw EngineInitException(failure)
                 }
                 engine = newEngine
             }
@@ -116,7 +129,7 @@ class TranslateGemmaEngine @Inject constructor(
         }
         val localEngine = engine ?: throw ModelNotInstalledException()
         return withContext(Dispatchers.Default) {
-            inferenceMutex.withLock {
+            withInference {
                 val conversation = localEngine.createConversation(
                     ConversationConfig(
                         systemInstruction = Contents.of(systemInstructionFor(request.arabicMode)),
@@ -150,15 +163,49 @@ class TranslateGemmaEngine @Inject constructor(
                     }
                     TranslationResult(translatedText = polished, engineId = ENGINE_ID)
                 } finally {
-                    conversation.close()
+                    runCatching { conversation.close() }
                 }
             }
         }
     }
 
+
+    /** Runs one inference under the lock and finishes any close deferred during it. */
+    private suspend fun <T> withInference(block: suspend () -> T): T =
+        inferenceMutex.withLock {
+            try {
+                block()
+            } finally {
+                drainPendingClose()
+            }
+        }
+
+    private fun drainPendingClose() {
+        while (true) {
+            val next = pendingClose.poll() ?: return
+            if (next === engine) continue
+            runCatching { next.close() }
+        }
+    }
+
+    /**
+     * Releases the native engine; the next translate reloads lazily. A close
+     * requested mid-generation is deferred until the generation ends - the
+     * native engine is never freed under a running conversation.
+     */
     override fun close() {
-        engine?.close()
+        val old = engine
         engine = null
+        if (old == null) return
+        if (inferenceMutex.tryLock()) {
+            try {
+                runCatching { old.close() }
+            } finally {
+                inferenceMutex.unlock()
+            }
+        } else {
+            pendingClose.add(old)
+        }
     }
 
     class GenerationFailedException(message: String) : Exception(message)

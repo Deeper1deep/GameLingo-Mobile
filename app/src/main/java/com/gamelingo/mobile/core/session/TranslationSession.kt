@@ -119,6 +119,10 @@ data class WorkerStatus(
 data class OcrLine(
     val text: String,
     val capturedAtMillis: Long,
+    /** Id of this text appearance (see TextPresenceTracker); 0 when untracked. */
+    val subtitleId: Long = 0L,
+    /** Session generation the line was captured in; 0 when untracked. */
+    val generation: Long = 0L,
 )
 
 /** One finished translation, ready for the floating window (Phase 6). */
@@ -128,6 +132,10 @@ data class TranslatedLine(
     val engineId: String,
     val fromCache: Boolean,
     val capturedAtMillis: Long,
+    val subtitleId: Long = 0L,
+    val generation: Long = 0L,
+    /** Colours detected on the source words (empty unless the feature is on). */
+    val sourceColors: List<com.gamelingo.mobile.core.color.SourceWordColor> = emptyList(),
 )
 
 /**
@@ -148,6 +156,8 @@ object TranslationSessionBus {
      * buffered SharedFlow instead. Conflating worker input was dropping
      * subtitles under fast dialogue.
      */
+    private val presence = com.gamelingo.mobile.core.text.TextPresenceTracker()
+
     private val _ocrLines = MutableSharedFlow<OcrLine>(
         extraBufferCapacity = OCR_LINES_BUFFER,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -194,6 +204,7 @@ object TranslationSessionBus {
 
     fun onSessionStarted() {
         generationCounter.incrementAndGet()
+        presence.reset()
         _error.value = null
         if (_state.value != SessionState.RUNNING) {
             _startedAtMillis.value = System.currentTimeMillis()
@@ -204,6 +215,7 @@ object TranslationSessionBus {
 
     fun onSessionStopped() {
         generationCounter.incrementAndGet()
+        presence.reset()
         _state.value = SessionState.STOPPED
         _startedAtMillis.value = null
         _translatedCount.value = 0
@@ -227,35 +239,146 @@ object TranslationSessionBus {
         }
     }
 
-    fun onNewLine(text: String, capturedAtMillis: Long) {
-        val line = OcrLine(text = text, capturedAtMillis = capturedAtMillis)
-        _latestLine.value = line
-        // Buffered, DROP_OLDEST: a saturated buffer sheds the stalest line,
-        // never the fresh one; tryEmit never blocks the capture loop.
-        _ocrLines.tryEmit(line)
-        _translationFailure.value = null
+    /**
+     * Guards every transition of the subtitle lifecycle: registering an
+     * appearance, accepting+publishing a result, clearing, failing. Without
+     * one lock "is this result still wanted?" and "show it" were separate
+     * steps a Clear or a newer line could slip between.
+     */
+    private val lifecycleLock = Any()
+
+    /** Source-word colours of the live appearance, keyed by its subtitle id. */
+    private var liveColors: Pair<Long, List<com.gamelingo.mobile.core.color.SourceWordColor>>? = null
+
+    fun onNewLine(
+        text: String,
+        capturedAtMillis: Long,
+        sourceColors: List<com.gamelingo.mobile.core.color.SourceWordColor> = emptyList(),
+    ) {
+        synchronized(lifecycleLock) {
+            // Register the appearance BEFORE the line can reach the worker:
+            // a result can then never arrive for a source nobody tracks.
+            val subtitleId = presence.onLinePublished(text, capturedAtMillis)
+            val line = OcrLine(
+                text = text,
+                capturedAtMillis = capturedAtMillis,
+                subtitleId = subtitleId,
+                generation = generationCounter.get(),
+            )
+            _latestLine.value = line
+            liveColors = if (sourceColors.isEmpty()) null else subtitleId to sourceColors
+            // Buffered, DROP_OLDEST: a saturated buffer sheds the stalest line,
+            // never the fresh one; tryEmit never blocks the capture loop.
+            _ocrLines.tryEmit(line)
+            _translationFailure.value = null
+        }
     }
 
+    /** True while [subtitleId] is the live appearance (always true for the untracked id 0). */
+    fun isSubtitleActive(subtitleId: Long): Boolean =
+        subtitleId == NO_ID || presence.isActive(subtitleId)
+
+    /**
+     * Shows a finished translation - unless its source is gone, was replaced
+     * by a newer appearance, or belongs to another session. The check and the
+     * publish are one atomic step.
+     *
+     * @param subtitleId the appearance the request was made for; [NO_ID] for
+     * legacy callers, which fall back to matching by text.
+     * @return true when the translation was published to the UI.
+     */
     fun onTranslated(
         original: String,
         translated: String,
         engineId: String,
         fromCache: Boolean,
         capturedAtMillis: Long,
-    ) {
+        subtitleId: Long = NO_ID,
+        generation: Long = NO_ID,
+    ): Boolean = synchronized(lifecycleLock) {
+        if (generation != NO_ID && generation != generationCounter.get()) return false
+        val accepted = if (subtitleId != NO_ID) {
+            presence.acceptSubtitle(subtitleId)
+        } else {
+            presence.acceptTranslation(original)
+        }
+        if (!accepted) return false
         _translatedLine.value = TranslatedLine(
             original = original,
             translated = translated,
             engineId = engineId,
             fromCache = fromCache,
             capturedAtMillis = capturedAtMillis,
+            subtitleId = subtitleId,
+            generation = generation,
+            sourceColors = liveColors?.takeIf { it.first == subtitleId }?.second.orEmpty(),
         )
         _translationFailure.value = null
         _translatedCount.update { it + 1 }
+        true
     }
 
-    fun onTranslationFailed(original: String) {
-        _translationFailure.value = original
+    /**
+     * One OCR pass read [text] (blank when it found nothing). Hides the
+     * translation once the source is confirmed gone.
+     *
+     * @return true when the translation was just cleared: the capture side
+     * must then forget its duplicate/stability memory so the same subtitle
+     * reappearing is translated again.
+     */
+    fun onTextObserved(text: String, nowMillis: Long): Boolean = synchronized(lifecycleLock) {
+        applyDecision(presence.observe(text, nowMillis))
+    }
+
+    /** The frame is identical to the previous one (OCR skipped). */
+    fun onFrameUnchanged(nowMillis: Long): Boolean = synchronized(lifecycleLock) {
+        applyDecision(presence.onUnchangedFrame(nowMillis))
+    }
+
+    /** Frame-less heartbeat: confirms an absence on a static screen. */
+    fun onHeartbeat(nowMillis: Long): Boolean = synchronized(lifecycleLock) {
+        applyDecision(presence.tick(nowMillis))
+    }
+
+    /**
+     * True when the tracked line has gone too long without a real OCR pass,
+     * so the capture loop must OCR this frame even if it looks unchanged
+     * (battery saver would otherwise skip the very pass that could notice the
+     * text is gone).
+     */
+    fun needsOcrVerification(nowMillis: Long): Boolean = presence.needsVerification(nowMillis)
+
+    private fun applyDecision(decision: com.gamelingo.mobile.core.text.TextPresenceTracker.Decision): Boolean =
+        when (decision) {
+            is com.gamelingo.mobile.core.text.TextPresenceTracker.Decision.Clear -> {
+                // The clear belongs to the appearance that disappeared: it may
+                // remove that appearance's translation (or an older one), never
+                // a translation of a newer line.
+                val shownId = _translatedLine.value?.subtitleId ?: NO_ID
+                if (shownId == NO_ID || shownId <= decision.subtitleId) {
+                    _translatedLine.value = null
+                }
+                _translationFailure.value = null
+                true
+            }
+            com.gamelingo.mobile.core.text.TextPresenceTracker.Decision.None -> false
+        }
+
+    /**
+     * Records a failed translation for the overlay - unless the failing
+     * request belongs to an appearance that is no longer live or to an old
+     * session: a stale failure must never show over a newer line's result.
+     */
+    fun onTranslationFailed(
+        original: String,
+        subtitleId: Long = NO_ID,
+        generation: Long = NO_ID,
+    ) {
+        synchronized(lifecycleLock) {
+            if (generation != NO_ID && generation != generationCounter.get()) return
+            if (subtitleId != NO_ID && !presence.isActive(subtitleId)) return
+            _translationFailure.value = original
+        }
     }
 
     fun onNotice(notice: SessionNotice) {
@@ -272,4 +395,7 @@ object TranslationSessionBus {
 
     /** Buffer for the lossless worker line stream (~10 s of fast dialogue). */
     private const val OCR_LINES_BUFFER = 64
+
+    /** "No subtitle id / generation": legacy callers that do not track appearances. */
+    const val NO_ID = 0L
 }

@@ -30,7 +30,7 @@ import com.gamelingo.mobile.core.capture.CaptureHealth
 import com.gamelingo.mobile.core.capture.DisplayGeometry
 import com.gamelingo.mobile.core.capture.FailureTracker
 import com.gamelingo.mobile.core.capture.SubtitleBlockScorer
-import com.gamelingo.mobile.core.capture.translated
+import com.gamelingo.mobile.core.capture.shifted
 import com.gamelingo.mobile.core.capture.FrameChangeDetector
 import com.gamelingo.mobile.core.capture.RegionMapper
 import com.gamelingo.mobile.core.capture.isDeadProjectionError
@@ -54,6 +54,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.isActive
@@ -114,6 +115,15 @@ class ScreenCaptureService : Service() {
     private val frameChangeDetector = FrameChangeDetector()
     private val stabilityTracker = TextStabilityTracker()
     private val deduplicator = Deduplicator()
+
+    /**
+     * Set by the heartbeat when a translation was cleared (its source text is
+     * gone): the capture loop then forgets its duplicate/stability memory so
+     * the same subtitle appearing again is translated again. Consumed on the
+     * capture loop's own thread, which owns those trackers.
+     */
+    private val resetLineGates = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var heartbeatJob: kotlinx.coroutines.Job? = null
     private val failureTracker = FailureTracker()
 
     /** Separate, larger budget for display rebuilds (full-screen/rotation). */
@@ -255,6 +265,22 @@ class ScreenCaptureService : Service() {
         lastStallReportAt = 0L
         startService(OverlayService.startIntent(this))
         captureJob = serviceScope.launch { captureLoop() }
+        heartbeatJob?.cancel()
+        heartbeatJob = serviceScope.launch { presenceHeartbeat() }
+    }
+
+    /**
+     * Cheap heartbeat (no OCR, no bitmap): a static screen produces no frames,
+     * so after the subtitle vanishes nothing else would ever confirm the
+     * absence. Four checks a second of a few comparisons is negligible.
+     */
+    private suspend fun presenceHeartbeat() {
+        while (currentCoroutineContext().isActive) {
+            delay(PRESENCE_HEARTBEAT_MS)
+            if (TranslationSessionBus.onHeartbeat(System.currentTimeMillis())) {
+                resetLineGates.set(true)
+            }
+        }
     }
 
     /** The display facts the capture surface must match right now. */
@@ -496,15 +522,27 @@ class ScreenCaptureService : Service() {
         // happens below: the finally owns recycling, never the success path.
         var ocrBitmap: Bitmap? = null
         try {
+            if (resetLineGates.compareAndSet(true, false)) {
+                deduplicator.reset()
+                stabilityTracker.reset()
+            }
+            // Battery saver may skip OCR on an unchanged frame, but never the
+            // pass that could notice the tracked text is gone: a static frame
+            // is not proof the subtitle is still there.
             val shouldRunOcr = !settings.batterySaverEnabled ||
                 PipelineTiming.timed("change_detect") {
                     frameChangeDetector.hasChanged(fullBitmap.toDownsampledBytes())
-                }
+                } ||
+                TranslationSessionBus.needsOcrVerification(System.currentTimeMillis())
             if (!shouldRunOcr) {
                 // Battery saver skipped this frame. Stamp it: a session whose
                 // OCR keeps being skipped must look starved, not healthy.
                 CaptureHealth.onOcrSkipped()
                 deduplicator.touch()
+                if (TranslationSessionBus.onFrameUnchanged(System.currentTimeMillis())) {
+                    deduplicator.reset()
+                    stabilityTracker.reset()
+                }
                 return
             }
 
@@ -525,14 +563,14 @@ class ScreenCaptureService : Service() {
             }
 
             val ocrStartNanos = System.nanoTime()
+            var shiftedBlocks: List<com.gamelingo.mobile.core.capture.RecognizedBlock> = emptyList()
             val rawText = if (settings.smartTextDetection) {
             // Smart mode: read positioned blocks, shift them into full-frame
             // coordinates, and let the scorer pick the real subtitle over
             // static corner watermarks and HUD labels, merging wrapped lines.
             val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(workingBitmap, 0))
-            val shifted = blocks.map { block ->
-                block.copy(rect = block.rect.translated(0, cropTop))
-            }
+            val shifted = blocks.map { block -> block.shifted(0, cropTop) }
+            shiftedBlocks = shifted
             val subtitle = SubtitleBlockScorer.selectSubtitle(
                 blocks = shifted,
                 frameWidth = geometry.width,
@@ -552,14 +590,30 @@ class ScreenCaptureService : Service() {
                 "smart=${settings.smartTextDetection}",
             )
             val text = TextNormalizer.normalize(rawText)
+            // Presence first, before any early return: an EMPTY read is the
+            // signal that the subtitle left the screen, and the dedupe and
+            // stability gates below must not hide it from the lifecycle.
+            if (TranslationSessionBus.onTextObserved(text, System.currentTimeMillis())) {
+                deduplicator.reset()
+                stabilityTracker.reset()
+            }
             if (text.isEmpty()) return
 
             if (settings.ignoreUnstableText && !stabilityTracker.offer(text)) return
             if (settings.dedupEnabled && !deduplicator.shouldDeliver(text)) return
 
+            // Colours only for a line that is really being published (new
+            // text), and only when the user asked: the pixel pass is cheap
+            // but not free, and the frame is recycled in the finally below.
+            val sourceColors = if (settings.preserveSourceColors) {
+                detectSourceColors(fullBitmap, shiftedBlocks, text)
+            } else {
+                emptyList()
+            }
             TranslationSessionBus.onNewLine(
                 text = text,
                 capturedAtMillis = System.currentTimeMillis(),
+                sourceColors = sourceColors,
             )
             CaptureHealth.onLinePublished()
             PipelineTiming.mark("line_published", 0, "len=${text.length}")
@@ -571,6 +625,38 @@ class ScreenCaptureService : Service() {
             }
             if (!fullBitmap.isRecycled) fullBitmap.recycle()
         }
+    }
+
+    /**
+     * Samples the glyph colour of each word of the published subtitle from the
+     * captured frame. Only chromatic colours are kept (white/grey is the
+     * default look). Bounded work: at most [MAX_COLOR_WORDS] words, each box
+     * sampled at a capped size.
+     */
+    private fun detectSourceColors(
+        frame: Bitmap,
+        blocks: List<com.gamelingo.mobile.core.capture.RecognizedBlock>,
+        publishedText: String,
+    ): List<com.gamelingo.mobile.core.color.SourceWordColor> {
+        if (blocks.isEmpty()) return emptyList()
+        val wanted = publishedText.lowercase()
+        val out = ArrayList<com.gamelingo.mobile.core.color.SourceWordColor>()
+        for (word in blocks.asSequence().flatMap { it.words.asSequence() }) {
+            if (out.size >= MAX_COLOR_WORDS) break
+            if (!wanted.contains(word.text.lowercase())) continue
+            val left = word.rect.left.coerceIn(0, frame.width - 1)
+            val top = word.rect.top.coerceIn(0, frame.height - 1)
+            val w = (word.rect.right - left).coerceIn(2, MAX_WORD_SAMPLE_PX).coerceAtMost(frame.width - left)
+            val h = (word.rect.bottom - top).coerceIn(2, MAX_WORD_SAMPLE_PX).coerceAtMost(frame.height - top)
+            if (w < 2 || h < 2) continue
+            val pixels = IntArray(w * h)
+            runCatching { frame.getPixels(pixels, 0, w, left, top, w, h) }.getOrNull() ?: continue
+            val color = com.gamelingo.mobile.core.color.SourceColorDetector.dominantTextColor(pixels, w, h)
+            if (color != null && com.gamelingo.mobile.core.color.SourceColorDetector.isChromatic(color)) {
+                out += com.gamelingo.mobile.core.color.SourceWordColor(word.text, color)
+            }
+        }
+        return out
     }
 
     /** Converts an RGBA_8888 ImageReader frame into a Bitmap, handling row padding. */
@@ -622,6 +708,8 @@ class ScreenCaptureService : Service() {
         Log.i(TAG, "stopCapture: tearing down (reason=$reason)")
         captureJob?.cancel()
         captureJob = null
+        heartbeatJob?.cancel()
+        heartbeatJob = null
         settingsJob?.cancel()
         settingsJob = null
         cachedSettings = null
@@ -770,6 +858,11 @@ class ScreenCaptureService : Service() {
         /** Watchdog: report when no frame arrived for this long while capturing. */
         private const val STALL_REPORT_MS = 5_000L
         private const val NO_FIRST_FRAME_MS = 8_000L
+
+        /** Presence heartbeat period: far below OCR cost, fine for the 1 s grace. */
+        private const val PRESENCE_HEARTBEAT_MS = 250L
+        private const val MAX_COLOR_WORDS = 24
+        private const val MAX_WORD_SAMPLE_PX = 96
 
         /** Floor for the capture tick delay when OCR outlasts the interval. */
         private const val MIN_TICK_DELAY_MS = 50L
