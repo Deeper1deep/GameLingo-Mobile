@@ -46,6 +46,14 @@ class LocalAiTranslationEngine @Inject constructor(
     @Volatile
     private var runner: OrtOnnxRunner? = null
 
+    /** Runners whose close was requested while an inference still used them. */
+    private val pendingClose = java.util.concurrent.ConcurrentLinkedQueue<OrtOnnxRunner>()
+
+    init {
+        // Deleting the model must first release its sessions.
+        modelManager.addReleaseListener(LocalModelManager.MODEL_MARIAN) { close() }
+    }
+
     @Volatile
     private var tokenizer: SentencePieceTokenizer? = null
 
@@ -76,15 +84,23 @@ class LocalAiTranslationEngine @Inject constructor(
                         encoderFile = java.io.File(dir, ENCODER_FILE),
                         decoderFile = java.io.File(dir, DECODER_FILE),
                     )
-                    newRunner.open()
-                    runner = newRunner
+                    try {
+                        newRunner.open()
+                        // A cancel landing here must not leave an opened runner
+                        // nobody owns.
+                        currentCoroutineContext().ensureActive()
+                        runner = newRunner
+                    } catch (failure: Throwable) {
+                        runCatching { newRunner.close() }
+                        throw failure
+                    }
                 }
             } catch (cancelled: CancellationException) {
-                runner = null
+                releaseRunner()
                 tokenizer = null
                 throw cancelled
             } catch (failure: Throwable) {
-                runner = null
+                releaseRunner()
                 tokenizer = null
                 throw EngineInitException(failure)
             }
@@ -104,7 +120,7 @@ class LocalAiTranslationEngine @Inject constructor(
         val localTokenizer = tokenizer ?: throw ModelNotInstalledException()
         val localRunner = runner ?: throw ModelNotInstalledException()
         return withContext(Dispatchers.Default) {
-            inferenceMutex.withLock {
+            withInference {
                 val inputIds = localTokenizer.encode(request.text)
                 // Captured once: the cancellation lambda is not a suspend
                 // context, so it reads the captured context's Job state.
@@ -148,10 +164,51 @@ class LocalAiTranslationEngine @Inject constructor(
         }
     }
 
-    /** Releases the model sessions; the next translate reloads lazily. */
-    override fun close() {
-        runner?.close()
+    private fun releaseRunner() {
+        val old = runner
         runner = null
+        if (old != null) closeWhenIdle(old)
+    }
+
+    /** Closes [target] now, or right after the running inference when one holds it. */
+    private fun closeWhenIdle(target: OrtOnnxRunner) {
+        if (inferenceMutex.tryLock()) {
+            try {
+                runCatching { target.close() }
+            } finally {
+                inferenceMutex.unlock()
+            }
+        } else {
+            pendingClose.add(target)
+        }
+    }
+
+
+    /** Runs one inference under the lock and finishes any close deferred during it. */
+    private suspend fun <T> withInference(block: suspend () -> T): T =
+        inferenceMutex.withLock {
+            try {
+                block()
+            } finally {
+                drainPendingClose()
+            }
+        }
+
+    private fun drainPendingClose() {
+        while (true) {
+            val next = pendingClose.poll() ?: return
+            if (next === runner) continue
+            runCatching { next.close() }
+        }
+    }
+
+    /**
+     * Releases the model sessions; the next translate reloads lazily. Never
+     * closes native sessions under a running decode: that close is deferred
+     * until the inference finishes.
+     */
+    override fun close() {
+        releaseRunner()
         tokenizer = null
     }
 

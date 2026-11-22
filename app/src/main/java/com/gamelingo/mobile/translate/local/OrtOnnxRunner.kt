@@ -49,6 +49,8 @@ class OrtOnnxRunner(
     fun open() {
         if (encoder != null && decoder != null) return
         val environment = OrtEnvironment.getEnvironment()
+        // SessionOptions owns native memory: closed as soon as both sessions
+        // exist (they copy what they need) or loading fails.
         val options = OrtSession.SessionOptions().apply {
             setIntraOpNumThreads(threadCount)
             runCatching { addConfigEntry("session.disable_quant_qdq", "1") }
@@ -78,6 +80,8 @@ class OrtOnnxRunner(
             newPast.forEach { (_, tensor) -> runCatching { tensor.close() } }
             runCatching { newUseCache?.close() }
             throw failure
+        } finally {
+            runCatching { options.close() }
         }
         env = environment
         encoder = newEncoder
@@ -101,8 +105,8 @@ class OrtOnnxRunner(
     @Synchronized
     override fun encode(inputIds: IntArray): EncoderState {
         open()
-        val environment = env!!
-        val session = encoder!!
+        val environment = env ?: throw IllegalStateException("onnx_runner_closed")
+        val session = encoder ?: throw IllegalStateException("onnx_runner_closed")
         val ids = LongArray(inputIds.size) { inputIds[it].toLong() }
         val mask = LongArray(inputIds.size) { 1L }
         val idsTensor = OnnxTensor.createTensor(
@@ -140,7 +144,7 @@ class OrtOnnxRunner(
     override fun decodeStep(encoderState: EncoderState, decoderIds: IntArray): FloatArray {
         val state = encoderState as OrtEncoderState
         val environment = state.env
-        val session = decoder!!
+        val session = decoder ?: throw IllegalStateException("onnx_runner_closed")
         val ids = LongArray(decoderIds.size) { decoderIds[it].toLong() }
         val idsTensor = OnnxTensor.createTensor(
             environment, LongBuffer.wrap(ids), longArrayOf(1, ids.size.toLong()),
@@ -151,7 +155,8 @@ class OrtOnnxRunner(
             inputs["encoder_hidden_states"] = state.hiddenStates
             inputs["encoder_attention_mask"] = state.attentionMask
             pastTensors.forEach { (name, tensor) -> inputs[name] = tensor }
-            inputs["use_cache_branch"] = useCacheBranch!!
+            inputs["use_cache_branch"] = useCacheBranch
+                ?: throw IllegalStateException("onnx_runner_closed")
             session.run(inputs).use { results ->
                 val logitsTensor = results.get(0) as OnnxTensor
                 val shape = logitsTensor.info.shape // [1, seq, vocab]
