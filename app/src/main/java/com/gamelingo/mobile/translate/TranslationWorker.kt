@@ -111,6 +111,7 @@ class TranslationWorker(
 
     @Volatile
     private var lastEnqueuedText: String? = null
+    private var lastEnqueuedSubtitleId: Long = 0L
 
     @Volatile
     private var lastEnqueuedAtMillis: Long = -1
