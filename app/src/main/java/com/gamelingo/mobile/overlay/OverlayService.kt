@@ -185,6 +185,9 @@ class OverlayService : Service() {
         var dragging = false
         val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
         view.setOnTouchListener { _, event ->
+            // Locked position: dragging is off, but touches still fall through
+            // to Compose so the stop control keeps working.
+            if (settingsState.value.overlayStyle.positionLocked) return@setOnTouchListener false
             val params = layoutParams ?: return@setOnTouchListener false
             val screenHeight = resources.displayMetrics.heightPixels
             val screenWidth = resources.displayMetrics.widthPixels

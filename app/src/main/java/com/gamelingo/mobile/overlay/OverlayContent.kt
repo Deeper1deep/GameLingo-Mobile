@@ -95,6 +95,7 @@ fun OverlayContent(
         ),
     )
     val textColor = Color(settings.overlayTextColor)
+    val style = settings.overlayStyle
     val maxWidthDp = (LocalConfiguration.current.screenWidthDp * MAX_WIDTH_FRACTION).toInt()
 
     Column(
@@ -103,9 +104,12 @@ fun OverlayContent(
             .padding(horizontal = 12.dp, vertical = 6.dp)
             .background(
                 if (state.cleared && state.notice == null) Color.Transparent else background,
-                RoundedCornerShape(12.dp),
+                RoundedCornerShape(style.cornerRadiusDp.dp),
             )
-            .padding(horizontal = 16.dp, vertical = if (state.cleared) 2.dp else 10.dp),
+            .padding(
+                horizontal = (style.paddingDp + 6).dp,
+                vertical = if (state.cleared) 2.dp else style.paddingDp.dp,
+            ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         // In-session stop affordance: without it the user must leave the game
@@ -169,13 +173,13 @@ fun OverlayContent(
                 } else {
                     emptyList()
                 }
-                Text(
+                StyledText(
                     text = coloredText(state.translated, arabicSpans),
                     color = textColor,
-                    fontSize = settings.overlayTextSizeSp.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center,
-                    style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl),
+                    fontSizeSp = settings.overlayTextSizeSp,
+                    bold = style.bold,
+                    direction = TextDirection.Rtl,
+                    style = style,
                 )
                 // Second line: the original English, left-to-right.
                 if (settings.showOriginalText && !state.original.isNullOrBlank()) {
@@ -186,12 +190,13 @@ fun OverlayContent(
                     } else {
                         emptyList()
                     }
-                    Text(
+                    StyledText(
                         text = coloredText(state.original, originalSpans),
                         color = textColor.copy(alpha = 0.7f),
-                        fontSize = (settings.overlayTextSizeSp - 5).coerceAtLeast(10).sp,
-                        textAlign = TextAlign.Center,
-                        style = LocalTextStyle.current.copy(textDirection = TextDirection.Ltr),
+                        fontSizeSp = (settings.overlayTextSizeSp - 5).coerceAtLeast(10),
+                        bold = false,
+                        direction = TextDirection.Ltr,
+                        style = style,
                     )
                 }
             }
@@ -230,3 +235,61 @@ fun OverlayContent(
 
 private const val MAX_WIDTH_FRACTION = 0.92f
 private const val STOP_HINT_MILLIS = 2_500L
+
+private fun fontFamilyOf(font: com.gamelingo.mobile.core.overlay.OverlayFont) = when (font) {
+    com.gamelingo.mobile.core.overlay.OverlayFont.DEFAULT -> androidx.compose.ui.text.font.FontFamily.Default
+    com.gamelingo.mobile.core.overlay.OverlayFont.SANS -> androidx.compose.ui.text.font.FontFamily.SansSerif
+    com.gamelingo.mobile.core.overlay.OverlayFont.SERIF -> androidx.compose.ui.text.font.FontFamily.Serif
+    com.gamelingo.mobile.core.overlay.OverlayFont.MONO -> androidx.compose.ui.text.font.FontFamily.Monospace
+    com.gamelingo.mobile.core.overlay.OverlayFont.CURSIVE -> androidx.compose.ui.text.font.FontFamily.Cursive
+}
+
+/**
+ * Subtitle text with the user's typography, optional outline (a stroked copy
+ * drawn under the fill, so thin glyph parts stay readable) and shadow.
+ */
+@Composable
+internal fun StyledText(
+    text: androidx.compose.ui.text.AnnotatedString,
+    color: Color,
+    fontSizeSp: Int,
+    bold: Boolean,
+    direction: TextDirection,
+    style: com.gamelingo.mobile.core.overlay.OverlayStyle,
+) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val base = LocalTextStyle.current.copy(
+        fontFamily = fontFamilyOf(style.font),
+        fontWeight = if (bold) FontWeight.Bold else FontWeight.Normal,
+        fontSize = fontSizeSp.sp,
+        letterSpacing = style.letterSpacingSp.sp,
+        lineHeight = (fontSizeSp * style.lineHeightMultiplier).sp,
+        textAlign = TextAlign.Center,
+        textDirection = direction,
+        shadow = if (style.shadowEnabled) {
+            androidx.compose.ui.graphics.Shadow(
+                color = Color.Black.copy(alpha = 0.85f),
+                offset = androidx.compose.ui.geometry.Offset(2f, 2f),
+                blurRadius = 4f,
+            )
+        } else {
+            null
+        },
+    )
+    androidx.compose.foundation.layout.Box {
+        if (style.outlineWidthDp > 0f) {
+            Text(
+                text = text.text,
+                color = Color(style.outlineColor),
+                style = base.copy(
+                    shadow = null,
+                    drawStyle = androidx.compose.ui.graphics.drawscope.Stroke(
+                        width = with(density) { (style.outlineWidthDp * 2f).dp.toPx() },
+                        join = androidx.compose.ui.graphics.StrokeJoin.Round,
+                    ),
+                ),
+            )
+        }
+        Text(text = text, color = color, style = base)
+    }
+}

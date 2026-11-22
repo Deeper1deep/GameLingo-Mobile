@@ -59,6 +59,8 @@ class DataStoreSettingsRepository @Inject constructor(
         AppSettings(
             showOriginalText = prefs[KEY_SHOW_ORIGINAL] ?: true,
             preserveSourceColors = prefs[KEY_PRESERVE_COLORS] ?: false,
+            overlayStyle = com.gamelingo.mobile.core.overlay.OverlayStyle.decodeOrDefault(prefs[KEY_OVERLAY_STYLE]),
+            customOverlayPreset = com.gamelingo.mobile.core.overlay.OverlayAppearance.decodeOrNull(prefs[KEY_CUSTOM_PRESET]),
             captureIntervalMs = SettingsConstraints.clampCaptureIntervalMs(
                 prefs[KEY_CAPTURE_INTERVAL_MS] ?: SettingsConstraints.DEFAULT_CAPTURE_INTERVAL_MS,
             ),
@@ -310,6 +312,17 @@ class DataStoreSettingsRepository @Inject constructor(
         dataStore.edit { it[KEY_OVERLAY_BG_COLOR] = argb }
     }
 
+    override suspend fun setOverlayStyle(style: com.gamelingo.mobile.core.overlay.OverlayStyle) {
+        dataStore.edit { it[KEY_OVERLAY_STYLE] = com.gamelingo.mobile.core.overlay.OverlayStyle.encode(style) }
+    }
+
+    override suspend fun setCustomOverlayPreset(preset: com.gamelingo.mobile.core.overlay.OverlayAppearance?) {
+        dataStore.edit {
+            if (preset == null) it.remove(KEY_CUSTOM_PRESET)
+            else it[KEY_CUSTOM_PRESET] = com.gamelingo.mobile.core.overlay.OverlayAppearance.encode(preset)
+        }
+    }
+
     override suspend fun setPreserveSourceColors(enabled: Boolean) {
         dataStore.edit { it[KEY_PRESERVE_COLORS] = enabled }
     }
@@ -321,6 +334,8 @@ class DataStoreSettingsRepository @Inject constructor(
     private companion object {
         val KEY_SHOW_ORIGINAL = booleanPreferencesKey("show_original_text")
         val KEY_PRESERVE_COLORS = booleanPreferencesKey("preserve_source_colors")
+        val KEY_OVERLAY_STYLE = stringPreferencesKey("overlay_style_json")
+        val KEY_CUSTOM_PRESET = stringPreferencesKey("overlay_custom_preset_json")
         val KEY_CAPTURE_INTERVAL_MS = longPreferencesKey("capture_interval_ms")
         val KEY_RESTRICT_TO_REGION = booleanPreferencesKey("restrict_to_text_region")
         val KEY_SMART_TEXT_DETECTION = booleanPreferencesKey("smart_text_detection")

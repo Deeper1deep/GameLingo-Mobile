@@ -43,6 +43,7 @@ import com.gamelingo.mobile.ui.theme.GlSpacing
 @Composable
 fun OverlaySettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
+    onOpenEditor: () -> Unit = {},
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
     SettingsColumn {
@@ -60,6 +61,12 @@ fun OverlaySettingsScreen(
             title = stringResource(R.string.translation_show_original),
             checked = settings.showOriginalText,
             onCheckedChange = viewModel::setShowOriginalText,
+        )
+        com.gamelingo.mobile.ui.components.GlNavRow(
+            icon = androidx.compose.material.icons.Icons.Filled.Create,
+            title = stringResource(R.string.style_editor_open),
+            subtitle = stringResource(R.string.style_editor_open_sub),
+            onClick = onOpenEditor,
         )
         SwitchCard(
             title = stringResource(R.string.overlay_original_colors),
