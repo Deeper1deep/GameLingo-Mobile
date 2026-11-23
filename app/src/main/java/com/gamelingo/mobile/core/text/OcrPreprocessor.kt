@@ -13,7 +13,9 @@ object OcrPreprocessor {
 
     private val WS = Regex("\\s+")
     // A lone vertical bar standing where the pronoun I fits: "| think", "you and |".
-    private val BAR_AS_I = Regex("""(?<![\p{L}\p{N}|])\|(?![\p{L}\p{N}|])(?=\s+\p{L}|\s*[.,!?]|$)""")
+    private val BAR_AS_I = Regex(
+        """(?<![\p{L}\p{N}|])\|(?=\s+\p{Ll})|(?<=\p{Ll}\s)\|(?=\s*(?:[.,!?]|$))""",
+    )
     private val EDGE_JUNK = Regex("""^[\s|_~^`\\<>]+|[\s|_~^`\\<>]+$""")
     private val SPACE_BEFORE_PUNCT = Regex("""\s+([,.!?;:])""")
 
@@ -24,11 +26,11 @@ object OcrPreprocessor {
         val ws = t.replace(WS, " ").trim()
         if (ws != t) { changes += "whitespace"; t = ws }
 
-        val edge = t.replace(EDGE_JUNK, "")
-        if (edge != t && edge.isNotEmpty()) { changes += "edge-symbols"; t = edge }
-
         val bar = if (t.contains('|')) BAR_AS_I.replace(t, "I") else t
         if (bar != t) { changes += "bar-as-I"; t = bar }
+
+        val edge = t.replace(EDGE_JUNK, "")
+        if (edge != t && edge.isNotEmpty()) { changes += "edge-symbols"; t = edge }
 
         val sp = t.replace(SPACE_BEFORE_PUNCT, "$1")
         if (sp != t) { changes += "space-before-punctuation"; t = sp }

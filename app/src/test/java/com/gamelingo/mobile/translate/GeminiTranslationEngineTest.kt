@@ -65,10 +65,10 @@ class GeminiTranslationEngineTest {
         assertEquals(GeminiTranslationEngine.MODEL, api.lastModel)
         val request = api.lastRequest
         assertNotNull(request)
-        assertEquals(
-            EgyptianDialectPrompt.SYSTEM_PROMPT,
-            request!!.systemInstruction?.parts?.firstOrNull()?.text,
-        )
+        // The mandate is unchanged; the composer only appends line-specific modules.
+        val system = request!!.systemInstruction?.parts?.firstOrNull()?.text
+        assertTrue(system!!.startsWith(EgyptianDialectPrompt.SYSTEM_PROMPT))
+        assertTrue(system.contains(PromptComposer.GUARD_MODULE))
         val userText = request.contents.first().parts.first().text
         assertTrue(userText!!.contains("How are you?"))
         assertTrue(userText.contains("previous"))
