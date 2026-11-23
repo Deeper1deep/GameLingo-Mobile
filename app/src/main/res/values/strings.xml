@@ -143,15 +143,10 @@
     <string name="about_package">معرّف التطبيق: %1$s</string>
     <string name="about_package_hint">ثابت ولا يتغير بين الإصدارات عشان التحديث يتم فوق النسخة القديمة بدون مسح بياناتك.</string>
     <string name="about_updates_title">التحديثات</string>
-    <string name="about_updates">التحديثات بتتسحب من مستودع GameLingo-Updates، مستقل عن سورس الكود، مع التحقق من SHA-256 والتوقيع قبل التثبيت.</string>
-    <string name="about_stack_title">التقنيات</string>
-    <string name="about_stack_body">Kotlin وJetpack Compose وMaterial 3 وRoom وDataStore وMediaProjection وخدمة في المقدمة وOCR محلي على الجهاز.</string>
     <string name="about_copyright_prefix" translatable="false">© 2026 </string>
     <string name="about_developer_handle" translatable="false">@Deeper</string>
     <string name="about_developer_cd">فتح حساب المطور على تيليجرام</string>
     <string name="about_contact_developer">تواصل مع المطور</string>
-    <string name="about_open_repo">فتح مستودع الكود</string>
-    <string name="about_open_updates">فتح مستودع التحديثات</string>
 
     <string name="voice_status_title">الحالة</string>
     <string name="voice_coming_soon">ترجمة الصوت جاية في إصدار لاحق. البنية جاهزة ليها، بس مش ميزة مكتملة في الإصدار الأول.</string>
@@ -477,7 +472,6 @@
     <string name="diag_ms_fmt">%1$d مللي ثانية</string>
     <string name="diag_ago_fmt">من %1$d ثانية</string>
     <string name="diag_none">لسه</string>
-    <string name="overlay_stop">✕ إيقاف</string>
     <string name="overlay_stop_cd">إيقاف جلسة الترجمة</string>
     <string name="overlay_stop_hint">اضغط مطوّلًا للإيقاف</string>
     <string name="overlay_stop_hint_cd">إظهار تلميح الإيقاف المطوّل</string>

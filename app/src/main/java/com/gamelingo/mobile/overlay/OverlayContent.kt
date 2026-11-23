@@ -98,8 +98,34 @@ fun OverlayContent(
     val style = settings.overlayStyle
     val maxWidthDp = (LocalConfiguration.current.screenWidthDp * MAX_WIDTH_FRACTION).toInt()
 
+    // Stop gesture lives on the subtitle bar itself. It needs a long press,
+    // not one tap: stray gameplay touches reach this bar, and one tap ending
+    // the session is exactly how accidental stops happen.
+    val stoppable = state.sessionRunning && onStopSession != null
+    var showStopHint by remember { mutableStateOf(false) }
+    if (showStopHint) {
+        LaunchedEffect(Unit) {
+            delay(STOP_HINT_MILLIS)
+            showStopHint = false
+        }
+    }
+    val stopClickLabel = stringResource(R.string.overlay_stop_hint_cd)
+    val stopLongClickLabel = stringResource(R.string.overlay_stop_cd)
+
     Column(
         modifier = Modifier
+            .then(
+                if (stoppable) {
+                    Modifier.combinedClickable(
+                        onClickLabel = stopClickLabel,
+                        onLongClickLabel = stopLongClickLabel,
+                        onLongClick = { onStopSession?.invoke() },
+                        onClick = { showStopHint = true },
+                    )
+                } else {
+                    Modifier
+                },
+            )
             .widthIn(max = maxWidthDp.dp)
             .padding(horizontal = 12.dp, vertical = 6.dp)
             .background(
@@ -112,35 +138,14 @@ fun OverlayContent(
             ),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        // In-session stop affordance: without it the user must leave the game
-        // and find the app's stop button to end a session. It needs a long
-        // press, not one tap: stray gameplay touches reach this bar, and one
-        // tap ending the session is exactly how accidental stops happen. A
-        // short tap only explains the gesture.
-        if (state.sessionRunning && onStopSession != null) {
-            var showStopHint by remember { mutableStateOf(false) }
-            if (showStopHint) {
-                LaunchedEffect(Unit) {
-                    delay(STOP_HINT_MILLIS)
-                    showStopHint = false
-                }
-            }
+        // A tap on the bar only explains the stop gesture, briefly and only
+        // on demand: no permanent label sits next to the subtitle.
+        if (showStopHint) {
             Text(
-                text = stringResource(
-                    if (showStopHint) R.string.overlay_stop_hint else R.string.overlay_stop,
-                ),
+                text = stringResource(R.string.overlay_stop_hint),
                 color = textColor.copy(alpha = 0.8f),
                 fontSize = (settings.overlayTextSizeSp - 6).coerceAtLeast(9).sp,
                 textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .align(Alignment.End)
-                    .combinedClickable(
-                        onClickLabel = stringResource(R.string.overlay_stop_hint_cd),
-                        onLongClickLabel = stringResource(R.string.overlay_stop_cd),
-                        onLongClick = { onStopSession() },
-                        onClick = { showStopHint = true },
-                    )
-                    .padding(bottom = 2.dp),
             )
         }
         when {

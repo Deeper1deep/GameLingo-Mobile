@@ -43,7 +43,7 @@ class GeminiTranslationEngine @Inject constructor(
                     // user's Arabic style (MSA or Egyptian); the profanity
                     // policy is identical in both.
                     systemInstruction = GeminiContent(
-                        parts = listOf(GeminiPart(ArabicStylePrompt.systemPromptFor(request.arabicMode))),
+                        parts = listOf(GeminiPart(PromptComposer.systemPrompt(request.arabicMode, request.text))),
                     ),
                     contents = listOf(
                         GeminiContent(
