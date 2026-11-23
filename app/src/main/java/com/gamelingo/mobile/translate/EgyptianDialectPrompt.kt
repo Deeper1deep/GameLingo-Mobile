@@ -13,7 +13,7 @@ object EgyptianDialectPrompt {
      */
     // 2: faithful-translation mandate added (profanity preserved, never
     // censored); entries cached under version 1 predate it and are dropped.
-    const val PROMPT_VERSION = 2
+    const val PROMPT_VERSION = 3
 
     // The faithful-translation mandate is fixed wording requested by the
     // user verbatim; do not soften it.

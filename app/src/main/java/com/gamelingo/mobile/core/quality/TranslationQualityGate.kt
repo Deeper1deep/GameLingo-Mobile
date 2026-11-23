@@ -28,6 +28,21 @@ object TranslationQualityGate {
 
         /** Modern Standard Arabic mode, but the output carries Egyptian colloquial words. */
         REGISTER_LEAK,
+
+        /** Output is far longer than the source plausibly allows: padding, explaining or looping. */
+        TOO_LONG,
+
+        /** A long source produced a tiny output: content was probably cut. */
+        TRUNCATED,
+
+        /** The same word or phrase repeats in a row: a decoding loop. */
+        REPETITION,
+
+        /** The model answered with a label, note or part of the instructions instead of only the translation. */
+        INSTRUCTION_LEAK,
+
+        /** Empty or whitespace-only output. */
+        EMPTY,
     }
 
     data class Inspection(
@@ -67,6 +82,30 @@ object TranslationQualityGate {
     private val EGYPTIAN_MARKERS = Regex(
         """(?<![\p{IsArabic}])(مش|ده|دي|دول|دلوقتي|دلوقت|عايز|عايزة|عايزين|إيه|ايه|ازاي|إزاي|كده|اللي|فين|بتاع|بتاعة|علشان|عشان|كمان|برضه|برضو)(?![\p{IsArabic}])""",
     )
+
+    private val INSTRUCTION_LEAK = Regex(
+        """(?i)(translate this line|dialogue context|^\s*(translation|الترجمة)\s*[:：]|as an ai|i cannot translate|here is the translation)""",
+    )
+
+    /** Same token 4+ times in a row, or the same 2-3 word phrase 3+ times in a row. */
+    internal fun hasLoop(text: String): Boolean {
+        val tokens = text.split(Regex("\\s+")).filter { it.isNotEmpty() }
+        if (tokens.size < 4) return false
+        var run = 1
+        for (i in 1 until tokens.size) {
+            run = if (tokens[i] == tokens[i - 1]) run + 1 else 1
+            if (run >= 4) return true
+        }
+        for (n in 2..3) {
+            var i = 0
+            while (i + n * 3 <= tokens.size) {
+                val gram = tokens.subList(i, i + n)
+                if (tokens.subList(i + n, i + 2 * n) == gram && tokens.subList(i + 2 * n, i + 3 * n) == gram) return true
+                i++
+            }
+        }
+        return false
+    }
 
     /**
      * [mode] is optional: when it is Modern Standard Arabic the gate also
@@ -117,6 +156,16 @@ object TranslationQualityGate {
             EGYPTIAN_MARKERS.containsMatchIn(text)
         ) {
             issues += Issue.REGISTER_LEAK
+        }
+
+        if (text.isBlank()) {
+            issues += Issue.EMPTY
+        } else {
+            val kind = com.gamelingo.mobile.core.translation.LineClassifier.classify(source)
+            if (com.gamelingo.mobile.core.translation.LengthPolicy.tooLong(source, text, kind)) issues += Issue.TOO_LONG
+            if (com.gamelingo.mobile.core.translation.LengthPolicy.looksTruncated(source, text)) issues += Issue.TRUNCATED
+            if (hasLoop(text)) issues += Issue.REPETITION
+            if (INSTRUCTION_LEAK.containsMatchIn(text)) issues += Issue.INSTRUCTION_LEAK
         }
 
         return Inspection(text = text, issues = issues, corrected = corrected)

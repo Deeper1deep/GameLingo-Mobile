@@ -112,7 +112,12 @@ class TranslationCoordinator @Inject constructor(
      * then rethrown so the worker can classify them into a [RequestState];
      * a cancellation (session stop or worker recovery) always propagates.
      */
-    private suspend fun processRequest(request: QueuedRequest): ProcessorOutcome {
+    private suspend fun processRequest(queued: QueuedRequest): ProcessorOutcome {
+        // OCR clean-up is its own step, before translation and before the
+        // cache key: only safe fixes (whitespace, doubled capture, "|" for
+        // "I"); anything uncertain stays exactly as read.
+        val cleaned = com.gamelingo.mobile.core.text.OcrPreprocessor.clean(queued.text).text
+        val request = if (cleaned.isNotBlank() && cleaned != queued.text) queued.copy(text = cleaned) else queued
         // Session generation guard: if the session stops or restarts while
         // this request is in flight, its result belongs to the old session
         // and must not be published into the new one.

@@ -29,7 +29,7 @@ class EgyptianDialectPromptTest {
 
     @Test
     fun `prompt version bumped so cached pre-mandate translations are never served`() {
-        assertEquals(2, EgyptianDialectPrompt.PROMPT_VERSION)
+        assertEquals(3, EgyptianDialectPrompt.PROMPT_VERSION)
     }
 
     @Test
