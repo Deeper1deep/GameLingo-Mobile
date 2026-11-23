@@ -133,6 +133,7 @@ class ScreenCaptureService : Service() {
     /** Identity of the translation area the last frame used; null before the first frame. */
     @Volatile
     private var appliedRegionKey: String? = null
+    private var lastPreviewAtMs = 0L
 
     /** Watchdog: last time a stall was reported, so it logs once per stall. */
     private var lastStallReportAt = 0L
@@ -531,6 +532,23 @@ class ScreenCaptureService : Service() {
                 deduplicator.reset()
                 stabilityTracker.reset()
             }
+            // Region selector open with live preview: OCR only to show which
+            // text the rectangle would accept. No translation request, no
+            // presence tracking, throttled well below the normal frame rate.
+            val previewCandidate = com.gamelingo.mobile.core.region.RegionPreviewBus.candidate.value
+            if (previewCandidate != null) {
+                val now = SystemClock.elapsedRealtime()
+                if (now - lastPreviewAtMs >= PREVIEW_INTERVAL_MS) {
+                    lastPreviewAtMs = now
+                    val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(fullBitmap, 0))
+                    com.gamelingo.mobile.core.region.RegionPreviewBus.publish(
+                        com.gamelingo.mobile.core.region.RegionPreviewBus.build(
+                            blocks, geometry.width, geometry.height, previewCandidate,
+                        ),
+                    )
+                }
+                return
+            }
             // Custom translation area: the user's own rectangle for the
             // current orientation. Null = the classic scan band / full frame.
             val customRegion = if (settings.customRegionEnabled) {
@@ -591,7 +609,8 @@ class ScreenCaptureService : Service() {
                 cropLeft = l
                 cropTop = t
                 Bitmap.createBitmap(fullBitmap, l, t, r - l, b - t).also { ocrBitmap = it }
-            } else if (settings.restrictToTextRegion) {
+            } else if (settings.restrictToTextRegion && !settings.customRegionEnabled) {
+                // (custom area on but none saved for this orientation = full screen)
                 val region = settings.effectiveRegion
                 val rect = RegionMapper.mapToPixels(
                     topFraction = region.top,
@@ -903,6 +922,7 @@ class ScreenCaptureService : Service() {
         const val EXTRA_RESULT_DATA = "extra_result_data"
         private const val TAG = "ScreenCapture"
         private const val REGION_MARGIN_MIN_PX = 16
+        private const val PREVIEW_INTERVAL_MS = 700L
         private const val REGION_MARGIN_FRACTION = 0.15f
         private const val CHANNEL_ID = "screen_capture"
         private const val ALERTS_CHANNEL_ID = "session_alerts"

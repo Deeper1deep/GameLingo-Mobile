@@ -45,6 +45,11 @@
             android:name=".overlay.OverlayService"
             android:exported="false" />
 
+        <!-- Custom translation area selector, shown over the game on demand. -->
+        <service
+            android:name=".overlay.RegionSelectorService"
+            android:exported="false" />
+
         <!-- Serves the verified update APK to the system installer only. -->
         <provider
             android:name="androidx.core.content.FileProvider"
