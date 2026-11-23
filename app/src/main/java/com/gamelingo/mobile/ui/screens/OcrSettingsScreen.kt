@@ -157,6 +157,8 @@ fun OcrSettingsScreen(
             onCheckedChange = viewModel::setSmartTextDetection,
         )
 
+        CustomRegionSection(settings, viewModel)
+
         if (settings.restrictToTextRegion) {
             RadioGroupCard(
                 title = stringResource(R.string.ocr_region_preset),

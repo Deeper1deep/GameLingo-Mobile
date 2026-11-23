@@ -217,6 +217,21 @@ class SettingsViewModel @Inject constructor(
     fun saveCustomPreset(a: com.gamelingo.mobile.core.overlay.OverlayAppearance?) =
         viewModelScope.launch { repository.setCustomOverlayPreset(a) }
 
+    fun setCustomRegionEnabled(enabled: Boolean) =
+        viewModelScope.launch { repository.setCustomRegionEnabled(enabled) }
+
+    fun setCustomRegion(landscape: Boolean, region: com.gamelingo.mobile.core.region.NormalizedRegion?) =
+        viewModelScope.launch { repository.setCustomRegion(landscape, region) }
+
+    fun setShowRegionBorder(show: Boolean) =
+        viewModelScope.launch { repository.setShowRegionBorder(show) }
+
+    fun setRegionSensitivity(s: com.gamelingo.mobile.core.region.RegionSensitivity) =
+        viewModelScope.launch { repository.setRegionSensitivity(s) }
+
+    fun setRegionPreview(enabled: Boolean) =
+        viewModelScope.launch { repository.setRegionPreview(enabled) }
+
     fun setPreserveSourceColors(enabled: Boolean) =
         viewModelScope.launch { repository.setPreserveSourceColors(enabled) }
 

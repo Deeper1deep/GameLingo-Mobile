@@ -72,6 +72,17 @@ class DataStoreSettingsRepository @Inject constructor(
             ),
             regionTopFraction = region.top,
             regionBottomFraction = region.bottom,
+            customRegionEnabled = prefs[KEY_CUSTOM_REGION_ON] ?: false,
+            customRegions = com.gamelingo.mobile.core.region.OrientedRegions(
+                portrait = com.gamelingo.mobile.core.region.NormalizedRegion.decodeOrNull(prefs[KEY_CUSTOM_REGION_PORTRAIT]),
+                landscape = com.gamelingo.mobile.core.region.NormalizedRegion.decodeOrNull(prefs[KEY_CUSTOM_REGION_LANDSCAPE]),
+            ),
+            showRegionBorder = prefs[KEY_REGION_BORDER] ?: true,
+            regionSensitivity = parseEnumOrDefault(
+                prefs[KEY_REGION_SENSITIVITY],
+                com.gamelingo.mobile.core.region.RegionSensitivity.BALANCED,
+            ),
+            regionPreview = prefs[KEY_REGION_PREVIEW] ?: false,
             dedupEnabled = prefs[KEY_DEDUP] ?: true,
             ignoreUnstableText = prefs[KEY_IGNORE_UNSTABLE] ?: true,
             batterySaverEnabled = prefs[KEY_BATTERY_SAVER] ?: true,
@@ -122,6 +133,32 @@ class DataStoreSettingsRepository @Inject constructor(
 
     override suspend fun setRestrictToTextRegion(restrict: Boolean) {
         dataStore.edit { it[KEY_RESTRICT_TO_REGION] = restrict }
+    }
+
+    override suspend fun setCustomRegionEnabled(enabled: Boolean) {
+        dataStore.edit { it[KEY_CUSTOM_REGION_ON] = enabled }
+    }
+
+    override suspend fun setCustomRegion(
+        landscape: Boolean,
+        region: com.gamelingo.mobile.core.region.NormalizedRegion?,
+    ) {
+        val key = if (landscape) KEY_CUSTOM_REGION_LANDSCAPE else KEY_CUSTOM_REGION_PORTRAIT
+        // Only a valid rectangle is ever stored; anything else clears the key.
+        val clean = region?.sanitizedOrNull()
+        dataStore.edit { if (clean == null) it.remove(key) else it[key] = clean.encode() }
+    }
+
+    override suspend fun setShowRegionBorder(show: Boolean) {
+        dataStore.edit { it[KEY_REGION_BORDER] = show }
+    }
+
+    override suspend fun setRegionSensitivity(sensitivity: com.gamelingo.mobile.core.region.RegionSensitivity) {
+        dataStore.edit { it[KEY_REGION_SENSITIVITY] = sensitivity.name }
+    }
+
+    override suspend fun setRegionPreview(enabled: Boolean) {
+        dataStore.edit { it[KEY_REGION_PREVIEW] = enabled }
     }
 
     override suspend fun setSmartTextDetection(enabled: Boolean) {
@@ -334,6 +371,12 @@ class DataStoreSettingsRepository @Inject constructor(
     private companion object {
         val KEY_SHOW_ORIGINAL = booleanPreferencesKey("show_original_text")
         val KEY_PRESERVE_COLORS = booleanPreferencesKey("preserve_source_colors")
+        val KEY_CUSTOM_REGION_ON = booleanPreferencesKey("custom_region_enabled")
+        val KEY_CUSTOM_REGION_PORTRAIT = stringPreferencesKey("custom_region_portrait")
+        val KEY_CUSTOM_REGION_LANDSCAPE = stringPreferencesKey("custom_region_landscape")
+        val KEY_REGION_BORDER = booleanPreferencesKey("custom_region_border")
+        val KEY_REGION_SENSITIVITY = stringPreferencesKey("custom_region_sensitivity")
+        val KEY_REGION_PREVIEW = booleanPreferencesKey("custom_region_preview")
         val KEY_OVERLAY_STYLE = stringPreferencesKey("overlay_style_json")
         val KEY_CUSTOM_PRESET = stringPreferencesKey("overlay_custom_preset_json")
         val KEY_CAPTURE_INTERVAL_MS = longPreferencesKey("capture_interval_ms")
