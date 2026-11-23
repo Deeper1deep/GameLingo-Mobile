@@ -226,6 +226,23 @@ object TranslationSessionBus {
         _workerStatus.value = WorkerStatus()
     }
 
+    /**
+     * The translation area changed mid-session. Everything shown or in
+     * flight belongs to the old area: bump the generation so any pending
+     * translation is dropped as stale, forget the tracked appearance and
+     * hide the current subtitle. The session itself keeps running.
+     */
+    fun onRegionChanged() {
+        synchronized(lifecycleLock) {
+            generationCounter.incrementAndGet()
+            presence.reset()
+            liveColors = null
+            _latestLine.value = null
+            _translatedLine.value = null
+            _translationFailure.value = null
+        }
+    }
+
     fun onSessionError(reason: SessionError) {
         _error.value = reason
         _state.value = SessionState.ERROR

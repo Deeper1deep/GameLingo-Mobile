@@ -34,6 +34,18 @@ data class AppSettings(
     val regionPreset: TextRegionPreset = TextRegionPreset.LOWER_THIRD,
     val regionTopFraction: Float = SettingsConstraints.DEFAULT_REGION_TOP,
     val regionBottomFraction: Float = SettingsConstraints.DEFAULT_REGION_BOTTOM,
+    /**
+     * Custom translation area: when on, only text inside the user's own
+     * rectangle is read and translated. Off by default = the scan band above.
+     */
+    val customRegionEnabled: Boolean = false,
+    /** One saved rectangle per orientation, as screen fractions. */
+    val customRegions: com.gamelingo.mobile.core.region.OrientedRegions =
+        com.gamelingo.mobile.core.region.OrientedRegions(),
+    val showRegionBorder: Boolean = true,
+    val regionSensitivity: com.gamelingo.mobile.core.region.RegionSensitivity =
+        com.gamelingo.mobile.core.region.RegionSensitivity.BALANCED,
+    val regionPreview: Boolean = false,
     val dedupEnabled: Boolean = true,
     val ignoreUnstableText: Boolean = true,
     val batterySaverEnabled: Boolean = true,
@@ -108,6 +120,13 @@ interface SettingsRepository {
     suspend fun setRegionPreset(preset: TextRegionPreset)
     suspend fun setRegionTopFraction(fraction: Float)
     suspend fun setRegionBottomFraction(fraction: Float)
+    suspend fun setCustomRegionEnabled(enabled: Boolean)
+
+    /** Saves (or clears with null) the rectangle of one orientation. */
+    suspend fun setCustomRegion(landscape: Boolean, region: com.gamelingo.mobile.core.region.NormalizedRegion?)
+    suspend fun setShowRegionBorder(show: Boolean)
+    suspend fun setRegionSensitivity(sensitivity: com.gamelingo.mobile.core.region.RegionSensitivity)
+    suspend fun setRegionPreview(enabled: Boolean)
     suspend fun setDedupEnabled(enabled: Boolean)
     suspend fun setIgnoreUnstableText(ignore: Boolean)
     suspend fun setBatterySaverEnabled(enabled: Boolean)

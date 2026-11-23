@@ -126,6 +126,33 @@ class FakeSettingsRepository(
         state.value = state.value.copy(customOverlayPreset = preset)
     }
 
+    override suspend fun setCustomRegionEnabled(enabled: Boolean) {
+        state.value = state.value.copy(customRegionEnabled = enabled)
+    }
+
+    override suspend fun setCustomRegion(
+        landscape: Boolean,
+        region: com.gamelingo.mobile.core.region.NormalizedRegion?,
+    ) {
+        val clean = region?.sanitizedOrNull()
+        val cur = state.value.customRegions
+        state.value = state.value.copy(
+            customRegions = if (landscape) cur.copy(landscape = clean) else cur.copy(portrait = clean),
+        )
+    }
+
+    override suspend fun setShowRegionBorder(show: Boolean) {
+        state.value = state.value.copy(showRegionBorder = show)
+    }
+
+    override suspend fun setRegionSensitivity(sensitivity: com.gamelingo.mobile.core.region.RegionSensitivity) {
+        state.value = state.value.copy(regionSensitivity = sensitivity)
+    }
+
+    override suspend fun setRegionPreview(enabled: Boolean) {
+        state.value = state.value.copy(regionPreview = enabled)
+    }
+
     override suspend fun setPreserveSourceColors(enabled: Boolean) {
         state.value = state.value.copy(preserveSourceColors = enabled)
     }

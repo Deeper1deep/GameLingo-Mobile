@@ -130,6 +130,10 @@ class ScreenCaptureService : Service() {
     private val rebuildFailureTracker = FailureTracker(maxConsecutiveFailures = REBUILD_MAX_FAILURES)
     private val blockDynamicsTracker = BlockDynamicsTracker()
 
+    /** Identity of the translation area the last frame used; null before the first frame. */
+    @Volatile
+    private var appliedRegionKey: String? = null
+
     /** Watchdog: last time a stall was reported, so it logs once per stall. */
     private var lastStallReportAt = 0L
 
@@ -260,6 +264,7 @@ class ScreenCaptureService : Service() {
             }
         }
 
+        appliedRegionKey = null
         TranslationSessionBus.onSessionStarted()
         CaptureHealth.onSessionStarted()
         lastStallReportAt = 0L
@@ -526,10 +531,37 @@ class ScreenCaptureService : Service() {
                 deduplicator.reset()
                 stabilityTracker.reset()
             }
+            // Custom translation area: the user's own rectangle for the
+            // current orientation. Null = the classic scan band / full frame.
+            val customRegion = if (settings.customRegionEnabled) {
+                settings.customRegions.forFrame(geometry.width, geometry.height)
+            } else {
+                null
+            }
+            var regionChanged = false
+            val regionKey = customRegion?.let {
+                "${geometry.width}x${geometry.height}:${it.encode()}:${settings.regionSensitivity}"
+            } ?: "full"
+            if (regionKey != appliedRegionKey) {
+                val firstFrame = appliedRegionKey == null
+                regionChanged = !firstFrame
+                appliedRegionKey = regionKey
+                if (!firstFrame) {
+                    // The area changed mid-session: drop what belonged to the
+                    // old one (subtitle, in-flight translations, trackers) and
+                    // carry on with the new one. No restart, no crash.
+                    TranslationSessionBus.onRegionChanged()
+                    deduplicator.reset()
+                    stabilityTracker.reset()
+                    blockDynamicsTracker.reset()
+                }
+            }
+            val regionPx = customRegion?.toPixels(geometry.width, geometry.height)
+
             // Battery saver may skip OCR on an unchanged frame, but never the
             // pass that could notice the tracked text is gone: a static frame
             // is not proof the subtitle is still there.
-            val shouldRunOcr = !settings.batterySaverEnabled ||
+            val shouldRunOcr = !settings.batterySaverEnabled || regionChanged ||
                 PipelineTiming.timed("change_detect") {
                     frameChangeDetector.hasChanged(fullBitmap.toDownsampledBytes())
                 } ||
@@ -546,8 +578,20 @@ class ScreenCaptureService : Service() {
                 return
             }
 
+            var cropLeft = 0
             var cropTop = 0
-            val workingBitmap = if (settings.restrictToTextRegion) {
+            val workingBitmap = if (regionPx != null) {
+                // OCR only the area (plus a small margin so a line crossing the
+                // border is read whole and judged by the overlap rule, not cut).
+                val margin = maxOf(REGION_MARGIN_MIN_PX, (regionPx.height * REGION_MARGIN_FRACTION).toInt())
+                val l = (regionPx.left - margin).coerceAtLeast(0)
+                val t = (regionPx.top - margin).coerceAtLeast(0)
+                val r = (regionPx.right + margin).coerceAtMost(geometry.width)
+                val b = (regionPx.bottom + margin).coerceAtMost(geometry.height)
+                cropLeft = l
+                cropTop = t
+                Bitmap.createBitmap(fullBitmap, l, t, r - l, b - t).also { ocrBitmap = it }
+            } else if (settings.restrictToTextRegion) {
                 val region = settings.effectiveRegion
                 val rect = RegionMapper.mapToPixels(
                     topFraction = region.top,
@@ -564,21 +608,33 @@ class ScreenCaptureService : Service() {
 
             val ocrStartNanos = System.nanoTime()
             var shiftedBlocks: List<com.gamelingo.mobile.core.capture.RecognizedBlock> = emptyList()
-            val rawText = if (settings.smartTextDetection) {
-            // Smart mode: read positioned blocks, shift them into full-frame
-            // coordinates, and let the scorer pick the real subtitle over
-            // static corner watermarks and HUD labels, merging wrapped lines.
-            val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(workingBitmap, 0))
-            val shifted = blocks.map { block -> block.shifted(0, cropTop) }
-            shiftedBlocks = shifted
-            val subtitle = SubtitleBlockScorer.selectSubtitle(
-                blocks = shifted,
-                frameWidth = geometry.width,
-                frameHeight = geometry.height,
-                dynamics = blockDynamicsTracker,
-            )
-            blockDynamicsTracker.offer(shifted)
-            subtitle.orEmpty()
+            val rawText = if (settings.smartTextDetection || regionPx != null) {
+                // Block mode: read positioned blocks and shift them into
+                // full-frame coordinates.
+                val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(workingBitmap, 0))
+                val shifted = blocks.map { block -> block.shifted(cropLeft, cropTop) }
+                if (regionPx != null) {
+                    // Rejected text is dropped HERE: it never reaches the
+                    // scorer, the presence tracking or any translation request.
+                    val accepted = com.gamelingo.mobile.core.region.RegionFilter.filter(
+                        shifted, regionPx, settings.regionSensitivity,
+                    )
+                    shiftedBlocks = accepted
+                    blockDynamicsTracker.offer(accepted)
+                    // The user chose this area: everything accepted inside it
+                    // is subtitle text, in its original line order.
+                    accepted.joinToString(" ") { it.text }
+                } else {
+                    shiftedBlocks = shifted
+                    val subtitle = SubtitleBlockScorer.selectSubtitle(
+                        blocks = shifted,
+                        frameWidth = geometry.width,
+                        frameHeight = geometry.height,
+                        dynamics = blockDynamicsTracker,
+                    )
+                    blockDynamicsTracker.offer(shifted)
+                    subtitle.orEmpty()
+                }
             } else {
                 recognizerEngine.recognize(InputImage.fromBitmap(workingBitmap, 0))
             }
@@ -846,6 +902,8 @@ class ScreenCaptureService : Service() {
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"
         private const val TAG = "ScreenCapture"
+        private const val REGION_MARGIN_MIN_PX = 16
+        private const val REGION_MARGIN_FRACTION = 0.15f
         private const val CHANNEL_ID = "screen_capture"
         private const val ALERTS_CHANNEL_ID = "session_alerts"
         private const val RESUME_NOTIFICATION_ID = 42
