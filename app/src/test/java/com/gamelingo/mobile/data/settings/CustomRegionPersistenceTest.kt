@@ -20,11 +20,12 @@ import org.robolectric.RobolectricTestRunner
  * purpose: the DataStore delegate is process-wide, so ordering is explicit.
  */
 @RunWith(RobolectricTestRunner::class)
+@org.robolectric.annotation.Config(sdk = [35], application = android.app.Application::class)
 class CustomRegionPersistenceTest {
 
     @Test
     fun `custom region settings default off and persist normalized values`() = runTest {
-        val context = ApplicationProvider.getApplicationContext<Context>()
+        val context = ApplicationProvider.getApplicationContext<android.app.Application>()
         val repo = DataStoreSettingsRepository(context, ApiKeyCipher())
 
         // Disabled by default: existing users keep the current behaviour.
