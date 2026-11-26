@@ -136,6 +136,8 @@ data class TranslatedLine(
     val generation: Long = 0L,
     /** Colours detected on the source words (empty unless the feature is on). */
     val sourceColors: List<com.gamelingo.mobile.core.color.SourceWordColor> = emptyList(),
+    /** Where the original subtitle was on screen (fractions), when the capture knew it. */
+    val sourceBox: com.gamelingo.mobile.core.overlay.NormalizedBox? = null,
 )
 
 /**
@@ -237,6 +239,7 @@ object TranslationSessionBus {
             generationCounter.incrementAndGet()
             presence.reset()
             liveColors = null
+            liveBox = null
             _latestLine.value = null
             _translatedLine.value = null
             _translationFailure.value = null
@@ -266,11 +269,13 @@ object TranslationSessionBus {
 
     /** Source-word colours of the live appearance, keyed by its subtitle id. */
     private var liveColors: Pair<Long, List<com.gamelingo.mobile.core.color.SourceWordColor>>? = null
+    private var liveBox: Pair<Long, com.gamelingo.mobile.core.overlay.NormalizedBox>? = null
 
     fun onNewLine(
         text: String,
         capturedAtMillis: Long,
         sourceColors: List<com.gamelingo.mobile.core.color.SourceWordColor> = emptyList(),
+        sourceBox: com.gamelingo.mobile.core.overlay.NormalizedBox? = null,
     ) {
         synchronized(lifecycleLock) {
             // Register the appearance BEFORE the line can reach the worker:
@@ -284,6 +289,7 @@ object TranslationSessionBus {
             )
             _latestLine.value = line
             liveColors = if (sourceColors.isEmpty()) null else subtitleId to sourceColors
+            liveBox = if (sourceBox == null) null else subtitleId to sourceBox
             // Buffered, DROP_OLDEST: a saturated buffer sheds the stalest line,
             // never the fresh one; tryEmit never blocks the capture loop.
             _ocrLines.tryEmit(line)
@@ -329,6 +335,7 @@ object TranslationSessionBus {
             subtitleId = subtitleId,
             generation = generation,
             sourceColors = liveColors?.takeIf { it.first == subtitleId }?.second.orEmpty(),
+            sourceBox = liveBox?.takeIf { it.first == subtitleId }?.second,
         )
         _translationFailure.value = null
         _translatedCount.update { it + 1 }

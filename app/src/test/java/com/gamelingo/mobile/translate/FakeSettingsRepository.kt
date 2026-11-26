@@ -141,6 +141,12 @@ class FakeSettingsRepository(
         )
     }
 
+    override suspend fun setTranslationPlacement(
+        placement: com.gamelingo.mobile.core.overlay.TranslationPlacement,
+    ) {
+        state.value = state.value.copy(translationPlacement = placement.sanitized())
+    }
+
     override suspend fun setShowRegionBorder(show: Boolean) {
         state.value = state.value.copy(showRegionBorder = show)
     }

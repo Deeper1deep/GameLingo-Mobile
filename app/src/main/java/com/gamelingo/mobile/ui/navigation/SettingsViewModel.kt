@@ -223,6 +223,9 @@ class SettingsViewModel @Inject constructor(
     fun setCustomRegion(landscape: Boolean, region: com.gamelingo.mobile.core.region.NormalizedRegion?) =
         viewModelScope.launch { repository.setCustomRegion(landscape, region) }
 
+    fun setTranslationPlacement(p: com.gamelingo.mobile.core.overlay.TranslationPlacement) =
+        viewModelScope.launch { repository.setTranslationPlacement(p) }
+
     fun setShowRegionBorder(show: Boolean) =
         viewModelScope.launch { repository.setShowRegionBorder(show) }
 

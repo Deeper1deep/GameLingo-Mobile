@@ -689,6 +689,9 @@ class ScreenCaptureService : Service() {
                 text = text,
                 capturedAtMillis = System.currentTimeMillis(),
                 sourceColors = sourceColors,
+                sourceBox = com.gamelingo.mobile.core.overlay.NormalizedBox.ofBlocks(
+                    shiftedBlocks, text, geometry.width, geometry.height,
+                ),
             )
             CaptureHealth.onLinePublished()
             PipelineTiming.mark("line_published", 0, "len=${text.length}")

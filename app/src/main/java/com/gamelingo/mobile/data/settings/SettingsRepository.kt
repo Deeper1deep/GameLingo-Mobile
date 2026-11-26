@@ -42,6 +42,12 @@ data class AppSettings(
     /** One saved rectangle per orientation, as screen fractions. */
     val customRegions: com.gamelingo.mobile.core.region.OrientedRegions =
         com.gamelingo.mobile.core.region.OrientedRegions(),
+    /**
+     * Where the translation is drawn: independent of [customRegions] (what is
+     * scanned). Defaults reproduce the existing top/bottom anchor.
+     */
+    val translationPlacement: com.gamelingo.mobile.core.overlay.TranslationPlacement =
+        com.gamelingo.mobile.core.overlay.TranslationPlacement(),
     val showRegionBorder: Boolean = true,
     val regionSensitivity: com.gamelingo.mobile.core.region.RegionSensitivity =
         com.gamelingo.mobile.core.region.RegionSensitivity.BALANCED,
@@ -121,6 +127,9 @@ interface SettingsRepository {
     suspend fun setRegionTopFraction(fraction: Float)
     suspend fun setRegionBottomFraction(fraction: Float)
     suspend fun setCustomRegionEnabled(enabled: Boolean)
+
+    /** Saves the translation placement; never touches the OCR region. */
+    suspend fun setTranslationPlacement(placement: com.gamelingo.mobile.core.overlay.TranslationPlacement)
 
     /** Saves (or clears with null) the rectangle of one orientation. */
     suspend fun setCustomRegion(landscape: Boolean, region: com.gamelingo.mobile.core.region.NormalizedRegion?)

@@ -64,6 +64,24 @@ class CustomRegionPersistenceTest {
         assertNull(afterInvalid.customRegions.landscape)
         assertNotNull(afterInvalid.customRegions.portrait)
 
+        // The translation placement is stored apart from the region: saving
+        // one never changes the other.
+        val placement = com.gamelingo.mobile.core.overlay.TranslationPlacement(
+            mode = com.gamelingo.mobile.core.overlay.PlacementMode.BELOW_ORIGINAL,
+            fixedX = 0.4f, fixedY = 0.2f, widthFraction = 0.6f,
+        )
+        val regionBefore = repo.settings.first().customRegions
+        repo.setTranslationPlacement(placement)
+        val afterPlacement = repo.settings.first()
+        assertEquals(placement, afterPlacement.translationPlacement)
+        assertEquals(regionBefore, afterPlacement.customRegions)
+        repo.setCustomRegion(landscape = false, region = NormalizedRegion(0.3f, 0.3f, 0.6f, 0.6f))
+        assertEquals(placement, repo.settings.first().translationPlacement)
+        // Restart keeps both.
+        val again = DataStoreSettingsRepository(context, ApiKeyCipher()).settings.first()
+        assertEquals(placement, again.translationPlacement)
+        assertEquals(NormalizedRegion(0.3f, 0.3f, 0.6f, 0.6f), again.customRegions.portrait)
+
         // Reset to full screen = clearing the rectangle.
         repo.setCustomRegion(landscape = false, region = null)
         assertNull(repo.settings.first().customRegions.portrait)
