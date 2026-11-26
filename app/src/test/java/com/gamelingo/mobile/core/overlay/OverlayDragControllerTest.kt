@@ -117,8 +117,8 @@ class OverlayDragControllerTest {
         )
         // Fixed mode, and resolving it again lands exactly where it was dropped.
         val again = PlacementResolver.resolve(saved, sw, sh, vw, vh, null, null, false, 48)
-        assertEquals(dropped.left, again.left, 1)
-        assertEquals(dropped.top, again.top, 1)
+        assertTrue(kotlin.math.abs(dropped.left - again.left) <= 1)
+        assertTrue(kotlin.math.abs(dropped.top - again.top) <= 1)
     }
 
     @Test fun `a drag in a fixed position survives rotation as the same fractions`() {
