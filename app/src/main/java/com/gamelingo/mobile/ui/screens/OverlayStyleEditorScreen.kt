@@ -198,6 +198,14 @@ fun OverlayStyleEditorScreen(viewModel: SettingsViewModel = hiltViewModel()) {
             onValueChange = { v -> editStyle { it.copy(paddingDp = v.toInt()) } },
         )
 
+        SliderCard(
+            title = if (draft.style.maxLines == 0) stringResource(R.string.style_max_lines_unlimited)
+            else stringResource(R.string.style_max_lines, draft.style.maxLines),
+            valueLabel = "",
+            value = draft.style.maxLines.toFloat(), valueRange = 0f..OverlayStyle.MAX_LINES.toFloat(),
+            onValueChange = { v -> editStyle { it.copy(maxLines = v.toInt()) } },
+        )
+
         ColorSwatchRow(stringResource(R.string.style_text_color), OverlayColors.TEXT_PRESETS, draft.textColor) { c -> edit { it.copy(textColor = c) } }
         ColorSwatchRow(stringResource(R.string.style_bg_color), OverlayColors.BACKGROUND_PRESETS, draft.backgroundColor) { c -> edit { it.copy(backgroundColor = c) } }
         ColorSwatchRow(stringResource(R.string.style_outline_color), OverlayColors.TEXT_PRESETS + 0xFF000000, draft.style.outlineColor) { c -> editStyle { it.copy(outlineColor = c) } }

@@ -1,14 +1,13 @@
 package com.gamelingo.mobile.overlay
 
-import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.PixelFormat
 import android.os.IBinder
 import android.provider.Settings
 import android.view.Gravity
-import android.view.MotionEvent
 import android.view.View
+import android.view.ViewGroup
 import android.view.WindowManager
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -18,6 +17,7 @@ import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
 import com.gamelingo.mobile.core.overlay.NormalizedBox
 import com.gamelingo.mobile.core.overlay.OverlayLayout
+import com.gamelingo.mobile.core.overlay.PlacementPoint
 import com.gamelingo.mobile.core.overlay.PlacementResolver
 import com.gamelingo.mobile.core.session.SessionError
 import com.gamelingo.mobile.core.session.SessionState
@@ -53,10 +53,9 @@ class OverlayService : Service() {
     private val lifecycleOwner = OverlayLifecycleOwner()
 
     private var windowManager: WindowManager? = null
-    private var overlayView: ComposeView? = null
+    private var overlayView: DragFrameLayout? = null
     private var layoutParams: WindowManager.LayoutParams? = null
     private var sourceBox: NormalizedBox? = null
-    @Volatile private var dragging = false
 
     private val uiState = MutableStateFlow(OverlayUiState())
     private val settingsState = MutableStateFlow(AppSettings())
@@ -133,11 +132,11 @@ class OverlayService : Service() {
         }
         layoutParams = params
 
-        val view = ComposeView(this)
-        view.setViewTreeLifecycleOwner(lifecycleOwner)
-        view.setViewTreeViewModelStoreOwner(lifecycleOwner)
-        view.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
-        view.setContent {
+        val content = ComposeView(this)
+        content.setViewTreeLifecycleOwner(lifecycleOwner)
+        content.setViewTreeViewModelStoreOwner(lifecycleOwner)
+        content.setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+        content.setContent {
             val state by uiState.collectAsState()
             val settings by settingsState.collectAsState()
             OverlayContent(
@@ -146,7 +145,31 @@ class OverlayService : Service() {
                 onStopSession = { stopSessionFromOverlay() },
             )
         }
-        attachDragHandler(view)
+        // The window's root owns the drag (see DragFrameLayout). Compose
+        // resolves its recomposer from the ROOT view, so the lifecycle owners
+        // must be on the root as well as on the content.
+        val view = DragFrameLayout(this).apply {
+            setViewTreeLifecycleOwner(lifecycleOwner)
+            setViewTreeViewModelStoreOwner(lifecycleOwner)
+            setViewTreeSavedStateRegistryOwner(lifecycleOwner)
+            addView(
+                content,
+                android.widget.FrameLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT,
+                ),
+            )
+            windowPosition = { PlacementPoint(params.x, params.y) }
+            screenSize = { this@OverlayService.screenSize() }
+            isLocked = { settingsState.value.overlayStyle.positionLocked }
+            stopEnabled = { uiState.value.sessionRunning }
+            onDragMove = { point ->
+                params.x = point.left
+                params.y = point.top
+                runCatching { windowManager?.updateViewLayout(this, params) }
+            }
+            onDragEnd = { saveDroppedPosition(this, params) }
+            onHoldStop = { stopSessionFromOverlay() }
+        }
 
         return try {
             windowManager?.addView(view, params)
@@ -192,8 +215,9 @@ class OverlayService : Service() {
      * smart). Called on settings changes, new subtitles and size changes.
      */
     private fun reposition() {
-        if (dragging) return
         val view = overlayView ?: return
+        // Never fight the finger: a drag owns the window position until it ends.
+        if (!view.allowsExternalReposition()) return
         val params = layoutParams ?: return
         val settings = settingsState.value
         val (sw, sh) = screenSize()
@@ -219,69 +243,6 @@ class OverlayService : Service() {
         runCatching { windowManager?.updateViewLayout(view, params) }
     }
 
-    /**
-     * Free drag: the window follows the finger on both axes, clamped on
-     * screen. A tap is NOT a drag: until the finger moves past the touch
-     * slop, events fall through to Compose so the stop affordance stays
-     * clickable. On release the spot is saved as screen fractions: in Fixed
-     * mode it becomes the fixed position, in the followed modes a nudge.
-     */
-    @SuppressLint("ClickableViewAccessibility")
-    private fun attachDragHandler(view: View) {
-        var startX = 0
-        var startY = 0
-        var startTouchY = 0f
-        var startTouchX = 0f
-        val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
-        view.setOnTouchListener { _, event ->
-            // Locked position: dragging is off, but touches still fall through
-            // to Compose so the stop control keeps working.
-            if (settingsState.value.overlayStyle.positionLocked) return@setOnTouchListener false
-            val params = layoutParams ?: return@setOnTouchListener false
-            when (event.action) {
-                MotionEvent.ACTION_DOWN -> {
-                    startX = params.x
-                    startY = params.y
-                    startTouchY = event.rawY
-                    startTouchX = event.rawX
-                    dragging = false
-                    false
-                }
-
-                MotionEvent.ACTION_MOVE -> {
-                    if (!dragging) {
-                        val moved = kotlin.math.abs(event.rawX - startTouchX) > slop ||
-                            kotlin.math.abs(event.rawY - startTouchY) > slop
-                        if (!moved) return@setOnTouchListener false
-                        dragging = true
-                        // Re-anchor the drag origin so the window does not
-                        // jump by the slop distance when the drag starts.
-                        startX = params.x
-                        startY = params.y
-                        startTouchY = event.rawY
-                        startTouchX = event.rawX
-                    }
-                    val (sw, sh) = screenSize()
-                    val moved = PlacementResolver.clamp(
-                        x = (startX + (event.rawX - startTouchX)).toInt(),
-                        y = (startY + (event.rawY - startTouchY)).toInt(),
-                        sw = sw, sh = sh, ow = view.width, oh = view.height,
-                    )
-                    params.x = moved.left
-                    params.y = moved.top
-                    runCatching { windowManager?.updateViewLayout(view, params) }
-                    true
-                }
-
-                else -> {
-                    val wasDragging = dragging
-                    if (wasDragging) saveDroppedPosition(view, params)
-                    wasDragging
-                }
-            }
-        }
-    }
-
     /** Persists where a drag ended; only the placement is written, never the OCR region. */
     private fun saveDroppedPosition(view: View, params: WindowManager.LayoutParams) {
         val (sw, sh) = screenSize()
@@ -297,10 +258,10 @@ class OverlayService : Service() {
         val updated = PlacementResolver.afterDrag(
             placement, params.x, params.y, base, sw, sh, view.width,
         )
-        serviceScope.launch {
-            settingsRepository.setTranslationPlacement(updated)
-            dragging = false
-        }
+        // Apply at once: a subtitle arriving before the store echoes the new
+        // value must not snap the window back to the old spot.
+        settingsState.value = settings.copy(translationPlacement = updated)
+        serviceScope.launch { settingsRepository.setTranslationPlacement(updated) }
     }
 
     private fun collectState() {
@@ -380,6 +341,12 @@ class OverlayService : Service() {
                 com.gamelingo.mobile.capture.ScreenCaptureService.stopIntent(this),
             )
         }
+    }
+
+    /** Rotation / display-size change: re-place from the saved fractions. */
+    override fun onConfigurationChanged(newConfig: android.content.res.Configuration) {
+        super.onConfigurationChanged(newConfig)
+        overlayView?.post { reposition() }
     }
 
     override fun onDestroy() {

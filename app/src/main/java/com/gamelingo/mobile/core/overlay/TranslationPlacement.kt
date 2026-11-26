@@ -72,6 +72,18 @@ data class TranslationPlacement(
 
         fun encode(p: TranslationPlacement): String = json.encodeToString(p.sanitized())
 
+        /**
+         * Like [decodeOrDefault] but also says why a fallback happened (null when the
+         * stored value was fine or absent), for the diagnostics log.
+         */
+        fun decodeWithDiagnostic(raw: String?): Pair<TranslationPlacement, String?> {
+            if (raw.isNullOrBlank()) return TranslationPlacement() to null
+            val parsed = runCatching { json.decodeFromString<TranslationPlacement>(raw) }.getOrNull()
+                ?: return TranslationPlacement() to "saved translation position is corrupt; using the default position"
+            val fixed = parsed.sanitized()
+            return fixed to if (fixed != parsed) "saved translation position was out of range; clamped to the screen" else null
+        }
+
         /** Corrupt or unknown JSON yields the default placement, never a crash. */
         fun decodeOrDefault(raw: String?): TranslationPlacement =
             if (raw.isNullOrBlank()) TranslationPlacement()
