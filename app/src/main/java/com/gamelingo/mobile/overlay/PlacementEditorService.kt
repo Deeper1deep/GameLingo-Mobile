@@ -93,7 +93,7 @@ class PlacementEditorService : Service() {
         val view = PlacementEditorView(this).apply {
             box = NormalizedRegion(left, top, left + w, top + h)
             textColor = settings.overlayTextColor.toInt()
-            backgroundColor = OverlayLayout.backgroundWithOpacity(
+            boxColor = OverlayLayout.backgroundWithOpacity(
                 settings.overlayBackgroundColor, settings.overlayOpacity,
             ).toInt()
             textSizeSp = settings.overlayTextSizeSp.toFloat()

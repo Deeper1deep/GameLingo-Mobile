@@ -35,7 +35,7 @@ class PlacementEditorView(context: Context) : View(context) {
         set(value) { field = value; invalidate() }
 
     var textColor: Int = Color.WHITE
-    var backgroundColor: Int = Color.argb(200, 0, 0, 0)
+    var boxColor: Int = Color.argb(200, 0, 0, 0)
     var textSizeSp: Float = 18f
     var align: PlacementAlign = PlacementAlign.CENTER
         set(value) { field = value; invalidate() }
@@ -73,7 +73,7 @@ class PlacementEditorView(context: Context) : View(context) {
             canvas.drawRect(it.left * width, it.top * height, it.right * width, it.bottom * height, regionPaint)
         }
         val r = px()
-        bgPaint.color = backgroundColor
+        bgPaint.color = boxColor
         canvas.drawRoundRect(r, 12f * density, 12f * density, bgPaint)
 
         // Live sample, clipped to the box like the real window.
