@@ -473,7 +473,7 @@
     <string name="diag_ago_fmt">من %1$d ثانية</string>
     <string name="diag_none">لسه</string>
     <string name="overlay_stop_cd">إيقاف جلسة الترجمة</string>
-    <string name="overlay_stop_hint">اضغط مطوّلًا للإيقاف</string>
+    <string name="overlay_stop_hint">اسحب لتحريك الترجمة · اضغط مع الثبات ثانيتين للإيقاف</string>
     <string name="overlay_stop_hint_cd">إظهار تلميح الإيقاف المطوّل</string>
     <string name="diag_last_stop">آخر إيقاف</string>
     <string name="notif_channel_alerts_name">تنبيهات الجلسة</string>
@@ -564,4 +564,6 @@
     <string name="placement_editor_hint">اسحب الصندوق لتحريك الترجمة، ومن الزوايا لتغيير الحجم. الإطار الأخضر المتقطع هو منطقة القراءة ولن يتغير</string>
     <string name="placement_ocr_section">منطقة القراءة (OCR)</string>
     <string name="placement_ocr_hint">منطقة القراءة تحدد ما يُترجم، وتتحرك وتتغير من «تعديل المنطقة» في إعدادات القراءة، دون أن تحرّك الترجمة.</string>
+    <string name="style_max_lines">أقصى عدد أسطر: %1$d</string>
+    <string name="style_max_lines_unlimited">أقصى عدد أسطر: بلا حد</string>
 </resources>

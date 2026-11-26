@@ -26,7 +26,11 @@ data class OverlayStyle(
     val paddingDp: Int = 10,
     /** Locks dragging only; the stop control always stays usable. */
     val positionLocked: Boolean = false,
+    /** Longest translation shown, in lines; 0 = no limit (wraps fully). */
+    val maxLines: Int = 0,
 ) {
+    fun maxLinesOrUnlimited(): Int = if (maxLines <= 0) Int.MAX_VALUE else maxLines
+
     /** Values forced into their safe ranges (also repairs corrupt stored JSON). */
     fun sanitized() = copy(
         letterSpacingSp = letterSpacingSp.coerceIn(MIN_SPACING, MAX_SPACING),
@@ -34,6 +38,7 @@ data class OverlayStyle(
         outlineWidthDp = outlineWidthDp.coerceIn(0f, MAX_OUTLINE),
         cornerRadiusDp = cornerRadiusDp.coerceIn(0, MAX_RADIUS),
         paddingDp = paddingDp.coerceIn(MIN_PADDING, MAX_PADDING),
+        maxLines = maxLines.coerceIn(0, MAX_LINES),
     )
 
     companion object {
@@ -45,6 +50,7 @@ data class OverlayStyle(
         const val MAX_RADIUS = 28
         const val MIN_PADDING = 4
         const val MAX_PADDING = 24
+        const val MAX_LINES = 6
 
         private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
 

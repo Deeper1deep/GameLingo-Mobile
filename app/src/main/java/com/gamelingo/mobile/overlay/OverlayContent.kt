@@ -1,8 +1,7 @@
 package com.gamelingo.mobile.overlay
 
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -83,7 +82,6 @@ internal fun coloredText(
  * overlay settings. Width wraps the content up to a screen fraction so the
  * window never claims the whole screen without need.
  */
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OverlayContent(
     state: OverlayUiState,
@@ -123,16 +121,16 @@ fun OverlayContent(
         }
     }
     val stopClickLabel = stringResource(R.string.overlay_stop_hint_cd)
-    val stopLongClickLabel = stringResource(R.string.overlay_stop_cd)
 
     Column(
         modifier = Modifier
             .then(
                 if (stoppable) {
-                    Modifier.combinedClickable(
+                    // A tap only explains the stop gesture. The hold-to-stop
+                    // itself is handled by the window root (DragFrameLayout),
+                    // so it can never fire in the middle of a drag.
+                    Modifier.clickable(
                         onClickLabel = stopClickLabel,
-                        onLongClickLabel = stopLongClickLabel,
-                        onLongClick = { onStopSession?.invoke() },
                         onClick = { showStopHint = true },
                     )
                 } else {
@@ -210,6 +208,7 @@ fun OverlayContent(
                     direction = TextDirection.Rtl,
                     style = style,
                     textAlign = textAlign,
+                    maxLines = style.maxLinesOrUnlimited(),
                 )
                 // Second line: the original English, left-to-right.
                 if (settings.showOriginalText && !state.original.isNullOrBlank()) {
@@ -228,6 +227,7 @@ fun OverlayContent(
                         direction = TextDirection.Ltr,
                         style = style,
                         textAlign = textAlign,
+                        maxLines = style.maxLinesOrUnlimited(),
                     )
                 }
             }
@@ -288,6 +288,7 @@ internal fun StyledText(
     direction: TextDirection,
     style: com.gamelingo.mobile.core.overlay.OverlayStyle,
     textAlign: TextAlign = TextAlign.Center,
+    maxLines: Int = Int.MAX_VALUE,
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val base = LocalTextStyle.current.copy(
@@ -312,6 +313,8 @@ internal fun StyledText(
         if (style.outlineWidthDp > 0f) {
             Text(
                 text = text.text,
+                maxLines = maxLines,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 color = Color(style.outlineColor),
                 style = base.copy(
                     shadow = null,
@@ -322,6 +325,9 @@ internal fun StyledText(
                 ),
             )
         }
-        Text(text = text, color = color, style = base)
+        Text(
+            text = text, color = color, style = base, maxLines = maxLines,
+            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+        )
     }
 }

@@ -78,7 +78,10 @@ class DataStoreSettingsRepository @Inject constructor(
                 landscape = com.gamelingo.mobile.core.region.NormalizedRegion.decodeOrNull(prefs[KEY_CUSTOM_REGION_LANDSCAPE]),
             ),
             translationPlacement = com.gamelingo.mobile.core.overlay.TranslationPlacement
-                .decodeOrDefault(prefs[KEY_TRANSLATION_PLACEMENT]),
+                .decodeWithDiagnostic(prefs[KEY_TRANSLATION_PLACEMENT]).let { (placement, why) ->
+                    if (why != null) android.util.Log.w("TranslationPlacement", why)
+                    placement
+                },
             showRegionBorder = prefs[KEY_REGION_BORDER] ?: true,
             regionSensitivity = parseEnumOrDefault(
                 prefs[KEY_REGION_SENSITIVITY],
