@@ -77,6 +77,8 @@ class DataStoreSettingsRepository @Inject constructor(
                 portrait = com.gamelingo.mobile.core.region.NormalizedRegion.decodeOrNull(prefs[KEY_CUSTOM_REGION_PORTRAIT]),
                 landscape = com.gamelingo.mobile.core.region.NormalizedRegion.decodeOrNull(prefs[KEY_CUSTOM_REGION_LANDSCAPE]),
             ),
+            translationPlacement = com.gamelingo.mobile.core.overlay.TranslationPlacement
+                .decodeOrDefault(prefs[KEY_TRANSLATION_PLACEMENT]),
             showRegionBorder = prefs[KEY_REGION_BORDER] ?: true,
             regionSensitivity = parseEnumOrDefault(
                 prefs[KEY_REGION_SENSITIVITY],
@@ -147,6 +149,15 @@ class DataStoreSettingsRepository @Inject constructor(
         // Only a valid rectangle is ever stored; anything else clears the key.
         val clean = region?.sanitizedOrNull()
         dataStore.edit { if (clean == null) it.remove(key) else it[key] = clean.encode() }
+    }
+
+    override suspend fun setTranslationPlacement(
+        placement: com.gamelingo.mobile.core.overlay.TranslationPlacement,
+    ) {
+        dataStore.edit {
+            it[KEY_TRANSLATION_PLACEMENT] =
+                com.gamelingo.mobile.core.overlay.TranslationPlacement.encode(placement)
+        }
     }
 
     override suspend fun setShowRegionBorder(show: Boolean) {
@@ -374,6 +385,7 @@ class DataStoreSettingsRepository @Inject constructor(
         val KEY_CUSTOM_REGION_ON = booleanPreferencesKey("custom_region_enabled")
         val KEY_CUSTOM_REGION_PORTRAIT = stringPreferencesKey("custom_region_portrait")
         val KEY_CUSTOM_REGION_LANDSCAPE = stringPreferencesKey("custom_region_landscape")
+        val KEY_TRANSLATION_PLACEMENT = stringPreferencesKey("translation_placement_json")
         val KEY_REGION_BORDER = booleanPreferencesKey("custom_region_border")
         val KEY_REGION_SENSITIVITY = stringPreferencesKey("custom_region_sensitivity")
         val KEY_REGION_PREVIEW = booleanPreferencesKey("custom_region_preview")

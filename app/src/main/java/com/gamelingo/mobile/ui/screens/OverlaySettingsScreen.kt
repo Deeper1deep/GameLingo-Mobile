@@ -126,6 +126,8 @@ fun OverlaySettingsScreen(
             onSelect = viewModel::setOverlayPosition,
         )
         HintText(stringResource(R.string.overlay_drag_hint))
+
+        TranslationPlacementSection(settings, viewModel)
     }
 }
 

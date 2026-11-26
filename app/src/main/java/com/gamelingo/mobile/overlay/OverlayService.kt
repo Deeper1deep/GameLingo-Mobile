@@ -16,7 +16,9 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.lifecycle.setViewTreeLifecycleOwner
 import androidx.lifecycle.setViewTreeViewModelStoreOwner
 import androidx.savedstate.setViewTreeSavedStateRegistryOwner
+import com.gamelingo.mobile.core.overlay.NormalizedBox
 import com.gamelingo.mobile.core.overlay.OverlayLayout
+import com.gamelingo.mobile.core.overlay.PlacementResolver
 import com.gamelingo.mobile.core.session.SessionError
 import com.gamelingo.mobile.core.session.SessionState
 import com.gamelingo.mobile.core.timing.PipelineTiming
@@ -53,6 +55,8 @@ class OverlayService : Service() {
     private var windowManager: WindowManager? = null
     private var overlayView: ComposeView? = null
     private var layoutParams: WindowManager.LayoutParams? = null
+    private var sourceBox: NormalizedBox? = null
+    @Volatile private var dragging = false
 
     private val uiState = MutableStateFlow(OverlayUiState())
     private val settingsState = MutableStateFlow(AppSettings())
@@ -110,10 +114,15 @@ class OverlayService : Service() {
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.WRAP_CONTENT,
             WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
+            // LAYOUT_IN_SCREEN / NO_LIMITS: x/y are absolute screen pixels, so
+            // the saved fractions of the screen map to the same spot every time.
             WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
+                WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL or
+                WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or
+                WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
             PixelFormat.TRANSLUCENT,
         ).apply {
+            gravity = Gravity.TOP or Gravity.START
             // Full-screen video and games render into the display cutout;
             // without this the window is laid out as if the cutout bars
             // still existed and the bar lands off-centre or half-hidden.
@@ -139,10 +148,14 @@ class OverlayService : Service() {
         }
         attachDragHandler(view)
 
-        applyAnchor(settingsState.value.overlayPosition, marginPx)
         return try {
             windowManager?.addView(view, params)
             overlayView = view
+            // The window's real size is only known after layout: re-place then.
+            view.addOnLayoutChangeListener { _, l, t, r, b, ol, ot, or2, ob ->
+                if (r - l != or2 - ol || b - t != ob - ot) view.post { reposition() }
+            }
+            view.post { reposition() }
             true
         } catch (_: Exception) {
             // Permission revoked between check and add, or a dead window
@@ -151,50 +164,84 @@ class OverlayService : Service() {
         }
     }
 
-    /** Re-anchors the window when the user changes the position setting. */
-    private fun applyAnchor(position: OverlayPosition, marginPx: Int? = null) {
-        val params = layoutParams ?: return
-        val margin = marginPx
-            ?: (EDGE_MARGIN_DP * resources.displayMetrics.density).toInt()
-        if (OverlayLayout.anchorsTop(position)) {
-            params.gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
-            params.y = margin
+    private fun screenSize(): Pair<Int, Int> {
+        val wm = windowManager ?: return resources.displayMetrics.widthPixels to resources.displayMetrics.heightPixels
+        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
+            val b = wm.currentWindowMetrics.bounds
+            b.width() to b.height()
         } else {
-            params.gravity = Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL
-            params.y = margin
+            val m = android.util.DisplayMetrics()
+            @Suppress("DEPRECATION")
+            wm.defaultDisplay.getRealMetrics(m)
+            m.widthPixels to m.heightPixels
         }
-        // A re-anchor also re-centers horizontally.
-        params.x = 0
-        overlayView?.let { view ->
-            runCatching { windowManager?.updateViewLayout(view, params) }
-        }
+    }
+
+    /** The scanned area as a box, read-only: placement never writes the region. */
+    private fun regionBox(settings: AppSettings, sw: Int, sh: Int): NormalizedBox? {
+        if (!settings.customRegionEnabled) return null
+        val r = settings.customRegions.forFrame(sw, sh) ?: return null
+        return NormalizedBox(r.left, r.top, r.right, r.bottom)
+    }
+
+    private fun marginPx() = (EDGE_MARGIN_DP * resources.displayMetrics.density).toInt()
+
+    /**
+     * Puts the window where the placement setting says: size from the
+     * saved width/height, position from the mode (fixed / follow / below /
+     * smart). Called on settings changes, new subtitles and size changes.
+     */
+    private fun reposition() {
+        if (dragging) return
+        val view = overlayView ?: return
+        val params = layoutParams ?: return
+        val settings = settingsState.value
+        val (sw, sh) = screenSize()
+        val placement = settings.translationPlacement
+        params.width = placement.widthFraction?.let { (it * sw).toInt() }
+            ?: WindowManager.LayoutParams.WRAP_CONTENT
+        params.height = placement.heightFraction?.let { (it * sh).toInt() }
+            ?: WindowManager.LayoutParams.WRAP_CONTENT
+        val ow = if (params.width > 0) params.width else view.width
+        val oh = if (params.height > 0) params.height else view.height
+        val point = PlacementResolver.resolve(
+            placement = placement,
+            screenWidth = sw, screenHeight = sh,
+            overlayWidth = ow, overlayHeight = oh,
+            source = sourceBox,
+            ocrRegion = regionBox(settings, sw, sh),
+            defaultAnchorTop = OverlayLayout.anchorsTop(settings.overlayPosition),
+            marginPx = marginPx(),
+        )
+        params.gravity = Gravity.TOP or Gravity.START
+        params.x = point.left
+        params.y = point.top
+        runCatching { windowManager?.updateViewLayout(view, params) }
     }
 
     /**
      * Free drag: the window follows the finger on both axes, clamped on
      * screen. A tap is NOT a drag: until the finger moves past the touch
-     * slop, events fall through to Compose so the stop affordance (and any
-     * future control) stays clickable.
+     * slop, events fall through to Compose so the stop affordance stays
+     * clickable. On release the spot is saved as screen fractions: in Fixed
+     * mode it becomes the fixed position, in the followed modes a nudge.
      */
     @SuppressLint("ClickableViewAccessibility")
     private fun attachDragHandler(view: View) {
-        var startOffsetY = 0
-        var startOffsetX = 0
+        var startX = 0
+        var startY = 0
         var startTouchY = 0f
         var startTouchX = 0f
-        var dragging = false
         val slop = android.view.ViewConfiguration.get(this).scaledTouchSlop
         view.setOnTouchListener { _, event ->
             // Locked position: dragging is off, but touches still fall through
             // to Compose so the stop control keeps working.
             if (settingsState.value.overlayStyle.positionLocked) return@setOnTouchListener false
             val params = layoutParams ?: return@setOnTouchListener false
-            val screenHeight = resources.displayMetrics.heightPixels
-            val screenWidth = resources.displayMetrics.widthPixels
             when (event.action) {
                 MotionEvent.ACTION_DOWN -> {
-                    startOffsetY = params.y
-                    startOffsetX = params.x
+                    startX = params.x
+                    startY = params.y
                     startTouchY = event.rawY
                     startTouchX = event.rawX
                     dragging = false
@@ -209,37 +256,50 @@ class OverlayService : Service() {
                         dragging = true
                         // Re-anchor the drag origin so the window does not
                         // jump by the slop distance when the drag starts.
-                        startOffsetY = params.y
-                        startOffsetX = params.x
+                        startX = params.x
+                        startY = params.y
                         startTouchY = event.rawY
                         startTouchX = event.rawX
                     }
-                    // For a bottom-anchored window, dragging up increases y.
-                    val deltaY = if (params.gravity and Gravity.BOTTOM == Gravity.BOTTOM) {
-                        startTouchY - event.rawY
-                    } else {
-                        event.rawY - startTouchY
-                    }
-                    params.y = OverlayLayout.clampVerticalOffset(
-                        offsetY = (startOffsetY + deltaY).toInt(),
-                        viewHeight = view.height,
-                        screenHeight = screenHeight,
+                    val (sw, sh) = screenSize()
+                    val moved = PlacementResolver.clamp(
+                        x = (startX + (event.rawX - startTouchX)).toInt(),
+                        y = (startY + (event.rawY - startTouchY)).toInt(),
+                        sw = sw, sh = sh, ow = view.width, oh = view.height,
                     )
-                    params.x = OverlayLayout.clampHorizontalOffset(
-                        offsetX = (startOffsetX + (event.rawX - startTouchX)).toInt(),
-                        viewWidth = view.width,
-                        screenWidth = screenWidth,
-                    )
+                    params.x = moved.left
+                    params.y = moved.top
                     runCatching { windowManager?.updateViewLayout(view, params) }
                     true
                 }
 
                 else -> {
                     val wasDragging = dragging
-                    dragging = false
+                    if (wasDragging) saveDroppedPosition(view, params)
                     wasDragging
                 }
             }
+        }
+    }
+
+    /** Persists where a drag ended; only the placement is written, never the OCR region. */
+    private fun saveDroppedPosition(view: View, params: WindowManager.LayoutParams) {
+        val (sw, sh) = screenSize()
+        val settings = settingsState.value
+        val placement = settings.translationPlacement
+        val base = PlacementResolver.resolve(
+            placement = placement, screenWidth = sw, screenHeight = sh,
+            overlayWidth = view.width, overlayHeight = view.height,
+            source = sourceBox, ocrRegion = regionBox(settings, sw, sh),
+            defaultAnchorTop = OverlayLayout.anchorsTop(settings.overlayPosition),
+            marginPx = marginPx(), applyOffsets = false,
+        )
+        val updated = PlacementResolver.afterDrag(
+            placement, params.x, params.y, base, sw, sh, view.width,
+        )
+        serviceScope.launch {
+            settingsRepository.setTranslationPlacement(updated)
+            dragging = false
         }
     }
 
@@ -247,7 +307,7 @@ class OverlayService : Service() {
         serviceScope.launch {
             settingsRepository.settings.collect { settings ->
                 settingsState.value = settings
-                applyAnchor(settings.overlayPosition)
+                reposition()
             }
         }
         serviceScope.launch {
@@ -275,6 +335,8 @@ class OverlayService : Service() {
                         stopSelf()
                         return@collect
                     }
+                    sourceBox = line.sourceBox
+                    reposition()
                     uiState.value = OverlayUiState(
                         original = line.original,
                         translated = line.translated,

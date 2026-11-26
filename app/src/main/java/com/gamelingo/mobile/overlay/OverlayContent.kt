@@ -5,6 +5,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LocalTextStyle
@@ -97,6 +99,17 @@ fun OverlayContent(
     val textColor = Color(settings.overlayTextColor)
     val style = settings.overlayStyle
     val maxWidthDp = (LocalConfiguration.current.screenWidthDp * MAX_WIDTH_FRACTION).toInt()
+    val placement = settings.translationPlacement
+    val textAlign = when (placement.align) {
+        com.gamelingo.mobile.core.overlay.PlacementAlign.LEFT -> TextAlign.Left
+        com.gamelingo.mobile.core.overlay.PlacementAlign.CENTER -> TextAlign.Center
+        com.gamelingo.mobile.core.overlay.PlacementAlign.RIGHT -> TextAlign.Right
+    }
+    val columnAlignment = when (placement.align) {
+        com.gamelingo.mobile.core.overlay.PlacementAlign.LEFT -> Alignment.Start
+        com.gamelingo.mobile.core.overlay.PlacementAlign.CENTER -> Alignment.CenterHorizontally
+        com.gamelingo.mobile.core.overlay.PlacementAlign.RIGHT -> Alignment.End
+    }
 
     // Stop gesture lives on the subtitle bar itself. It needs a long press,
     // not one tap: stray gameplay touches reach this bar, and one tap ending
@@ -126,7 +139,13 @@ fun OverlayContent(
                     Modifier
                 },
             )
-            .widthIn(max = maxWidthDp.dp)
+            .then(
+                // A width set by the user fills the (exactly sized) window;
+                // otherwise the bar wraps its text as before.
+                if (placement.widthFraction != null) Modifier.fillMaxWidth()
+                else Modifier.widthIn(max = maxWidthDp.dp),
+            )
+            .then(if (placement.heightFraction != null) Modifier.fillMaxHeight() else Modifier)
             .padding(horizontal = 12.dp, vertical = 6.dp)
             .background(
                 if (state.cleared && state.notice == null) Color.Transparent else background,
@@ -136,7 +155,12 @@ fun OverlayContent(
                 horizontal = (style.paddingDp + 6).dp,
                 vertical = if (state.cleared) 2.dp else style.paddingDp.dp,
             ),
-        horizontalAlignment = Alignment.CenterHorizontally,
+        horizontalAlignment = columnAlignment,
+        verticalArrangement = if (placement.heightFraction != null) {
+            androidx.compose.foundation.layout.Arrangement.Center
+        } else {
+            androidx.compose.foundation.layout.Arrangement.Top
+        },
     ) {
         // A tap on the bar only explains the stop gesture, briefly and only
         // on demand: no permanent label sits next to the subtitle.
@@ -185,6 +209,7 @@ fun OverlayContent(
                     bold = style.bold,
                     direction = TextDirection.Rtl,
                     style = style,
+                    textAlign = textAlign,
                 )
                 // Second line: the original English, left-to-right.
                 if (settings.showOriginalText && !state.original.isNullOrBlank()) {
@@ -202,6 +227,7 @@ fun OverlayContent(
                         bold = false,
                         direction = TextDirection.Ltr,
                         style = style,
+                        textAlign = textAlign,
                     )
                 }
             }
@@ -261,6 +287,7 @@ internal fun StyledText(
     bold: Boolean,
     direction: TextDirection,
     style: com.gamelingo.mobile.core.overlay.OverlayStyle,
+    textAlign: TextAlign = TextAlign.Center,
 ) {
     val density = androidx.compose.ui.platform.LocalDensity.current
     val base = LocalTextStyle.current.copy(
@@ -269,7 +296,7 @@ internal fun StyledText(
         fontSize = fontSizeSp.sp,
         letterSpacing = style.letterSpacingSp.sp,
         lineHeight = (fontSizeSp * style.lineHeightMultiplier).sp,
-        textAlign = TextAlign.Center,
+        textAlign = textAlign,
         textDirection = direction,
         shadow = if (style.shadowEnabled) {
             androidx.compose.ui.graphics.Shadow(

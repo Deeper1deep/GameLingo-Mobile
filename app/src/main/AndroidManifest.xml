@@ -50,6 +50,11 @@
             android:name=".overlay.RegionSelectorService"
             android:exported="false" />
 
+        <!-- Translation position editor, shown over the game on demand. -->
+        <service
+            android:name=".overlay.PlacementEditorService"
+            android:exported="false" />
+
         <!-- Serves the verified update APK to the system installer only. -->
         <provider
             android:name="androidx.core.content.FileProvider"
