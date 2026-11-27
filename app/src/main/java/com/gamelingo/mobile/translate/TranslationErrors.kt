@@ -31,3 +31,10 @@ class ProviderRefusedException(message: String) : ProviderUnavailableException(m
 
 /** The API key was rejected (HTTP 400/401/403): wrong, expired or blocked. */
 class ApiAuthException(message: String) : IOException(message)
+
+/**
+ * The engine answered twice (the second time with reduced context) and both
+ * answers looked corrupted. The line fails visibly; nothing is cached,
+ * published as a translation or written to history.
+ */
+class RejectedOutputException : Exception("translation output rejected by the quality gate")

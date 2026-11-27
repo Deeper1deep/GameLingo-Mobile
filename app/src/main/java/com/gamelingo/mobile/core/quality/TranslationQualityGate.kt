@@ -45,6 +45,18 @@ object TranslationQualityGate {
         EMPTY,
     }
 
+    /**
+     * Issues that mean the OUTPUT is not a usable translation (decoding loop,
+     * leaked instructions, empty or runaway text). Such a result is retried
+     * once and, if it stays bad, rejected: never cached, published or saved
+     * as a success. The other issues (lost negation, untranslated line...)
+     * stay advisory, because a short or name-only line can trip them
+     * legitimately.
+     */
+    val CORRUPTING: Set<Issue> = setOf(Issue.EMPTY, Issue.REPETITION, Issue.INSTRUCTION_LEAK, Issue.TOO_LONG)
+
+    fun isCorrupt(inspection: Inspection): Boolean = inspection.issues.any { it in CORRUPTING }
+
     data class Inspection(
         val text: String,
         val issues: List<Issue>,

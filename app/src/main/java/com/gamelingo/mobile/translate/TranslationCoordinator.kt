@@ -177,31 +177,51 @@ class TranslationCoordinator @Inject constructor(
 
         val engineStartNanos = System.nanoTime()
         try {
-            val result = withTimeout(settings.requestTimeoutSec * MILLIS_PER_SECOND) {
-                hybridEngine.translate(
-                    TranslationRequest(
-                        text = request.text,
-                        contextLines = contextLines,
-                        // Feed the terminology layer: prompt-capable engines
-                        // (Gemini) render the established gaming terms into
-                        // the prompt instead of guessing them. Mode-aware:
-                        // the Egyptian layer never reaches an MSA prompt and
-                        // vice versa.
-                        glossary = mergedGlossary(request.text, arabicMode, settings),
-                        arabicMode = arabicMode,
-                        // Non-literal expressions as meaning hints for
-                        // prompt-capable engines; empty for plain lines.
-                        understandingHints = understandingHolder.get()
-                            .promptHints(request.text, arabicMode),
-                    ),
-                )
+            val baseRequest = TranslationRequest(
+                text = request.text,
+                contextLines = contextLines,
+                // Feed the terminology layer: prompt-capable engines
+                // (Gemini) render the established gaming terms into
+                // the prompt instead of guessing them. Mode-aware:
+                // the Egyptian layer never reaches an MSA prompt and
+                // vice versa.
+                glossary = mergedGlossary(request.text, arabicMode, settings),
+                arabicMode = arabicMode,
+                // Non-literal expressions as meaning hints for
+                // prompt-capable engines; empty for plain lines.
+                understandingHints = understandingHolder.get()
+                    .promptHints(request.text, arabicMode),
+            )
+            // At most one retry, with the dialogue context dropped, for an
+            // output that looks corrupted (loop, leaked instructions, empty
+            // or runaway text). A second bad answer is rejected: never
+            // cached, published or saved as a translation.
+            val attempt = com.gamelingo.mobile.core.quality.BoundedRetry.run(
+                first = { translateOnce(baseRequest, settings.requestTimeoutSec, arabicMode, request.text) },
+                retry = {
+                    translateOnce(
+                        baseRequest.copy(contextLines = emptyList()),
+                        settings.requestTimeoutSec, arabicMode, request.text,
+                    )
+                },
+                isCorrupt = { com.gamelingo.mobile.core.quality.TranslationQualityGate.isCorrupt(it.second) },
+            )
+            // A rejected output may still be rescued by the line's one known
+            // reference rendering (local, deterministic); otherwise it fails.
+            val rescue = if (attempt.accepted) null else {
+                understandingHolder.get().exactLineRendering(request.text, arabicMode)
+                    ?: throw RejectedOutputException()
             }
-            // Post-engine quality gate: pure string heuristics, no model
-            // calls, no retranslation loop. Locally correctable issues (a
-            // lost question mark) are fixed and tagged "+qc"; anything else
-            // publishes once exactly as the engine produced it.
-            val inspection = com.gamelingo.mobile.core.quality.TranslationQualityGate
-                .inspect(request.text, result.translatedText, arabicMode)
+            val result = if (rescue != null) {
+                attempt.value.first.copy(translatedText = rescue, engineId = "${attempt.value.first.engineId}+idiom")
+            } else {
+                attempt.value.first
+            }
+            val inspection = if (rescue != null) {
+                com.gamelingo.mobile.core.quality.TranslationQualityGate.Inspection(rescue, emptyList(), false)
+            } else {
+                attempt.value.second
+            }
             // A flagged output for a line that is, as a whole, one known
             // expression ("This is us.") is replaced by that expression's
             // reference rendering: local, deterministic, no second engine call.
@@ -276,6 +296,19 @@ class TranslationCoordinator @Inject constructor(
             )
             throw error
         }
+    }
+
+    /** One engine call under the user's timeout, plus the quality inspection of its output. */
+    private suspend fun translateOnce(
+        request: TranslationRequest,
+        timeoutSec: Int,
+        mode: com.gamelingo.mobile.data.settings.ArabicTranslationMode,
+        sourceText: String,
+    ): Pair<TranslationResult, com.gamelingo.mobile.core.quality.TranslationQualityGate.Inspection> {
+        val result = withTimeout(timeoutSec * MILLIS_PER_SECOND) { hybridEngine.translate(request) }
+        val inspection = com.gamelingo.mobile.core.quality.TranslationQualityGate
+            .inspect(sourceText, result.translatedText, mode)
+        return result to inspection
     }
 
     /**
