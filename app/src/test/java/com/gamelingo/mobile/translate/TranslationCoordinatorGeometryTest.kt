@@ -63,8 +63,8 @@ class TranslationCoordinatorGeometryTest {
         val context = ApplicationProvider.getApplicationContext<android.app.Application>()
         val engine = SlowEngine(latencyMs = 600)
         val hybrid = HybridTranslationEngine(
-            online = engine,
-            local = engine,
+            onlineEngine = engine,
+            localEngine = engine,
             localChain = Router(engine),
             settingsRepository = FakeSettingsRepository(AppSettings(aiMode = AiMode.LOCAL)),
         )
