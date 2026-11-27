@@ -32,8 +32,13 @@ object GlossarySuggester {
         val counts = LinkedHashMap<String, Int>()
         for (line in recentLines) {
             for (m in CAP_RUN.findAll(line)) {
-                if (isSentenceStart(line, m.range.first)) continue
-                val term = m.value
+                var term = m.value
+                if (isSentenceStart(line, m.range.first)) {
+                    // The first capital is just the sentence opener: keep only the rest of a longer run.
+                    val rest = term.substringAfter(' ', "")
+                    if (rest.isEmpty()) continue
+                    term = rest
+                }
                 if (term in COMMON) continue
                 counts[term] = (counts[term] ?: 0) + 1
             }

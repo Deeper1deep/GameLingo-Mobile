@@ -207,7 +207,13 @@ if (System.getenv("CI") == "true") {
             doLast {
                 releaseApkDir.get().asFile
                     .walkTopDown().filter { it.extension == "apk" }
-                    .forEach { println("RELEASE_APK ${it.name} bytes=${it.length()}") }
+                    .forEach { apk ->
+                        println("RELEASE_APK ${apk.name} bytes=${apk.length()}")
+                        java.util.zip.ZipFile(apk).use { z ->
+                            z.entries().asSequence().filter { it.size >= 500_000 }
+                                .forEach { e -> println("RELEASE_ENTRY ${e.name} size=${e.size} compressed=${e.compressedSize}") }
+                        }
+                    }
             }
         }
     }
