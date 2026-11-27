@@ -29,15 +29,12 @@ class DiagnosticsScreenRenderTest {
     @get:Rule
     val rule = createComposeRule()
 
-    @org.junit.Ignore("isolating a CI hang: re-enable once the render path is proven")
     @Test
     fun `the geometry share button renders on the diagnostics screen`() {
         val label = ApplicationProvider.getApplicationContext<android.app.Application>()
             .getString(R.string.diag_geometry_export)
-        // The screen ticks a clock once per second forever, so the test clock is advanced by hand.
-        rule.mainClock.autoAdvance = false
-        rule.setContent { GameLingoTheme { DiagnosticsScreen() } }
-        rule.mainClock.advanceTimeBy(500)
+        // The live once-per-second clock never lets Compose go idle under test, so it is off here.
+        rule.setContent { GameLingoTheme { DiagnosticsScreen(liveClock = false) } }
         rule.onNodeWithText(label).performScrollTo().assertIsDisplayed()
 
         val image = rule.onRoot().captureToImage()

@@ -38,14 +38,14 @@ import kotlinx.coroutines.delay
  * second while visible. Answers "is it stuck, and where" without a logcat.
  */
 @Composable
-fun DiagnosticsScreen() {
+fun DiagnosticsScreen(liveClock: Boolean = true) {
     val workerStatus by TranslationSessionBus.workerStatus.collectAsStateWithLifecycle()
     val sessionState by TranslationSessionBus.state.collectAsStateWithLifecycle()
 
     // Snapshot + clock tick: ages re-render once per second while visible.
     var tick by remember { mutableLongStateOf(System.currentTimeMillis()) }
-    androidx.compose.runtime.LaunchedEffect(Unit) {
-        while (true) {
+    androidx.compose.runtime.LaunchedEffect(liveClock) {
+        while (liveClock) {
             delay(1_000)
             tick = System.currentTimeMillis()
         }
