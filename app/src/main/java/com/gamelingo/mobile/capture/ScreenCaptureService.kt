@@ -1124,6 +1124,20 @@ class ScreenCaptureService : Service() {
             .setContentTitle(getString(R.string.notif_capture_title))
             .setContentText(getString(R.string.notif_capture_text))
             .setOngoing(true)
+            .apply {
+                if (CaptureMode.appWindowActive(this@ScreenCaptureService)) {
+                    // Aligned from here the user is looking at the game, not at our settings.
+                    addAction(
+                        0,
+                        getString(R.string.notif_align_action),
+                        android.app.PendingIntent.getService(
+                            this@ScreenCaptureService, ALIGN_REQUEST_CODE,
+                            com.gamelingo.mobile.overlay.WindowAlignService.startIntent(this@ScreenCaptureService),
+                            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
+                        ),
+                    )
+                }
+            }
             .addAction(
                 0,
                 getString(R.string.notif_stop_action),
@@ -1171,6 +1185,7 @@ class ScreenCaptureService : Service() {
 
     companion object {
         const val ACTION_START = "com.gamelingo.mobile.action.START_CAPTURE"
+        private const val ALIGN_REQUEST_CODE = 7312
         const val ACTION_STOP = "com.gamelingo.mobile.action.STOP_CAPTURE"
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"

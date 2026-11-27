@@ -36,7 +36,7 @@ class AppWindowSectionRenderTest {
         rule.setContent {
             GameLingoTheme {
               androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.material3.MaterialTheme.colorScheme.background)) {
-                AppWindowCaptureSection(supported = true, chosen = true, aligned = false, onChosen = {}, onAlign = {})
+                AppWindowCaptureSection(supported = true, chosen = true, aligned = false, onChosen = {})
               }
             }
         }

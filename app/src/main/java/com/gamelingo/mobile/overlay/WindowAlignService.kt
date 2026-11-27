@@ -48,28 +48,7 @@ class WindowAlignService : Service() {
         val manager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         wm = manager
         val (dw, dh) = ScreenGeometryProvider.realDisplaySize(this)
-        val density = resources.displayMetrics.density
-        val frame = FrameLayout(this).apply {
-            background = GradientDrawable().apply {
-                setColor(Color.argb(40, 124, 77, 255))
-                setStroke((3 * density).toInt(), Color.rgb(124, 77, 255))
-            }
-        }
-        val label = TextView(this).apply {
-            setText(R.string.align_hint)
-            setTextColor(Color.WHITE)
-            textSize = 13f
-            gravity = Gravity.CENTER
-            setBackgroundColor(Color.argb(190, 20, 16, 32))
-            val p = (8 * density).toInt()
-            setPadding(p, p, p, p)
-        }
-        frame.addView(label, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
-        val row = android.widget.LinearLayout(this).apply { gravity = Gravity.CENTER }
-        row.addView(Button(this).apply { setText(R.string.align_confirm); setOnClickListener { confirm(contentW, contentH, dw, dh) } })
-        row.addView(Button(this).apply { setText(R.string.region_cancel); setOnClickListener { stopSelf() } })
-        frame.addView(row, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
-
+        val (frame, label) = AlignOutline.build(this, onConfirm = { confirm(contentW, contentH, dw, dh) }, onCancel = { stopSelf() })
         val lp = WindowManager.LayoutParams(
             contentW, contentH, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
             WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
@@ -114,6 +93,36 @@ class WindowAlignService : Service() {
     }
 
     companion object {
+        const val ACTION_ALIGN = "com.gamelingo.mobile.action.ALIGN_WINDOW"
+
         fun startIntent(context: Context) = Intent(context, WindowAlignService::class.java)
+    }
+}
+
+/** The outline, hint and Confirm/Cancel row. Separate so it can be rendered and tested. */
+object AlignOutline {
+    fun build(context: Context, onConfirm: () -> Unit, onCancel: () -> Unit): Pair<FrameLayout, TextView> {
+        val density = context.resources.displayMetrics.density
+        val frame = FrameLayout(context).apply {
+            background = GradientDrawable().apply {
+                setColor(Color.argb(40, 124, 77, 255))
+                setStroke((3 * density).toInt(), Color.rgb(124, 77, 255))
+            }
+        }
+        val label = TextView(context).apply {
+            setText(R.string.align_hint)
+            setTextColor(Color.WHITE)
+            textSize = 13f
+            gravity = Gravity.CENTER
+            setBackgroundColor(Color.argb(190, 20, 16, 32))
+            val p = (8 * density).toInt()
+            setPadding(p, p, p, p)
+        }
+        frame.addView(label, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+        val row = android.widget.LinearLayout(context).apply { gravity = Gravity.CENTER }
+        row.addView(Button(context).apply { setText(R.string.align_confirm); setOnClickListener { onConfirm() } })
+        row.addView(Button(context).apply { setText(R.string.region_cancel); setOnClickListener { onCancel() } })
+        frame.addView(row, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
+        return frame to label
     }
 }

@@ -1,11 +1,8 @@
 package com.gamelingo.mobile.ui.screens
 
-import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.ui.Modifier
 import androidx.compose.ui.res.stringResource
 import com.gamelingo.mobile.R
 import com.gamelingo.mobile.ui.components.GlCard
@@ -13,13 +10,11 @@ import com.gamelingo.mobile.ui.components.HintText
 import com.gamelingo.mobile.ui.components.SettingsColumn
 import com.gamelingo.mobile.ui.components.SwitchCard
 import com.gamelingo.mobile.ui.theme.GlColors
-import com.gamelingo.mobile.ui.theme.GlSpacing
 
 /**
  * Opt-in "capture one app window" choice. Off by default. It states plainly
- * what changes: the translation area is re-picked on the window, and
- * follow/below/smart placement only works after the user aligns the window
- * outline (placement is fixed until then). Not shown anywhere until reviewed.
+ * what changes. Alignment is launched from the session notification (while
+ * the game is visible), never from here, so it cannot be done against the wrong app. Not shown anywhere until reviewed.
  */
 @Composable
 fun AppWindowCaptureSection(
@@ -27,7 +22,6 @@ fun AppWindowCaptureSection(
     chosen: Boolean,
     aligned: Boolean,
     onChosen: (Boolean) -> Unit,
-    onAlign: () -> Unit,
 ) {
     SettingsColumn {
         SwitchCard(
@@ -43,12 +37,36 @@ fun AppWindowCaptureSection(
                     style = MaterialTheme.typography.titleMedium,
                     color = GlColors.TextPrimary,
                 )
-                HintText(stringResource(R.string.appwin_limits))
-                HintText(stringResource(if (aligned) R.string.appwin_aligned else R.string.appwin_not_aligned))
-                TextButton(onClick = onAlign, modifier = Modifier.padding(top = GlSpacing.sm)) {
-                    Text(stringResource(if (aligned) R.string.appwin_realign else R.string.appwin_align))
-                }
+                HintText(stringResource(R.string.appwin_step1))
+                HintText(stringResource(R.string.appwin_step2))
+                HintText(stringResource(R.string.appwin_step3))
+                HintText(stringResource(R.string.appwin_step4))
+            }
+            GlCard {
+                Text(
+                    text = stringResource(if (aligned) R.string.appwin_aligned else R.string.appwin_not_aligned),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = GlColors.TextPrimary,
+                )
             }
         }
     }
+}
+
+/** Stateful host: reads and writes the opt-in flag, no other setting. */
+@Composable
+fun AppWindowCaptureScreen() {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    var chosen by androidx.compose.runtime.remember {
+        androidx.compose.runtime.mutableStateOf(com.gamelingo.mobile.capture.CaptureMode.appWindowChosen(context))
+    }
+    AppWindowCaptureSection(
+        supported = android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.UPSIDE_DOWN_CAKE,
+        chosen = chosen,
+        aligned = com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.calibration != null,
+        onChosen = {
+            chosen = it
+            com.gamelingo.mobile.capture.CaptureMode.setAppWindowChosen(context, it)
+        },
+    )
 }
