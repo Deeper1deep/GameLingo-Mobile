@@ -130,6 +130,8 @@ android {
         // Robolectric migration tests read the exported Room schema JSONs
         // from src/test/assets; without this assets never reach the test runtime.
         unitTests.isIncludeAndroidResources = true
+        // Lets the JVM render test's PNG (base64 between markers) reach the CI log.
+        unitTests.all { it.testLogging.showStandardStreams = true }
     }
 }
 
