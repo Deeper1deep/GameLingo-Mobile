@@ -54,6 +54,7 @@ class TranslationCoordinator @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val started = AtomicBoolean(false)
     private val contextMemory = ContextMemory(maxLines = MAX_CONTEXT_LINES)
+    private val historyRecorder = HistoryRecorder.over(historyDao)
 
     /** Visible for tests: the worker driving every translation request. */
     var worker: TranslationWorker? = null
@@ -372,7 +373,9 @@ class TranslationCoordinator @Inject constructor(
         // History is best-effort: a Room failure must never crash the app or
         // swallow a translation the user is waiting for.
         runCatching {
-            historyDao.insert(
+            historyRecorder.record(
+                subtitleId,
+                TranslationSessionBus.NO_ID,
                 TranslationHistoryEntity(
                     sourceText = original,
                     translatedText = result.translatedText,
