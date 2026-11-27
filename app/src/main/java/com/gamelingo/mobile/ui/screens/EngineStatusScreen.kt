@@ -77,8 +77,8 @@ private fun stateText(row: EngineRow): String {
         },
     )
     val extra = when {
-        row.percent != null -> " ${row.percent}%"
-        row.sizeBytes != null -> " (${row.sizeBytes / 1_000_000} MB)"
+        row.percent != null -> " \u2066${row.percent}%\u2069"
+        row.sizeBytes != null -> " (\u2066${row.sizeBytes / 1_000_000} MB\u2069)"
         row.reason != null -> " (${row.reason})"
         else -> ""
     }
