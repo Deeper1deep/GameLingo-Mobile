@@ -39,9 +39,17 @@ data class ScreenGeometry(
         localLeft, localTop, localRight, localBottom, windowX, windowY, displayWidth, displayHeight,
     )
 
-    /** The region as a pixel rectangle of the capture frame (what OCR sees). */
+    /** The display to capture-frame mapping (scale and bar offsets), explicit. */
+    val transform: DisplayToCaptureTransform
+        get() = DisplayToCaptureTransform(displayWidth, displayHeight, captureWidth, captureHeight)
+
+    /**
+     * The region as a pixel rectangle of the capture frame (what OCR sees),
+     * through [transform]. Falls back to the plain fraction mapping only for a
+     * degenerate transform so diagnostics never throw.
+     */
     fun toCapturePixels(region: NormalizedRegion): PixelRect =
-        region.toPixels(captureWidth, captureHeight)
+        transform.toCapturePixels(region) ?: region.toPixels(captureWidth.coerceAtLeast(1), captureHeight.coerceAtLeast(1))
 
     /** The same region in display pixels (what the user sees on screen). */
     fun toDisplayPixels(region: NormalizedRegion): PixelRect =
@@ -70,4 +78,15 @@ object FrameGeometryGuard {
     /** A frame from a surface of another size (taken just before/after a rotation) must be dropped. */
     fun matches(imageWidth: Int, imageHeight: Int, frameWidth: Int, frameHeight: Int): Boolean =
         imageWidth == frameWidth && imageHeight == frameHeight
+
+    /**
+     * Full check: the image size must equal the active frame size AND the frame
+     * must come from the reader of the active geometry generation. A frame of
+     * an older generation is never reinterpreted, only dropped.
+     */
+    fun matches(
+        imageWidth: Int, imageHeight: Int,
+        frameWidth: Int, frameHeight: Int,
+        readerGeneration: Long, activeGeneration: Long,
+    ): Boolean = readerGeneration == activeGeneration && matches(imageWidth, imageHeight, frameWidth, frameHeight)
 }

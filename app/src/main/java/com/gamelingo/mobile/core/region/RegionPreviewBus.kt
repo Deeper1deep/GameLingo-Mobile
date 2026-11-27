@@ -45,18 +45,17 @@ object RegionPreviewBus {
         frameWidth: Int,
         frameHeight: Int,
         candidate: Candidate,
+        transform: DisplayToCaptureTransform? = null,
     ): Result {
         if (frameWidth <= 0 || frameHeight <= 0) return Result(emptyList())
-        val px = candidate.region.toPixels(frameWidth, frameHeight)
-        val boxes = blocks.map { block ->
+        // Same mapping OCR uses: boxes are drawn in DISPLAY fractions, the
+        // region is judged in frame pixels through the explicit transform.
+        val t = transform ?: DisplayToCaptureTransform(frameWidth, frameHeight, frameWidth, frameHeight)
+        val px = t.toCapturePixels(candidate.region) ?: return Result(emptyList())
+        val boxes = blocks.mapNotNull { block ->
             val r = block.rect
-            Box(
-                r.left.toFloat() / frameWidth,
-                r.top.toFloat() / frameHeight,
-                r.right.toFloat() / frameWidth,
-                r.bottom.toFloat() / frameHeight,
-                accepted = RegionFilter.accepts(r, px, candidate.sensitivity),
-            )
+            val f = t.frameRectToDisplayFractions(r) ?: return@mapNotNull null
+            Box(f[0], f[1], f[2], f[3], accepted = RegionFilter.accepts(r, px, candidate.sensitivity))
         }
         return Result(boxes)
     }
