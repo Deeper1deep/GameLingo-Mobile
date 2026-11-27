@@ -43,6 +43,15 @@ object TranslationQualityGate {
 
         /** Empty or whitespace-only output. */
         EMPTY,
+
+        /** Most of the output's letters are still Latin although the source is a multi-word line: mostly untranslated. Advisory. */
+        SOURCE_FRAGMENTS,
+
+        /** The output contains letters from a script that neither Arabic nor the (Latin) source uses: language mixing. */
+        FOREIGN_SCRIPT,
+
+        /** A number in the source is missing from the output. Advisory. */
+        NUMBER_LOST,
     }
 
     /**
@@ -53,7 +62,7 @@ object TranslationQualityGate {
      * stay advisory, because a short or name-only line can trip them
      * legitimately.
      */
-    val CORRUPTING: Set<Issue> = setOf(Issue.EMPTY, Issue.REPETITION, Issue.INSTRUCTION_LEAK, Issue.TOO_LONG)
+    val CORRUPTING: Set<Issue> = setOf(Issue.EMPTY, Issue.REPETITION, Issue.INSTRUCTION_LEAK, Issue.TOO_LONG, Issue.FOREIGN_SCRIPT)
 
     fun isCorrupt(inspection: Inspection): Boolean = inspection.issues.any { it in CORRUPTING }
 
@@ -98,6 +107,19 @@ object TranslationQualityGate {
     private val INSTRUCTION_LEAK = Regex(
         """(?i)(translate this line|dialogue context|^\s*(translation|الترجمة)\s*[:：]|as an ai|i cannot translate|here is the translation)""",
     )
+
+    /** Letters from scripts that show up in model drift (CJK, Cyrillic, Hangul, Devanagari, Thai, Hebrew, Greek). */
+    private val FOREIGN_LETTERS = Regex("""[\p{IsHan}\p{IsHiragana}\p{IsKatakana}\p{IsHangul}\p{IsCyrillic}\p{IsDevanagari}\p{IsThai}\p{IsHebrew}\p{IsGreek}]""")
+    private val DIGITS = Regex("""[0-9\u0660-\u0669]+""")
+
+    private fun latinShare(text: String): Float {
+        val letters = text.filter { it.isLetter() }
+        if (letters.isEmpty()) return 0f
+        return letters.count { it in 'A'..'Z' || it in 'a'..'z' }.toFloat() / letters.length
+    }
+
+    private fun normalizeDigits(s: String): String =
+        s.map { if (it in '\u0660'..'\u0669') ('0' + (it - '\u0660')) else it }.joinToString("")
 
     /** Same token 4+ times in a row, or the same 2-3 word phrase 3+ times in a row. */
     internal fun hasLoop(text: String): Boolean {
@@ -178,6 +200,17 @@ object TranslationQualityGate {
             if (com.gamelingo.mobile.core.translation.LengthPolicy.looksTruncated(source, text)) issues += Issue.TRUNCATED
             if (hasLoop(text)) issues += Issue.REPETITION
             if (INSTRUCTION_LEAK.containsMatchIn(text)) issues += Issue.INSTRUCTION_LEAK
+            if (FOREIGN_LETTERS.containsMatchIn(text) && !FOREIGN_LETTERS.containsMatchIn(source)) issues += Issue.FOREIGN_SCRIPT
+            // Names and intentional English terms are fine: only a line that is mostly Latin again counts.
+            val sourceWords = source.trim().split(Regex("\\s+")).size
+            if (sourceWords >= 4 && latinShare(text) > 0.6f && latinShare(source) > 0.9f &&
+                Issue.UNTRANSLATED !in issues
+            ) issues += Issue.SOURCE_FRAGMENTS
+            val sourceNumbers = DIGITS.findAll(normalizeDigits(source)).map { it.value }.toSet()
+            if (sourceNumbers.isNotEmpty()) {
+                val outNumbers = DIGITS.findAll(normalizeDigits(text)).map { it.value }.toSet()
+                if (!outNumbers.containsAll(sourceNumbers)) issues += Issue.NUMBER_LOST
+            }
         }
 
         return Inspection(text = text, issues = issues, corrected = corrected)
