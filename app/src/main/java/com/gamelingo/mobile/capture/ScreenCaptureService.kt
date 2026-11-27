@@ -246,6 +246,20 @@ class ScreenCaptureService : Service() {
             return
         }
 
+        if (CaptureMode.appWindowActive(this)) {
+            // The documented first callback gives the window size. Without it we
+            // do not guess: OCR stays paused and the reason is recorded.
+            serviceScope.launch {
+                delay(com.gamelingo.mobile.core.capture.AppWindowCapture.STARTUP_TIMEOUT_MILLIS)
+                val state = com.gamelingo.mobile.core.capture.AppWindowCapture.startup(
+                    reportedContentSize, com.gamelingo.mobile.core.capture.AppWindowCapture.STARTUP_TIMEOUT_MILLIS,
+                )
+                if (state is com.gamelingo.mobile.core.capture.AppWindowCapture.Startup.TimedOut) {
+                    geoLog("app-window: no onCapturedContentResize within ${com.gamelingo.mobile.core.capture.AppWindowCapture.STARTUP_TIMEOUT_MILLIS} ms; OCR stays paused")
+                    android.widget.Toast.makeText(this@ScreenCaptureService, R.string.app_window_no_size, android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
         projection.registerCallback(
             object : MediaProjection.Callback() {
                 // API 34+: the system tells us the size of the captured
