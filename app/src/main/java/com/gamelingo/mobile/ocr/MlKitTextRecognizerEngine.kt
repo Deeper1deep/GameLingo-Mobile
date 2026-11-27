@@ -34,7 +34,7 @@ class MlKitTextRecognizerEngine @Inject constructor() : TextRecognizerEngine {
                     text = block.text,
                     rect = PixelRect(box.left, box.top, box.right, box.bottom),
                     // ML Kit documents 0 as "unavailable" (older Play services), so zeros are not scores.
-                    confidence = block.lines.map { it.confidence }.filter { it > 0f }.takeIf { it.isNotEmpty() }?.average()?.toFloat(),
+                    confidence = com.gamelingo.mobile.core.capture.meanKnownConfidence(block.lines.map { it.confidence }),
                     words = block.lines.flatMap { line ->
                         line.elements.mapNotNull { element ->
                             val wb = element.boundingBox ?: return@mapNotNull null

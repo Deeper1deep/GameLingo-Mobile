@@ -21,3 +21,11 @@ fun RecognizedBlock.shifted(dx: Int, dy: Int): RecognizedBlock = copy(
 
 fun PixelRect.translated(dx: Int, dy: Int): PixelRect =
     PixelRect(left = left + dx, top = top + dy, right = right + dx, bottom = bottom + dy)
+
+/**
+ * Mean of the confidences the recogniser actually reported. ML Kit documents 0
+ * as "unavailable" (older Play services), so zeros are not scores; null when
+ * nothing was reported.
+ */
+fun meanKnownConfidence(values: List<Float>): Float? =
+    values.filter { it > 0f }.takeIf { it.isNotEmpty() }?.average()?.toFloat()
