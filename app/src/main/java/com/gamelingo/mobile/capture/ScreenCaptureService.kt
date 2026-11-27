@@ -407,6 +407,7 @@ class ScreenCaptureService : Service() {
                 geoLog("geometry: update gen=${published.generation} ${describeGeometry(published)}")
                 readerGeneration = published.generation
                 currentGeometry = published
+                TranslationSessionBus.onGeometryChanged()
                 resetGeometryDependentTracking()
                 return
             }
@@ -430,6 +431,7 @@ class ScreenCaptureService : Service() {
                     // later resize/setSurface succeeds. Nothing is recreated.
                     currentGeometry = null
                     readerGeneration = geometryGeneration.incrementAndGet()
+                    TranslationSessionBus.onGeometryChanged()
                     geoLog("geometry: swap failed, OCR paused until the surface is re-fitted: ${error.message}")
                 }
                 // A full-screen or rotation switch can make the projection
@@ -517,6 +519,7 @@ class ScreenCaptureService : Service() {
         readerGeneration = published.generation
         currentGeometry = published
         CaptureHealth.onDisplayRebuilt()
+        TranslationSessionBus.onGeometryChanged()
         geoLog("geometry: rebuilt gen=${published.generation} ${describeGeometry(published)}")
         resetGeometryDependentTracking()
     }
@@ -573,6 +576,7 @@ class ScreenCaptureService : Service() {
         if (g.width <= 0 || g.height <= 0 || g.displayWidth <= 0 || g.displayHeight <= 0) return false
         return CaptureGeometryValidator.provesFullDisplay(
             g.displayWidth, g.displayHeight, g.width, g.height, g.contentWidth, g.contentHeight,
+            com.gamelingo.mobile.core.capture.CaptureProvenance.forSdk(Build.VERSION.SDK_INT),
         )
     }
 

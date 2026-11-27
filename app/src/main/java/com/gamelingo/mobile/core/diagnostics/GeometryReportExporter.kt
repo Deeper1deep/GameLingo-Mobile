@@ -15,7 +15,8 @@ object GeometryReportExporter {
         val dir = File(context.cacheDir, DIR).apply { mkdirs() }
         val file = File(dir, FILE_NAME)
         val header = "app=${context.packageName} sdk=${android.os.Build.VERSION.SDK_INT} " +
-            "device=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+            "device=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} " +
+            "provenance=${com.gamelingo.mobile.core.capture.CaptureProvenance.forSdk(android.os.Build.VERSION.SDK_INT)}"
         file.writeText(GeometryDiagnostics.export(header))
         return file
     }
