@@ -24,29 +24,26 @@ object SubtitleBlockScorer {
     const val MIN_SCORE = 0.25f
 
     /**
-     * A block whose recogniser confidence is below this is treated as obviously
-     * corrupted and never becomes (or joins) a subtitle. Deliberately low: only
-     * clear garbage is rejected. A missing confidence (null) is never rejected.
-     * The raw OCR output is untouched, so diagnostics still see it.
+     * "Obviously corrupted" needs two independent signals, never confidence alone
+     * (stylised but readable subtitles can score low): the recogniser's own
+     * confidence is known AND below [LOW_CONFIDENCE], AND the text itself looks
+     * like garbage ([looksGarbled]). ML Kit documents 0 as "unavailable", so
+     * unknown confidence is null and never counts. Raw OCR output is untouched.
      */
-    const val MIN_CONFIDENCE = 0.3f
+    const val LOW_CONFIDENCE = 0.5f
 
-    fun isReadable(block: RecognizedBlock): Boolean =
-        block.confidence == null || block.confidence >= MIN_CONFIDENCE
+    fun isReadable(block: RecognizedBlock): Boolean {
+        val c = block.confidence ?: return true
+        return !(c < LOW_CONFIDENCE && looksGarbled(block.text))
+    }
 
-    /** Weight of the temporal signal: static blocks keep [STATIC_KEEP] of their score. */
-    private const val STATIC_KEEP = 0.35f
-
-    /** Corner zone: block centers beyond these fractions count as corner-parked. */
-    private const val CORNER_X_LOW = 0.15f
-    private const val CORNER_X_HIGH = 0.85f
-    private const val CORNER_Y_LOW = 0.15f
-    private const val CORNER_Y_HIGH = 0.82f
-    private const val CORNER_KEEP = 0.2f
-
-    /** Plausible subtitle-line height as a fraction of frame height. */
-    private const val MIN_HEIGHT_FRACTION = 0.01f
-    private const val MAX_HEIGHT_FRACTION = 0.05f
+    /** Mostly symbols, or hardly any letters/digits: not words in any language. */
+    fun looksGarbled(text: String): Boolean {
+        val chars = text.filter { !it.isWhitespace() }
+        if (chars.isEmpty()) return true
+        val wordChars = chars.count { it.isLetterOrDigit() }
+        return wordChars.toFloat() / chars.length < 0.6f
+    }
 
     fun score(
         block: RecognizedBlock,

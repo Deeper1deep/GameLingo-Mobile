@@ -160,7 +160,7 @@ class SubtitleBlockScorerTest {
 
     @Test
     fun `an obviously corrupted low confidence block is rejected`() {
-        val bad = subtitle("Xq7# zzv lkj").copy(confidence = 0.1f)
+        val bad = subtitle("#\$%^& *~ #@!").copy(confidence = 0.1f)
         val out = SubtitleBlockScorer.selectSubtitle(listOf(bad), frameWidth, frameHeight, BlockDynamicsTracker())
         assertNull(out)
     }
@@ -181,5 +181,18 @@ class SubtitleBlockScorerTest {
         val junk = RecognizedBlock("#$%^&*", PixelRect(880, 840, 1520, 895), confidence = 0.05f)
         val out = SubtitleBlockScorer.selectSubtitle(listOf(l3, junk, l1, l2), frameWidth, frameHeight, BlockDynamicsTracker())
         assertEquals("First line of speech second line goes here and a third one", out)
+    }
+
+    @Test
+    fun `readable text is kept even when confidence is low`() {
+        val stylised = subtitle("I told you not to touch it").copy(confidence = 0.05f)
+        assertEquals("I told you not to touch it",
+            SubtitleBlockScorer.selectSubtitle(listOf(stylised), frameWidth, frameHeight, BlockDynamicsTracker()))
+    }
+
+    @Test
+    fun `garbled looking text with unknown confidence is not rejected by the gate`() {
+        val unknown = subtitle("#\$%^& *~ #@!")
+        assertTrue(SubtitleBlockScorer.isReadable(unknown))
     }
 }
