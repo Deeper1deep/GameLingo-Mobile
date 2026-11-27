@@ -17,6 +17,7 @@ class OcrAsrDeduper(private val windowMillis: Long = 6_000L, private val minWord
         text.lowercase().split(Regex("[^\\p{L}\\p{N}']+")).filter { it.isNotEmpty() }.toSet()
 
     /** True when [text] from this source duplicates a line from the OTHER source just before. */
+    @Synchronized
     fun isDuplicate(text: String, fromAudio: Boolean, nowMillis: Long): Boolean {
         while (recent.isNotEmpty() && nowMillis - recent.first().atMillis > windowMillis) recent.removeFirst()
         val w = words(text)

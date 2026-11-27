@@ -154,6 +154,28 @@
     <string name="about_developer_cd">فتح حساب المطور على تيليجرام</string>
     <string name="about_contact_developer">تواصل مع المطور</string>
 
+    <string name="voice_experimental">تجريبي: الكود مكتوب بس لسه ما اتجربش على جهازك. جودة التعرف على الكلام في أصوات الألعاب غير معروفة.</string>
+    <string name="voice_state_off">مقفول</string>
+    <string name="voice_state_no_model">محتاج تنزّل نموذج الكلام الأول</string>
+    <string name="voice_state_no_permission">محتاج إذن التسجيل (بيسجل صوت اللعبة مش المايك)</string>
+    <string name="voice_state_loading">بيحمّل النموذج…</string>
+    <string name="voice_state_listening">بيسمع صوت اللعبة</string>
+    <string name="voice_state_failed">فشل التشغيل. الصوت ممكن يكون ممنوع التسجيل من اللعبة دي.</string>
+    <string name="voice_model_title">نموذج التعرف على الكلام (إنجليزي)</string>
+    <string name="voice_model_info">حجم التنزيل %1$d ميجا تقريبًا. شغال بدون إنترنت بعد التنزيل. الرخصة: %2$s.</string>
+    <string name="voice_model_download">نزّل النموذج (%1$d ميجا)</string>
+    <string name="voice_model_cancel">إلغاء التنزيل</string>
+    <string name="voice_model_downloading">بينزّل… %1$d%%</string>
+    <string name="voice_model_verifying">بيتأكد من سلامة الملف…</string>
+    <string name="voice_model_installed">متثبت (%1$d ميجا على الجهاز)</string>
+    <string name="voice_model_delete">احذف النموذج</string>
+    <string name="voice_model_failed">فشل التنزيل أو التحقق: %1$s</string>
+    <string name="voice_wifi_only">التنزيل على الواي فاي بس</string>
+    <string name="voice_enable_title">ترجمة صوت اللعبة</string>
+    <string name="voice_enable_sub">بيسمع الكلام الإنجليزي في اللعبة ويترجمه في نفس النافذة. بيحتاج الإذن والنموذج.</string>
+    <string name="voice_tts_title">قراءة الترجمة بصوت عالي</string>
+    <string name="voice_tts_sub">بصوت العربي اللي في جهازك. لو الجهاز مفيهوش صوت عربي مش هيقرا حاجة.</string>
+    <string name="voice_limits">حدود معروفة: بعض الألعاب بتمنع تسجيل صوتها فبيبقى صامت. الموسيقى العالية والمؤثرات بتغلّط التعرف. فيه تأخير بين الكلام وظهور الترجمة.</string>
     <string name="voice_status_title">الحالة</string>
     <string name="voice_coming_soon">ترجمة الصوت جاية في إصدار لاحق. البنية جاهزة ليها، بس مش ميزة مكتملة في الإصدار الأول.</string>
     <string name="voice_planned_title">المخطط ليها</string>
@@ -259,7 +281,7 @@
     <string name="settings_ai_sub">الوضع والمفتاح واختبار الاتصال</string>
     <string name="settings_ocr_sub">معدل الالتقاط ومنطقة النص</string>
     <string name="settings_overlay_sub">الشكل والألوان والمكان</string>
-    <string name="settings_voice_sub">قريبًا</string>
+    <string name="settings_voice_sub">تجريبي، مقفول افتراضيًا</string>
     <string name="settings_updates_sub">الإصدار الحالي %1$s</string>
     <string name="settings_about_sub">معلومات التطبيق والمستودعات</string>
     <string name="nav_overlay_style">محرر شكل الترجمة</string>

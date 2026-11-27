@@ -88,6 +88,7 @@ class ScreenCaptureService : Service() {
 
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var recognizerEngine: TextRecognizerEngine
+    @Inject lateinit var audioController: com.gamelingo.mobile.audio.AudioTranslationController
 
     // A stray async exception must never reach the default uncaught handler:
     // that kills the whole app. The capture loop handles its own failures and
@@ -281,6 +282,8 @@ class ScreenCaptureService : Service() {
             null,
         )
         mediaProjection = projection
+        runCatching { audioController.start(projection, serviceScope) }
+            .onFailure { Log.w(TAG, "audio translation did not start", it) }
 
         getSystemService(DisplayManager::class.java)
             ?.registerDisplayListener(displayListener, null)
@@ -975,6 +978,7 @@ class ScreenCaptureService : Service() {
         if (!stopping.compareAndSet(false, true)) return
         CaptureHealth.onSessionStopped(reason)
         Log.i(TAG, "stopCapture: tearing down (reason=$reason)")
+        runCatching { audioController.stop() }
         captureJob?.cancel()
         captureJob = null
         heartbeatJob?.cancel()
@@ -1107,6 +1111,7 @@ class ScreenCaptureService : Service() {
         }
         // Same guarded teardown as stopCapture: either path can run after the
         // other, and none of these components tolerate a second release.
+        runCatching { audioController.stop() }
         runCatching { captureJob?.cancel() }
         runCatching { settingsJob?.cancel() }
         runCatching {
