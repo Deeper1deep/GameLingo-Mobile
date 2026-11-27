@@ -255,9 +255,12 @@ object RegionResolver {
                 ?.let { return ResolvedRegion(it, RegionSource.ORIENTATION_OVERRIDE) }
         }
         linked?.sanitizedOrNull()?.let { return ResolvedRegion(it, RegionSource.LINKED) }
-        // Settings saved before the linked model: a fixed, orientation-free
-        // choice, so rotating never swaps one rectangle for another.
-        migrationCandidate(perOrientation, preferLandscape = false)
+        // Settings saved before the linked model and not yet migrated (the
+        // single migration runs when a capture session starts): use the same
+        // rule the migration uses, the active frame's orientation first, so
+        // what is shown now is what migration will promote. No hardcoded
+        // portrait-first choice.
+        migrationCandidate(perOrientation, preferLandscape = frameWidth > frameHeight)
             ?.let { return ResolvedRegion(it, RegionSource.LEGACY_SAVED) }
         return ResolvedRegion(RegionEditor.DEFAULT_START, RegionSource.DEFAULT)
     }

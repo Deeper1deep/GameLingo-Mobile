@@ -106,6 +106,20 @@ class ScreenCaptureService : Service() {
     private val displayMutex = Mutex()
     private var currentGeometry: DisplayGeometry? = null
 
+    /** Counts geometry changes; every published geometry and its reader carry one. Frames of an older one are dropped. */
+    private val geometryGeneration = java.util.concurrent.atomic.AtomicLong(0L)
+    private var readerGeneration = 0L
+
+    /**
+     * Size of the captured content as reported by the system
+     * (MediaProjection.Callback.onCapturedContentResize, API 34+); null until
+     * reported. It is the authority for what the frame contains.
+     */
+    @Volatile private var reportedContentSize: Pair<Int, Int>? = null
+
+    /** The single migration of older per-orientation regions; the loop waits for it before the first frame. */
+    private var migrationJob: Job? = null
+
     /**
      * Latest settings, kept hot by a collector so the capture loop never hits
      * DataStore on every tick. Null until the first emission arrives.
@@ -227,6 +241,22 @@ class ScreenCaptureService : Service() {
 
         projection.registerCallback(
             object : MediaProjection.Callback() {
+                // API 34+: the system tells us the size of the captured
+                // content. It goes through the same serialized update path
+                // as display changes, so the two can never race to rebuild.
+                override fun onCapturedContentResize(width: Int, height: Int) {
+                    if (width <= 0 || height <= 0) return
+                    val previous = reportedContentSize
+                    reportedContentSize = width to height
+                    Log.i(TAG, "geometry: onCapturedContentResize ${width}x$height (was $previous)")
+                    if (previous != width to height && captureJob?.isActive == true) {
+                        serviceScope.launch {
+                            runCatching { rebuildDisplayIfNeeded() }
+                                .onFailure { Log.w(TAG, "content-resize update failed", it) }
+                        }
+                    }
+                }
+
                 override fun onStop() {
                     // The system ended the projection: token expired or
                     // consent revoked. That is a genuine expiry, so say why
@@ -266,9 +296,23 @@ class ScreenCaptureService : Service() {
         }
 
         appliedRegionKey = null
-        serviceScope.launch {
-            val land = resources.displayMetrics.let { it.widthPixels > it.heightPixels }
+        // The ONE migration authority: it runs here, once per session start,
+        // from the authoritative display size (not resources.displayMetrics,
+        // not Compose configuration), and the loop waits for it. It is atomic
+        // inside DataStore, never overwrites a valid linked region and never
+        // deletes the older per-orientation values.
+        migrationJob = serviceScope.launch {
+            val (mw, mh) = com.gamelingo.mobile.overlay.ScreenGeometryProvider.realDisplaySize(this@ScreenCaptureService)
+            val land = mw > mh
+            val before = runCatching { settingsRepository.settings.first() }.getOrNull()
             runCatching { settingsRepository.migrateLinkedRegion(land) }
+            val after = runCatching { settingsRepository.settings.first() }.getOrNull()
+            Log.i(
+                TAG,
+                "migration: activeOrientation=${if (land) "landscape" else "portrait"} " +
+                    "linkedBefore=${before?.linkedRegion?.encode()} linkedAfter=${after?.linkedRegion?.encode()} " +
+                    "legacyPortrait=${after?.customRegions?.portrait?.encode()} legacyLandscape=${after?.customRegions?.landscape?.encode()}",
+            )
         }
         TranslationSessionBus.onSessionStarted()
         CaptureHealth.onSessionStarted()
@@ -300,6 +344,7 @@ class ScreenCaptureService : Service() {
         resolved: com.gamelingo.mobile.core.region.ResolvedRegion?,
     ) {
         val g = com.gamelingo.mobile.overlay.ScreenGeometryProvider.snapshot(this, geometry.width, geometry.height)
+        Log.i(TAG, "geometry: ${describeGeometry(geometry)} insets=[${g.insetLeft},${g.insetTop},${g.insetRight},${g.insetBottom}]")
         if (resolved == null) {
             Log.i(TAG, "region: custom OFF; ${g.describe()}")
             return
@@ -309,7 +354,7 @@ class ScreenCaptureService : Service() {
             TAG,
             "region: mode=${if (settings.independentRegions) "independent" else "linked"} " +
                 "source=${resolved.source} norm=${resolved.region.encode()} " +
-                "capturePx=[${px.left},${px.top},${px.right},${px.bottom}] ${g.describe()}" +
+                "gen=${geometry.generation} capturePx=[${px.left},${px.top},${px.right},${px.bottom}] ${g.describe()}" +
                 if (g.captureAspectMismatch()) " WARNING capture aspect differs from display" else "",
         )
         if (resolved.source == com.gamelingo.mobile.core.region.RegionSource.DEFAULT) {
@@ -319,16 +364,23 @@ class ScreenCaptureService : Service() {
 
     /** The display facts the capture surface must match right now. */
     private fun latestGeometry(): DisplayGeometry {
-        val metrics = resources.displayMetrics
+        // One source for the frame size and for the selector's display space.
+        val (w, h) = com.gamelingo.mobile.overlay.ScreenGeometryProvider.realDisplaySize(this)
         val displayManager = getSystemService(DisplayManager::class.java)
         val rotation = displayManager
             ?.getDisplay(Display.DEFAULT_DISPLAY)
             ?.rotation
             ?: Surface.ROTATION_0
+        val content = reportedContentSize
         return DisplayGeometry(
-            width = metrics.widthPixels,
-            height = metrics.heightPixels,
+            width = w,
+            height = h,
             rotation = rotation,
+            displayWidth = w,
+            displayHeight = h,
+            contentWidth = content?.first ?: 0,
+            contentHeight = content?.second ?: 0,
+            generation = currentGeometry?.generation ?: 0L,
         )
     }
 
@@ -342,7 +394,18 @@ class ScreenCaptureService : Service() {
         val projection = mediaProjection ?: return
         val latest = latestGeometry()
         displayMutex.withLock {
-            if (!DisplayGeometry.needsRebuild(currentGeometry, latest)) return
+            if (!DisplayGeometry.needsUpdate(currentGeometry, latest)) return
+            if (currentGeometry != null && !DisplayGeometry.needsRebuild(currentGeometry, latest)) {
+                // Same frame size and rotation, but the captured-content or
+                // display facts changed: publish the new geometry atomically
+                // (new generation) without touching the surface.
+                val published = latest.copy(generation = geometryGeneration.incrementAndGet())
+                Log.i(TAG, "geometry: update gen=${published.generation} ${describeGeometry(published)}")
+                readerGeneration = published.generation
+                currentGeometry = published
+                resetGeometryDependentTracking()
+                return
+            }
             // Transient 0x0 metrics during a configuration change are real on
             // some devices. Never build a fake 1x1 surface to hide that: skip
             // the tick and retry once the metrics settle.
@@ -443,19 +506,62 @@ class ScreenCaptureService : Service() {
             runCatching { reader.close() }
             throw error
         }
+        // Publish the reader and the geometry together, under the display
+        // mutex, with a new generation: nothing sees a half-updated state.
+        val published = latest.copy(generation = geometryGeneration.incrementAndGet())
         imageReader = reader
-        currentGeometry = latest
+        readerGeneration = published.generation
+        currentGeometry = published
         CaptureHealth.onDisplayRebuilt()
-        // The frame stream restarts: stale digests, half-stable lines and
-        // block-position history from the old geometry must not gate the
-        // new one.
+        Log.i(TAG, "geometry: rebuilt gen=${published.generation} ${describeGeometry(published)}")
+        resetGeometryDependentTracking()
+    }
+
+    /** Only trackers that depend on frame geometry are reset; settings and the translation session are untouched. */
+    private fun resetGeometryDependentTracking() {
         frameChangeDetector.reset()
         stabilityTracker.reset()
         deduplicator.reset()
         blockDynamicsTracker.reset()
+        appliedRegionKey = null
+    }
+
+    private fun describeGeometry(g: DisplayGeometry): String {
+        val screen = com.gamelingo.mobile.overlay.ScreenGeometryProvider
+        val current = screen.currentWindowSize(this)
+        val tr = transformFor(g)
+        return "frame=${g.width}x${g.height} rot=${g.rotation} display=${g.displayWidth}x${g.displayHeight} " +
+            "currentWindow=${current?.first}x${current?.second} resources=${resources.displayMetrics.widthPixels}x${resources.displayMetrics.heightPixels} " +
+            "reportedContent=${g.contentWidth}x${g.contentHeight} ${tr.describe()} valid=${geometryProvesMapping(g)}"
+    }
+
+    /**
+     * The mapping from display fractions to this frame. The display is the
+     * captured content when the system reported one of the display's aspect;
+     * otherwise the real display.
+     */
+    private fun transformFor(g: DisplayGeometry) =
+        com.gamelingo.mobile.core.region.DisplayToCaptureTransform(g.displayWidth, g.displayHeight, g.width, g.height)
+
+    /**
+     * True when the selector's coordinate space provably matches what the
+     * frame shows: the frame is a mirror of the whole display. A captured
+     * surface of another aspect (a single window, a share of part of the
+     * display) cannot be mapped from display fractions, and is reported
+     * instead of read with the wrong pixels.
+     */
+    private fun geometryProvesMapping(g: DisplayGeometry): Boolean {
+        if (g.width <= 0 || g.height <= 0 || g.displayWidth <= 0 || g.displayHeight <= 0) return false
+        if (g.hasReportedContent &&
+            !com.gamelingo.mobile.core.region.DisplayToCaptureTransform.sameAspect(
+                g.displayWidth, g.displayHeight, g.contentWidth, g.contentHeight,
+            )
+        ) return false
+        return true
     }
 
     private suspend fun captureLoop() {
+        migrationJob?.join()
         while (serviceScope.isActive) {
             val tickStart = SystemClock.elapsedRealtime()
             // Settings come from the hot cache; only the very first ticks
@@ -485,6 +591,7 @@ class ScreenCaptureService : Service() {
                         image.use {
                             if (!com.gamelingo.mobile.core.region.FrameGeometryGuard.matches(
                                     it.width, it.height, geometry.width, geometry.height,
+                                    readerGeneration, geometry.generation,
                                 )
                             ) {
                                 // A frame from before/after a rotation: never
@@ -577,6 +684,20 @@ class ScreenCaptureService : Service() {
             // text the rectangle would accept. No translation request, no
             // presence tracking, throttled well below the normal frame rate.
             val previewCandidate = com.gamelingo.mobile.core.region.RegionPreviewBus.candidate.value
+            val transform = transformFor(geometry)
+            // Custom region mode never reads pixels it cannot map. When the
+            // captured surface is provably not a mirror of the display, OCR
+            // pauses (no translation of unrelated content) and the reason is
+            // logged and surfaced in the health record, once per geometry.
+            if ((settings.customRegionEnabled || previewCandidate != null) && !geometryProvesMapping(geometry)) {
+                val key = "mismatch:${geometry.generation}"
+                if (appliedRegionKey != key) {
+                    appliedRegionKey = key
+                    Log.w(TAG, "geometry mismatch, OCR paused: ${describeGeometry(geometry)}")
+                    CaptureHealth.onError("capture geometry mismatch: ${describeGeometry(geometry)}")
+                }
+                return
+            }
             if (previewCandidate != null) {
                 val now = SystemClock.elapsedRealtime()
                 if (now - lastPreviewAtMs >= PREVIEW_INTERVAL_MS) {
@@ -584,7 +705,7 @@ class ScreenCaptureService : Service() {
                     val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(fullBitmap, 0))
                     com.gamelingo.mobile.core.region.RegionPreviewBus.publish(
                         com.gamelingo.mobile.core.region.RegionPreviewBus.build(
-                            blocks, geometry.width, geometry.height, previewCandidate,
+                            blocks, geometry.width, geometry.height, previewCandidate, transform,
                         ),
                     )
                 }
@@ -620,7 +741,12 @@ class ScreenCaptureService : Service() {
                     blockDynamicsTracker.reset()
                 }
             }
-            val regionPx = customRegion?.toPixels(geometry.width, geometry.height)
+            val regionPx = customRegion?.let { transform.toCapturePixels(it) }
+            if (settings.customRegionEnabled && regionPx == null) {
+                // A conversion failure is a geometry error, not permission to scan the screen.
+                Log.w(TAG, "region could not be mapped to capture pixels; OCR paused: ${describeGeometry(geometry)}")
+                return
+            }
 
             // Battery saver may skip OCR on an unchanged frame, but never the
             // pass that could notice the tracked text is gone: a static frame

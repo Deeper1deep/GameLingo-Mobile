@@ -42,11 +42,8 @@ fun CustomRegionSection(settings: AppSettings, viewModel: SettingsViewModel) {
         settings.customRegions.portrait != null || settings.customRegions.landscape != null
     val landscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
-    // Older per-orientation values become the linked region once, without
-    // deleting anything; safe to repeat.
-    androidx.compose.runtime.LaunchedEffect(settings.customRegionEnabled) {
-        if (settings.customRegionEnabled) viewModel.migrateLinkedRegion(landscape)
-    }
+    // No migration here: the single migration authority is the capture
+    // session start (ScreenCaptureService), driven by the real display size.
 
     SwitchCard(
         title = stringResource(R.string.region_title),

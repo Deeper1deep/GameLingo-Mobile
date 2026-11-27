@@ -111,12 +111,21 @@ class RegionResolverTest {
 
     // ---- migration -------------------------------------------------------------
 
-    @Test fun `legacy values without a linked region pick one fixed rectangle for both orientations`() {
+    @Test fun `unmigrated legacy values follow the same rule migration uses, no hardcoded portrait first`() {
         val o = OrientedRegions(portrait = bottom, landscape = other)
         val p = resolve(linked = null, overrides = o, w = 1080, h = 2400)
         val l = resolve(linked = null, overrides = o, w = 2400, h = 1080)
-        assertEquals(p.region, l.region)
+        assertEquals(bottom, p.region)
+        assertEquals(other, l.region)
         assertEquals(RegionSource.LEGACY_SAVED, p.source)
+        // What the fallback shows is exactly what migration promotes for the same orientation.
+        assertEquals(p.region, RegionResolver.migrationCandidate(o, preferLandscape = false))
+        assertEquals(l.region, RegionResolver.migrationCandidate(o, preferLandscape = true))
+    }
+
+    @Test fun `only a landscape legacy region is used in portrait too`() {
+        val o = OrientedRegions(landscape = other)
+        assertEquals(other, resolve(linked = null, overrides = o, w = 1080, h = 2400).region)
     }
 
     @Test fun `migration prefers the active orientation then the other`() {

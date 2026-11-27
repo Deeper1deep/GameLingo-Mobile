@@ -69,7 +69,8 @@ class RegionSelectorService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun screenSize(): Pair<Int, Int> = ScreenGeometryProvider.displaySize(this)
+    /** The selector's display space is the same full-display size the capture frame mirrors. */
+    private fun screenSize(): Pair<Int, Int> = ScreenGeometryProvider.realDisplaySize(this)
 
     private suspend fun show() {
         settings = settingsRepository.settings.first()
@@ -182,11 +183,24 @@ class RegionSelectorService : Service() {
         val r = view.region
         val w = view.width.toFloat()
         val h = view.height.toFloat()
+        // Measured, not assumed: the overlay window is requested edge to edge
+        // but its true origin and size are read after layout and the origin
+        // is added exactly once below. Any gap to the display is logged.
+        val winSize = ScreenGeometryProvider.currentWindowSize(this)
+        android.util.Log.i(
+            "RegionSelector",
+            "selector: viewOnScreen=(${loc[0]},${loc[1]}) viewSize=${view.width}x${view.height} " +
+                "display=${sw}x$sh currentWindow=${winSize?.first}x${winSize?.second} " +
+                "insets=[${geometry.insetLeft},${geometry.insetTop},${geometry.insetRight},${geometry.insetBottom}] " +
+                "rotation=${geometry.rotation} " +
+                "coversDisplay=${loc[0] <= 1 && loc[1] <= 1 && view.width >= sw - 1 && view.height >= sh - 1}",
+        )
         // Window pixels -> display fractions, the window origin added once.
         val saved = geometry.selectorToNormalized(
             r.left * w, r.top * h, r.right * w, r.bottom * h,
             loc[0].toFloat(), loc[1].toFloat(),
         )
+        android.util.Log.i("RegionSelector", "selector: saved normalized=${saved?.encode()} linked=${!settings.independentRegions}")
         if (saved == null) {
             Toast.makeText(this, R.string.region_invalid, Toast.LENGTH_SHORT).show()
             return
