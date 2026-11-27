@@ -36,9 +36,9 @@ fun VoiceTranslationScreen(viewModel: AudioViewModel = hiltViewModel()) {
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
     VoiceTranslationContent(
         settings = settings, model = model, status = status,
-        modelSizeBytes = viewModel.modelSizeBytes, modelLicense = modelLicense,
-        onDownload = onDownload, onCancel = onCancel, onDelete = onDelete,
-        onWifiOnly = onWifiOnly, onTts = onTts,
+        modelSizeBytes = viewModel.modelSizeBytes, modelLicense = viewModel.modelLicense,
+        onDownload = viewModel::downloadModel, onCancel = viewModel::cancelDownload, onDelete = viewModel::deleteModel,
+        onWifiOnly = viewModel::setWifiOnly, onTts = viewModel::setTts,
         onSpeech = { on ->
             viewModel.setSpeech(on)
             if (on) micPermission.launch(Manifest.permission.RECORD_AUDIO)
