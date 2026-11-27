@@ -143,12 +143,13 @@ fun rememberSessionController(): SessionController {
                 } else {
                     val projectionManager =
                         context.getSystemService(MediaProjectionManager::class.java)
-                    // API 34+: ask for the whole default display so the OCR region mapping is
-                    // provably against the full screen (no single-app window can be picked).
-                    // Unless the user chose single-app capture (off by default).
-                    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
-                        com.gamelingo.mobile.core.capture.CaptureProvenance.DEFAULT_DISPLAY_REQUESTED &&
-                        !com.gamelingo.mobile.capture.CaptureMode.appWindowActive(context)
+                    // Default: the normal system picker (share one app or the entire screen).
+                    // Only when the user switched to "whole screen only" on API 34+ is the
+                    // default display requested, which is provably the full display.
+                    val intent = if (com.gamelingo.mobile.capture.CaptureIntentPolicy.requestsDefaultDisplayOnly(
+                            Build.VERSION.SDK_INT,
+                            com.gamelingo.mobile.capture.CaptureMode.appWindowChosen(context),
+                        )
                     ) {
                         projectionManager.createScreenCaptureIntent(
                             android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay(),
