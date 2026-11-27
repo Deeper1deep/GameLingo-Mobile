@@ -31,6 +31,26 @@ fun TranslationSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    TranslationSettingsContent(
+        settings = settings,
+        onArabicMode = viewModel::setArabicTranslationMode,
+        onRemoveTerm = viewModel::removeUserGlossaryTerm,
+        onAddTerm = viewModel::addUserGlossaryTerm,
+        onContextLines = viewModel::setContextLines,
+        onShowOriginal = viewModel::setShowOriginalText,
+    )
+}
+
+/** Stateless body so the screen can be rendered and tested without Hilt. */
+@Composable
+fun TranslationSettingsContent(
+    settings: com.gamelingo.mobile.data.settings.AppSettings,
+    onArabicMode: (com.gamelingo.mobile.data.settings.ArabicTranslationMode) -> Unit,
+    onRemoveTerm: (String) -> Unit,
+    onAddTerm: (String, String, String, String, String) -> Unit,
+    onContextLines: (Int) -> Unit,
+    onShowOriginal: (Boolean) -> Unit,
+) {
     SettingsColumn {
         SectionHeader(stringResource(R.string.tr_languages_title))
         GlCard {
@@ -62,7 +82,7 @@ fun TranslationSettingsScreen(
                         },
                     )
                 },
-                onSelect = viewModel::setArabicTranslationMode,
+                onSelect = onArabicMode,
             )
             HintText(
                 text = stringResource(
@@ -107,7 +127,7 @@ fun TranslationSettingsScreen(
                         TextButton(onClick = { editing = term }) {
                             Text(stringResource(R.string.user_glossary_edit))
                         }
-                        TextButton(onClick = { viewModel.removeUserGlossaryTerm(term.en) }) {
+                        TextButton(onClick = { onRemoveTerm(term.en) }) {
                             Text(stringResource(R.string.user_glossary_remove))
                         }
                     }
@@ -158,7 +178,7 @@ fun TranslationSettingsScreen(
             )
             TextButton(
                 onClick = {
-                    viewModel.addUserGlossaryTerm(newEn, newAr, newGame, newPron, newNote)
+                    onAddTerm(newEn, newAr, newGame, newPron, newNote)
                     newEn = ""
                     newAr = ""
                     newGame = ""
@@ -177,7 +197,7 @@ fun TranslationSettingsScreen(
             subtitle = stringResource(R.string.tr_context_sub),
             checked = settings.contextLines > 0,
             onCheckedChange = { enabled ->
-                viewModel.setContextLines(
+                onContextLines(
                     if (enabled) SettingsConstraints.DEFAULT_CONTEXT_LINES else 0,
                 )
             },
@@ -188,7 +208,7 @@ fun TranslationSettingsScreen(
                 valueLabel = stringResource(R.string.ai_context_lines_value, settings.contextLines),
                 value = settings.contextLines.toFloat(),
                 valueRange = 1f..SettingsConstraints.MAX_CONTEXT_LINES.toFloat(),
-                onValueChange = { viewModel.setContextLines(it.toInt()) },
+                onValueChange = { onContextLines(it.toInt()) },
                 subtitle = stringResource(R.string.ai_context_hint),
             )
             TextButton(onClick = { com.gamelingo.mobile.core.session.TranslationSessionBus.requestContextReset() }) {
@@ -199,7 +219,7 @@ fun TranslationSettingsScreen(
         SwitchCard(
             title = stringResource(R.string.translation_show_original),
             checked = settings.showOriginalText,
-            onCheckedChange = viewModel::setShowOriginalText,
+            onCheckedChange = onShowOriginal,
         )
     }
 }
