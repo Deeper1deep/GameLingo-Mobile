@@ -3,6 +3,8 @@ package com.gamelingo.mobile.ui.screens
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.res.stringResource
 import com.gamelingo.mobile.R
 import com.gamelingo.mobile.ui.components.GlCard
