@@ -379,6 +379,21 @@ class ScreenCaptureService : Service() {
             ?.rotation
             ?: Surface.ROTATION_0
         val content = reportedContentSize
+        if (CaptureMode.appWindowActive(this) && content != null) {
+            // One app window: the frame is the captured content (scaled to the
+            // display's long edge). The OCR region is read as fractions of this
+            // frame, so the display plays no part in the mapping.
+            val frame = com.gamelingo.mobile.core.capture.AppWindowCapture
+                .frameFor(content.first, content.second, maxOf(w, h))
+            if (frame != null) {
+                return DisplayGeometry(
+                    width = frame.first, height = frame.second, rotation = rotation,
+                    displayWidth = frame.first, displayHeight = frame.second,
+                    contentWidth = content.first, contentHeight = content.second,
+                    generation = currentGeometry?.generation ?: 0L,
+                )
+            }
+        }
         return DisplayGeometry(
             width = w,
             height = h,
@@ -577,6 +592,14 @@ class ScreenCaptureService : Service() {
      */
     private fun geometryProvesMapping(g: DisplayGeometry): Boolean {
         if (g.width <= 0 || g.height <= 0 || g.displayWidth <= 0 || g.displayHeight <= 0) return false
+        if (CaptureMode.appWindowActive(this)) {
+            // App-window mode: valid only once the system reported the content
+            // size and the frame is that content's shape. Before the first
+            // report OCR waits; it never reads on a guess.
+            return g.hasReportedContent && g.displayWidth == g.width && g.displayHeight == g.height &&
+                com.gamelingo.mobile.core.capture.AppWindowCapture
+                    .frameFor(g.contentWidth, g.contentHeight, maxOf(g.width, g.height)) == (g.width to g.height)
+        }
         return CaptureGeometryValidator.provesFullDisplay(
             g.displayWidth, g.displayHeight, g.width, g.height, g.contentWidth, g.contentHeight,
             com.gamelingo.mobile.core.capture.CaptureProvenance.forSdk(Build.VERSION.SDK_INT),

@@ -195,6 +195,16 @@ class OverlayService : Service() {
         return NormalizedBox(r.left, r.top, r.right, r.bottom)
     }
 
+    /**
+     * In app-window capture the original subtitle's position on the display is
+     * unknown, so follow/below/smart place as fixed there. The saved mode is
+     * untouched and applies again in whole-screen capture.
+     */
+    private fun effectiveForCapture(p: com.gamelingo.mobile.core.overlay.TranslationPlacement) =
+        com.gamelingo.mobile.core.capture.AppWindowCapture
+            .effectivePlacement(p.mode, com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this))
+            .let { if (it.degraded) p.copy(mode = it.mode) else p }
+
     private fun marginPx() = (EDGE_MARGIN_DP * resources.displayMetrics.density).toInt()
 
     /**
@@ -217,7 +227,7 @@ class OverlayService : Service() {
         val ow = if (params.width > 0) params.width else view.width
         val oh = if (params.height > 0) params.height else view.height
         val point = PlacementResolver.resolve(
-            placement = placement,
+            placement = effectiveForCapture(placement),
             screenWidth = sw, screenHeight = sh,
             overlayWidth = ow, overlayHeight = oh,
             source = sourceBox,
@@ -249,7 +259,7 @@ class OverlayService : Service() {
         val settings = settingsState.value
         val placement = settings.translationPlacement
         val base = PlacementResolver.resolve(
-            placement = placement, screenWidth = sw, screenHeight = sh,
+            placement = effectiveForCapture(placement), screenWidth = sw, screenHeight = sh,
             overlayWidth = view.width, overlayHeight = view.height,
             source = sourceBox, ocrRegion = regionBox(settings, sw, sh),
             defaultAnchorTop = OverlayLayout.anchorsTop(settings.overlayPosition),
