@@ -489,7 +489,7 @@ class ScreenCaptureService : Service() {
                         newReader.reader.surface,
                         null,
                         null,
-                    ),
+                    ) ?: throw IllegalStateException("createVirtualDisplay returned null"),
                 )
             }
             if (outcome != CaptureSurfaceSwap.Outcome.REUSED) {
