@@ -169,6 +169,7 @@ class OverlayService : Service() {
             }
             onDragEnd = { saveDroppedPosition(this, params) }
             onHoldStop = { stopSessionFromOverlay() }
+            onDoubleTap = { toggleLock() }
         }
 
         return try {
@@ -230,6 +231,18 @@ class OverlayService : Service() {
         params.x = point.left
         params.y = point.top
         runCatching { windowManager?.updateViewLayout(view, params) }
+    }
+
+    /**
+     * Double tap on the window flips the position lock. Only the style flag is
+     * written: the OCR region and the placement are never touched.
+     */
+    private fun toggleLock() {
+        val settings = settingsState.value
+        val style = settings.overlayStyle
+        val updated = style.copy(positionLocked = !style.positionLocked)
+        settingsState.value = settings.copy(overlayStyle = updated)
+        serviceScope.launch { settingsRepository.setOverlayStyle(updated) }
     }
 
     /** Persists where a drag ended; only the placement is written, never the OCR region. */
