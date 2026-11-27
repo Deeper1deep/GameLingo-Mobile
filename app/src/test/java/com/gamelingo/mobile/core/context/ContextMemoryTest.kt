@@ -84,4 +84,31 @@ class ContextMemorySceneTest {
             memory.sources(),
         )
     }
+
+    @Test
+    fun `entries keep translated text, subtitle id, dialect and question flag`() {
+        val memory = ContextMemory(maxLines = 5)
+        memory.add("Where did he go?", 1_000L, ContextMemory.Source.OCR, "راح فين؟", 7L, "EGYPTIAN_ARABIC")
+        val e = memory.entriesSnapshot().single()
+        assertEquals("راح فين؟", e.translated)
+        assertEquals(7L, e.subtitleId)
+        assertEquals("EGYPTIAN_ARABIC", e.dialect)
+        assertEquals(true, e.isQuestion)
+    }
+
+    @Test
+    fun `a question one interjection back still frames the reply`() {
+        val memory = ContextMemory(maxLines = 5)
+        memory.add("Where did he go?")
+        memory.add("Hmm.")
+        assertEquals(listOf("Where did he go?", "Hmm."), memory.select("I don't know.", 5, 200))
+    }
+
+    @Test
+    fun `the same sentence heard after being read is not earlier context`() {
+        val memory = ContextMemory(maxLines = 5)
+        memory.add("Meet me behind the warehouse tonight", 1_000L, ContextMemory.Source.OCR)
+        val picked = memory.select("Meet me behind the warehouse tonight", 5, 200, ContextMemory.Source.AUDIO)
+        assertEquals(emptyList<String>(), picked)
+    }
 }

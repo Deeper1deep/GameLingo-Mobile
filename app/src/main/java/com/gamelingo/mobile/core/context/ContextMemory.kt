@@ -20,7 +20,27 @@ class ContextMemory(
     /** Where a remembered line came from. Known at ingress; no speaker recogniser is involved. */
     enum class Source { OCR, AUDIO, UNKNOWN }
 
-    private data class Entry(val line: String, val atMillis: Long?, val source: Source)
+    private data class Entry(
+        val line: String,
+        val atMillis: Long?,
+        val source: Source,
+        val translated: String? = null,
+        val subtitleId: Long = 0L,
+        val dialect: String? = null,
+    ) {
+        val isQuestion: Boolean get() = line.trimEnd().endsWith("?")
+    }
+
+    /** Public, read-only view of one remembered dialogue entry. Speaker is not recorded (no recogniser). */
+    data class ContextEntry(
+        val original: String,
+        val translated: String?,
+        val subtitleId: Long,
+        val dialect: String?,
+        val atMillis: Long?,
+        val source: Source,
+        val isQuestion: Boolean,
+    )
 
     private val entries = ArrayDeque<Entry>()
 
@@ -36,11 +56,24 @@ class ContextMemory(
      * first. Returns true when a new scene started.
      */
     @Synchronized
-    fun add(line: String, atMillis: Long, source: Source = Source.UNKNOWN): Boolean =
-        add(line, atMillis as Long?, source)
+    fun add(
+        line: String,
+        atMillis: Long,
+        source: Source = Source.UNKNOWN,
+        translated: String? = null,
+        subtitleId: Long = 0L,
+        dialect: String? = null,
+    ): Boolean = add(line, atMillis as Long?, source, translated, subtitleId, dialect)
 
     @Synchronized
-    private fun add(line: String, atMillis: Long?, source: Source): Boolean {
+    private fun add(
+        line: String,
+        atMillis: Long?,
+        source: Source,
+        translated: String? = null,
+        subtitleId: Long = 0L,
+        dialect: String? = null,
+    ): Boolean {
         if (maxLines <= 0 || line.isBlank()) return false
         var newScene = false
         val previous = entries.lastOrNull()
@@ -51,11 +84,17 @@ class ContextMemory(
             newScene = true
         }
         if (entries.lastOrNull()?.line == line) return newScene
-        entries.addLast(Entry(line, atMillis, source))
+        entries.addLast(Entry(line, atMillis, source, translated, subtitleId, dialect))
         while (entries.size > maxLines) {
             entries.removeFirst()
         }
         return newScene
+    }
+
+    /** Full entries, oldest first. */
+    @Synchronized
+    fun entriesSnapshot(): List<ContextEntry> = entries.map {
+        ContextEntry(it.line, it.translated, it.subtitleId, it.dialect, it.atMillis, it.source, it.isQuestion)
     }
 
     /** Origin of each remembered line, oldest first (same order as [snapshot]). */
@@ -77,7 +116,7 @@ class ContextMemory(
      * - Menu text and mission objectives never count as dialogue context.
      */
     @Synchronized
-    fun select(current: String, maxLines: Int, maxChars: Int): List<String> {
+    fun select(current: String, maxLines: Int, maxChars: Int, currentSource: Source = Source.UNKNOWN): List<String> {
         if (maxLines <= 0 || maxChars <= 0) return emptyList()
         val currentWords = contentWords(current)
         val picked = ArrayDeque<String>()
@@ -89,7 +128,15 @@ class ContextMemory(
             if (kind == com.gamelingo.mobile.core.translation.LineKind.UI_MESSAGE ||
                 kind == com.gamelingo.mobile.core.translation.LineKind.OBJECTIVE
             ) continue
-            val related = distance == 1 || contentWords(entry.line).any { it in currentWords }
+            val words = contentWords(entry.line)
+            // The same sentence seen through the other channel (heard vs read) is not earlier
+            // context, it is the current line again. The 0.8 overlap is my choice, unmeasured.
+            if (currentSource != Source.UNKNOWN && entry.source != Source.UNKNOWN &&
+                entry.source != currentSource && isSameSentence(words, currentWords)
+            ) continue
+            // A question one line back still frames the reply after an interjection.
+            val related = distance == 1 || (distance == 2 && entry.isQuestion) ||
+                words.any { it in currentWords }
             if (!related) continue
             if (picked.size >= maxLines) break
             val cost = entry.line.length
@@ -102,6 +149,12 @@ class ContextMemory(
             used += cost
         }
         return picked.toList()
+    }
+
+    private fun isSameSentence(a: Set<String>, b: Set<String>): Boolean {
+        if (a.isEmpty() || b.isEmpty()) return false
+        val shared = a.count { it in b }.toDouble()
+        return shared / (a.size + b.size - shared) >= SAME_SENTENCE_OVERLAP
     }
 
     private fun contentWords(text: String): Set<String> =
@@ -118,6 +171,7 @@ class ContextMemory(
     fun size(): Int = entries.size
 
     companion object {
+        private const val SAME_SENTENCE_OVERLAP = 0.8
         private val NON_WORD = Regex("[^\\p{L}\\p{N}']+")
         private val STOP_WORDS = setOf(
             "that", "this", "with", "have", "from", "they", "what", "your", "will", "just",

@@ -53,6 +53,12 @@ class TranslationCoordinator @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val started = AtomicBoolean(false)
+    private fun sourceOf(subtitleId: Long): com.gamelingo.mobile.core.context.ContextMemory.Source = when {
+        subtitleId == 0L -> com.gamelingo.mobile.core.context.ContextMemory.Source.UNKNOWN
+        com.gamelingo.mobile.core.session.TranslationSessionBus.isAudioId(subtitleId) -> com.gamelingo.mobile.core.context.ContextMemory.Source.AUDIO
+        else -> com.gamelingo.mobile.core.context.ContextMemory.Source.OCR
+    }
+
     private val contextMemory = ContextMemory(maxLines = MAX_CONTEXT_LINES)
     @Volatile private var lastContextMode: com.gamelingo.mobile.data.settings.ArabicTranslationMode? = null
     private val historyRecorder = HistoryRecorder.over(historyDao)
@@ -145,7 +151,7 @@ class TranslationCoordinator @Inject constructor(
         // lines were translated under the other style and must not steer this one.
         if (lastContextMode != null && lastContextMode != arabicMode) contextMemory.clear()
         lastContextMode = arabicMode
-        val contextLines = contextMemory.select(request.text, settings.contextLines, MAX_CONTEXT_CHARS)
+        val contextLines = contextMemory.select(request.text, settings.contextLines, MAX_CONTEXT_CHARS, sourceOf(request.subtitleId))
         val plannedEngine = hybridEngine.plannedEngineId()
         val cacheContext = CacheContext(
             aiMode = settings.aiMode,
@@ -179,12 +185,7 @@ class TranslationCoordinator @Inject constructor(
                     subtitleId = request.subtitleId,
                     generation = generation,
                 )
-                contextMemory.add(
-                    request.text, request.capturedAtMillis,
-                    if (request.subtitleId == 0L) com.gamelingo.mobile.core.context.ContextMemory.Source.UNKNOWN
-                    else if (com.gamelingo.mobile.core.session.TranslationSessionBus.isAudioId(request.subtitleId)) com.gamelingo.mobile.core.context.ContextMemory.Source.AUDIO
-                    else com.gamelingo.mobile.core.context.ContextMemory.Source.OCR,
-                )
+                contextMemory.add(request.text, request.capturedAtMillis, sourceOf(request.subtitleId), hit.translatedText, request.subtitleId, arabicMode.name)
                 com.gamelingo.mobile.core.context.SuggestionPool.record(request.text)
                 return ProcessorOutcome(
                     engineId = hit.engineId,
@@ -304,12 +305,7 @@ class TranslationCoordinator @Inject constructor(
                     request.text, finalResult, request.capturedAtMillis,
                     request.subtitleId, generation,
                 )
-                contextMemory.add(
-                    request.text, request.capturedAtMillis,
-                    if (request.subtitleId == 0L) com.gamelingo.mobile.core.context.ContextMemory.Source.UNKNOWN
-                    else if (com.gamelingo.mobile.core.session.TranslationSessionBus.isAudioId(request.subtitleId)) com.gamelingo.mobile.core.context.ContextMemory.Source.AUDIO
-                    else com.gamelingo.mobile.core.context.ContextMemory.Source.OCR,
-                )
+                contextMemory.add(request.text, request.capturedAtMillis, sourceOf(request.subtitleId), finalResult.translatedText, request.subtitleId, arabicMode.name)
                 com.gamelingo.mobile.core.context.SuggestionPool.record(request.text)
                 publishEngineNotice(settings.aiMode, finalResult.engineId)
             }
