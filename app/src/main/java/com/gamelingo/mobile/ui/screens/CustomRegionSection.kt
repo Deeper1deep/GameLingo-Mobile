@@ -40,7 +40,7 @@ fun CustomRegionSection(settings: AppSettings, viewModel: SettingsViewModel) {
     val context = LocalContext.current
     val hasRegion = settings.linkedRegion != null ||
         settings.customRegions.portrait != null || settings.customRegions.landscape != null
-    val landscape = context.resources.configuration.orientation ==
+    val landscape = androidx.compose.ui.platform.LocalConfiguration.current.orientation ==
         android.content.res.Configuration.ORIENTATION_LANDSCAPE
     // Older per-orientation values become the linked region once, without
     // deleting anything; safe to repeat.
