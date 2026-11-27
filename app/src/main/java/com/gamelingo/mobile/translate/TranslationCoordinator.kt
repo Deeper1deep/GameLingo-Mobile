@@ -216,7 +216,18 @@ class TranslationCoordinator @Inject constructor(
             // reference rendering (local, deterministic); otherwise it fails.
             val rescue = if (attempt.accepted) null else {
                 understandingHolder.get().exactLineRendering(request.text, arabicMode)
-                    ?: throw RejectedOutputException()
+                    ?: run {
+                        com.gamelingo.mobile.core.diagnostics.PipelineTrace.record(
+                            com.gamelingo.mobile.core.diagnostics.PipelineTrace.Event(
+                                System.currentTimeMillis(), request.subtitleId, "rejected",
+                                attempt.value.first.engineId, request.text.length,
+                                attempt.value.first.translatedText.length,
+                                attempt.value.second.issues.map { it.name }, attempt.retried,
+                                false, (System.nanoTime() - engineStartNanos) / NANOS_PER_MS,
+                            ),
+                        )
+                        throw RejectedOutputException()
+                    }
             }
             val result = if (rescue != null) {
                 attempt.value.first.copy(translatedText = rescue, engineId = "${attempt.value.first.engineId}+idiom")
@@ -253,6 +264,15 @@ class TranslationCoordinator @Inject constructor(
                 finalResult.engineId,
             )
             PipelineTiming.endToEnd("translated", request.capturedAtMillis)
+            com.gamelingo.mobile.core.diagnostics.PipelineTrace.record(
+                com.gamelingo.mobile.core.diagnostics.PipelineTrace.Event(
+                    System.currentTimeMillis(), request.subtitleId,
+                    if (rescue != null) "rescued" else "accepted",
+                    finalResult.engineId, request.text.length, finalResult.translatedText.length,
+                    inspection.issues.map { it.name }, attempt.retried, false,
+                    (System.nanoTime() - engineStartNanos) / NANOS_PER_MS,
+                ),
+            )
             if (settings.cacheEnabled) {
                 cache.put(
                     request.text,

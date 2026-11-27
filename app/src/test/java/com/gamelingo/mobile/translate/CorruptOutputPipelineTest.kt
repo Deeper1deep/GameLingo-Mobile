@@ -114,6 +114,10 @@ class CorruptOutputPipelineTest {
         assertEquals(clean, TranslationSessionBus.translatedLine.value!!.translated)
         assertEquals(1, cache.size())
         assertEquals(1, inserts.get())
+        val outcomes = com.gamelingo.mobile.core.diagnostics.PipelineTrace.snapshot().map { it.outcome }
+        assertTrue(outcomes.contains("rejected") && outcomes.contains("accepted"))
+        val exported = com.gamelingo.mobile.core.diagnostics.PipelineTrace.export()
+        assertTrue("trace leaked subtitle text", !exported.contains("truck") && !exported.contains(clean))
         TranslationSessionBus.onSessionStopped()
     }
 }
