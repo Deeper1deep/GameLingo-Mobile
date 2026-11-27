@@ -79,48 +79,41 @@ class CaptureSurfaceSwapTest {
         assertSame(readers.last(), surface.reader)
     }
 
-    @Test fun `a failed resize releases the dead display and recreates on the new reader`() {
-        val surface = CaptureSurface<FakeReader, FakeDisplay>(display = FakeDisplay(failResize = true), reader = FakeReader("old"))
-        val old = surface.reader!!
-        val dead = surface.display!!
-        val b = FakeReader("new")
-        val out = CaptureSurfaceSwap.swap(surface, 2400, 1080, 420, b, factory())
-        assertEquals(CaptureSurfaceSwap.Outcome.RECREATED, out)
-        assertTrue(dead.released)
-        assertTrue(old.closed)
-        assertFalse(b.closed)
-        assertEquals(1, displaysCreated)
-        assertSame(b, surface.reader)
-        assertTrue(surface.display !== dead)
-    }
-
-    @Test fun `a failed surface swap keeps the old reader open until recreate and never leaks the new one`() {
-        val surface = CaptureSurface<FakeReader, FakeDisplay>(display = FakeDisplay(failSetSurface = true), reader = FakeReader("old"))
-        val b = FakeReader("new")
-        events.clear()
-        CaptureSurfaceSwap.swap(surface, 2400, 1080, 420, b, factory())
-        // The old reader is closed only after the failed display was released, never before the swap attempt.
-        assertTrue(events.indexOf("release") < events.indexOf("close:old"))
-        assertFalse(b.closed)
-        assertSame(b, surface.reader)
-    }
-
-    @Test fun `when recreate also fails the new reader is closed and no half state remains`() {
-        val surface = CaptureSurface<FakeReader, FakeDisplay>(display = FakeDisplay(failResize = true), reader = FakeReader("old"))
+    @Test fun `a failed resize never creates a second display and leaves the old pair untouched`() {
+        val dead = FakeDisplay(failResize = true)
+        val old = FakeReader("old")
+        val surface = CaptureSurface<FakeReader, FakeDisplay>(display = dead, reader = old)
         val b = FakeReader("new")
         try {
-            CaptureSurfaceSwap.swap(surface, 2400, 1080, 420, b, factory(failCreate = true))
-            fail("expected the create failure to propagate")
-        } catch (expected: IllegalStateException) {
-            // propagated to the rebuild retry budget
+            CaptureSurfaceSwap.swap(surface, 2400, 1080, 420, b, factory())
+            fail("expected a swap failure")
+        } catch (expected: CaptureSwapException) {
         }
+        assertEquals(0, displaysCreated) // createVirtualDisplay is single-use per projection
         assertTrue(b.closed)
-        assertNull(surface.display)
-        assertNull(surface.reader)
-        assertEquals(0, displaysCreated)
+        assertFalse(old.closed) // may still be attached: never closed on failure
+        assertFalse(dead.released)
+        assertSame(dead, surface.display)
+        assertSame(old, surface.reader)
     }
 
-    @Test fun `first build failure closes the new reader`() {
+    @Test fun `a failed setSurface closes only the new reader and keeps the old pair`() {
+        val disp = FakeDisplay(failSetSurface = true)
+        val old = FakeReader("old")
+        val surface = CaptureSurface<FakeReader, FakeDisplay>(display = disp, reader = old)
+        val b = FakeReader("new")
+        try {
+            CaptureSurfaceSwap.swap(surface, 2400, 1080, 420, b, factory())
+            fail("expected a swap failure")
+        } catch (expected: CaptureSwapException) {
+        }
+        assertEquals(0, displaysCreated)
+        assertTrue(b.closed)
+        assertFalse(old.closed)
+        assertSame(old, surface.reader)
+    }
+
+    @Test fun `first build failure closes the new reader and leaves the surface empty`() {
         val surface = CaptureSurface<FakeReader, FakeDisplay>()
         val r = FakeReader("a")
         try {
@@ -130,5 +123,6 @@ class CaptureSurfaceSwapTest {
         }
         assertTrue(r.closed)
         assertNull(surface.display)
+        assertNull(surface.reader)
     }
 }

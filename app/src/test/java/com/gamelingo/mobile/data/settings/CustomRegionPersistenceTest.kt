@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.gamelingo.mobile.core.region.NormalizedRegion
 import com.gamelingo.mobile.core.region.RegionSensitivity
+import androidx.datastore.preferences.core.edit
 import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -180,5 +181,39 @@ class CustomRegionPersistenceTest {
         repo.clearCustomRegions()
         repo.migrateLinkedRegion(preferLandscape = true)
         assertNull(repo.settings.first().linkedRegion)
+
+        // ---- corrupt stored values ------------------------------------------------------
+        val store = context.settingsDataStore
+        val KP = androidx.datastore.preferences.core.stringPreferencesKey("custom_region_portrait")
+        val KL = androidx.datastore.preferences.core.stringPreferencesKey("custom_region_landscape")
+        val KK = androidx.datastore.preferences.core.stringPreferencesKey("custom_region_linked")
+        val corrupt = listOf("garbage", "0.1,0.2,0.3", "NaN,0,1,1", "Infinity,0,1,1", "0.5,0.5,0.5,0.5", "0.1,0.2,0.3,0.4,0.5", "")
+        for (bad in corrupt) {
+            repo.clearCustomRegions()
+            store.edit {
+                it[KP] = bad
+                it[KL] = bad
+                it[KK] = bad
+            }
+            repo.migrateLinkedRegion(preferLandscape = false) // must not throw
+            val after = repo.settings.first()
+            assertNull("corrupt '$bad' must not become a region", after.linkedRegion)
+            assertNull(after.customRegions.portrait)
+        }
+        // Out-of-range or inverted (but finite) values are repaired by design into an in-bounds region.
+        repo.clearCustomRegions()
+        store.edit { it[KP] = "0.9,0.9,0.1,0.1" }
+        repo.migrateLinkedRegion(preferLandscape = false)
+        val repaired = repo.settings.first().linkedRegion
+        assertNotNull(repaired)
+        assertTrue(repaired!!.left >= 0f && repaired.right <= 1f && repaired.left < repaired.right)
+        // A corrupt linked value does not block migrating a valid legacy one.
+        repo.clearCustomRegions()
+        store.edit {
+            it[KK] = "garbage"
+            it[KP] = p1.encode()
+        }
+        repo.migrateLinkedRegion(preferLandscape = true)
+        assertEquals(p1, repo.settings.first().linkedRegion)
     }
 }

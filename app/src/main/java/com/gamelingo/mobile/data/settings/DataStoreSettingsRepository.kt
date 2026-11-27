@@ -21,7 +21,7 @@ import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
-private val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
+internal val Context.settingsDataStore: DataStore<Preferences> by preferencesDataStore(
     name = "gamelingo_settings",
 )
 

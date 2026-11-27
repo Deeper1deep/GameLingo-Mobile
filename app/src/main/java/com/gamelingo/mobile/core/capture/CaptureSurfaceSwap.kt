@@ -18,18 +18,28 @@ class CaptureSurface<R : SurfaceReader, D : SurfaceDisplay<R>>(
     var reader: R? = null,
 )
 
+/** A resize or surface swap on the single VirtualDisplay failed. The surface was left untouched. */
+class CaptureSwapException(message: String, cause: Throwable) : RuntimeException(message, cause)
+
 /**
- * The resize transaction for a changed frame size. Order guarantees:
- * 1. The live display is resized and pointed at the NEW reader first; the old
- *    reader is closed only AFTER that succeeded (its surface must outlive the swap).
- * 2. If the swap fails, the dead display is released, the old reader is closed,
- *    and a fresh display is created on the new reader. There is never a second
- *    display next to the first.
- * 3. If even creating fails, the new reader is closed (no leak), the surface is
- *    left empty (no half state) and the error is rethrown for the retry budget.
+ * The resize transaction for a changed frame size.
+ *
+ * Android allows exactly ONE createVirtualDisplay per MediaProjection (a second
+ * call throws SecurityException on API 34+, and the token is single-use). So a
+ * geometry change can only resize() the existing display and setSurface() to a
+ * new reader; there is no recreate path. Guarantees:
+ * 1. First build: create the display on the new reader; if that fails the new
+ *    reader is closed and the surface stays empty.
+ * 2. Later: resize, setSurface to the NEW reader, and only then close the OLD
+ *    reader (its surface outlives the swap).
+ * 3. If resize or setSurface fails: the NEW reader is closed (no leak), the
+ *    display and the OLD reader are left exactly as they were (never close a
+ *    surface that may still be attached), and [CaptureSwapException] is thrown.
+ *    The caller must invalidate the published geometry so OCR pauses, and may
+ *    retry (resize and setSurface are repeatable) or end the session.
  */
 object CaptureSurfaceSwap {
-    enum class Outcome { CREATED, REUSED, RECREATED }
+    enum class Outcome { CREATED, REUSED }
 
     fun <R : SurfaceReader, D : SurfaceDisplay<R>> swap(
         surface: CaptureSurface<R, D>,
@@ -39,33 +49,28 @@ object CaptureSurfaceSwap {
         newReader: R,
         createDisplay: (R) -> D,
     ): Outcome {
-        try {
-            val existing = surface.display
-            var recreated = false
-            if (existing != null) {
-                val oldReader = surface.reader
-                try {
-                    existing.resize(width, height, densityDpi)
-                    existing.setSurface(newReader)
-                    surface.reader = null
-                    runCatching { oldReader?.close() }
-                    surface.reader = newReader
-                    return Outcome.REUSED
-                } catch (error: RuntimeException) {
-                    runCatching { existing.release() }
-                    surface.display = null
-                    recreated = true
-                }
+        val existing = surface.display
+        if (existing == null) {
+            try {
+                surface.display = createDisplay(newReader)
+            } catch (error: Exception) {
+                runCatching { newReader.close() }
+                throw error
             }
-            runCatching { surface.reader?.close() }
-            surface.reader = null
-            surface.display = createDisplay(newReader)
             surface.reader = newReader
-            return if (recreated) Outcome.RECREATED else Outcome.CREATED
+            return Outcome.CREATED
+        }
+        try {
+            existing.resize(width, height, densityDpi)
+            existing.setSurface(newReader)
         } catch (error: Exception) {
             runCatching { newReader.close() }
-            throw error
+            throw CaptureSwapException("capture surface swap failed: ${error.javaClass.simpleName}", error)
         }
+        val oldReader = surface.reader
+        surface.reader = newReader
+        runCatching { oldReader?.close() }
+        return Outcome.REUSED
     }
 }
 
