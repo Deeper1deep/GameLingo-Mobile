@@ -34,6 +34,7 @@
     <string name="user_glossary_game_hint">اللعبة (اختياري)</string>
     <string name="user_glossary_pron_hint">النطق (اختياري)</string>
     <string name="user_glossary_note_hint">ملاحظة (اختياري، مش بتتبعت للموديل)</string>
+    <string name="tr_context_reset">امسح سياق الحوار المحفوظ</string>
     <string name="notif_stop_action">إيقاف</string>
     <string name="notif_capture_title">GameLingo شغال</string>
     <string name="notif_capture_text">جاري قراءة النص الإنجليزي من الشاشة وترجمته على جهازك.</string>

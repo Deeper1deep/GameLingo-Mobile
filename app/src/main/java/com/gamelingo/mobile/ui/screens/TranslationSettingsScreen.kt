@@ -191,6 +191,9 @@ fun TranslationSettingsScreen(
                 onValueChange = { viewModel.setContextLines(it.toInt()) },
                 subtitle = stringResource(R.string.ai_context_hint),
             )
+            TextButton(onClick = { com.gamelingo.mobile.core.session.TranslationSessionBus.requestContextReset() }) {
+                Text(stringResource(R.string.tr_context_reset))
+            }
         }
 
         SwitchCard(

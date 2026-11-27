@@ -177,6 +177,13 @@ object TranslationSessionBus {
     /** The generation of the currently running (or just-stopped) session. */
     fun currentGeneration(): Long = generationCounter.get()
 
+    private val _contextResetToken = MutableStateFlow(0L)
+
+    /** Bumps each time the user asks to forget the remembered dialogue context. */
+    val contextResetToken: StateFlow<Long> = _contextResetToken.asStateFlow()
+
+    fun requestContextReset() { _contextResetToken.value = _contextResetToken.value + 1 }
+
     private val _translatedLine = MutableStateFlow<TranslatedLine?>(null)
     val translatedLine: StateFlow<TranslatedLine?> = _translatedLine.asStateFlow()
 

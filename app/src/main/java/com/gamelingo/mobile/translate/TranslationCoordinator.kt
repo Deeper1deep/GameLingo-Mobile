@@ -90,6 +90,12 @@ class TranslationCoordinator @Inject constructor(
                 )
             }
         }
+        scope.launch {
+            var seen = TranslationSessionBus.contextResetToken.value
+            TranslationSessionBus.contextResetToken.collect { token ->
+                if (token != seen) { seen = token; contextMemory.clear() }
+            }
+        }
         // The worker follows the session: a stopped session stops it
         // (queued lines belong to that session and must not leak into the
         // next one), and a fresh start re-arms it. Both calls are
