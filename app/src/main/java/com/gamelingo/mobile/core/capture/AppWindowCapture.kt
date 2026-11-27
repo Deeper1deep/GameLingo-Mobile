@@ -43,7 +43,8 @@ object AppWindowCapture {
     const val STARTUP_TIMEOUT_MILLIS = 5_000L
 
     /**
-     * Placement that is actually possible. Follow, below and smart placement
+     * Placement that is actually possible. With a valid user [AppWindowCalibration]
+     * (the window origin the user aligned) every mode works; without one, follow, below and smart placement
      * need the original subtitle's position on the DISPLAY, which an app-window
      * capture cannot give. They are NOT silently replaced: the result carries
      * [Effective.degraded] = true so the UI can show the notice, and the saved
@@ -51,7 +52,7 @@ object AppWindowCapture {
      */
     data class Effective(val mode: PlacementMode, val degraded: Boolean)
 
-    fun effectivePlacement(saved: PlacementMode, appWindowCapture: Boolean): Effective =
-        if (appWindowCapture && saved != PlacementMode.FIXED) Effective(PlacementMode.FIXED, degraded = true)
+    fun effectivePlacement(saved: PlacementMode, appWindowCapture: Boolean, calibrated: Boolean = false): Effective =
+        if (appWindowCapture && !calibrated && saved != PlacementMode.FIXED) Effective(PlacementMode.FIXED, degraded = true)
         else Effective(saved, degraded = false)
 }

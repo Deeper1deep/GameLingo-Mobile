@@ -33,5 +33,7 @@ class AppWindowCaptureTest {
             assertEquals(m, whole.mode); assertEquals(false, whole.degraded)
         }
         assertEquals(false, AppWindowCapture.effectivePlacement(PlacementMode.FIXED, true).degraded)
+        val c = AppWindowCapture.effectivePlacement(PlacementMode.SMART_AUTO, appWindowCapture = true, calibrated = true)
+        assertEquals(PlacementMode.SMART_AUTO, c.mode); assertEquals(false, c.degraded)
     }
 }
