@@ -85,6 +85,8 @@ class TranslationCoordinatorGeometryTest {
         TranslationSessionBus.onSessionStopped()
         TranslationSessionBus.onSessionStarted()
         coordinator.start()
+        // The coordinator subscribes to the (non-replaying) line stream asynchronously.
+        Thread.sleep(800)
 
         TranslationSessionBus.onNewLine("Get in the car now", System.currentTimeMillis())
         assertTrue("engine never started the first request", waitUntil { engine.started.get() >= 1 })

@@ -33,7 +33,10 @@ class DiagnosticsScreenRenderTest {
     fun `the geometry share button renders on the diagnostics screen`() {
         val label = ApplicationProvider.getApplicationContext<android.app.Application>()
             .getString(R.string.diag_geometry_export)
+        // The screen ticks a clock once per second forever, so the test clock is advanced by hand.
+        rule.mainClock.autoAdvance = false
         rule.setContent { GameLingoTheme { DiagnosticsScreen() } }
+        rule.mainClock.advanceTimeBy(500)
         rule.onNodeWithText(label).performScrollTo().assertIsDisplayed()
 
         val image = rule.onRoot().captureToImage()
