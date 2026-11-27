@@ -32,11 +32,11 @@ class HistoryRecorderTest {
         assertEquals("Get down now", s.rows.values.single().sourceText)
     }
 
-    @Test fun `a repeat of the same pair inside the window is skipped`() = runBlocking {
+    @Test fun `the same line under a new subtitle id is a new entry even inside the window`() = runBlocking {
         val s = FakeStore(); val r = HistoryRecorder(s)
         r.record(1, noId, entry("Get down", "انزل", 1_000))
         r.record(2, noId, entry("Get down", "انزل", 5_000))
-        assertEquals(1, s.rows.size)
+        assertEquals(2, s.rows.size)
     }
 
     @Test fun `the same pair much later is a new occurrence`() = runBlocking {

@@ -2,6 +2,8 @@ package com.gamelingo.mobile.core.quality
 
 import com.gamelingo.mobile.core.quality.TranslationQualityGate.Issue
 import com.gamelingo.mobile.data.settings.ArabicTranslationMode
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -60,5 +62,18 @@ class BoundedRetryTest {
     @Test fun `corrupting set does not include the advisory issues`() {
         assertFalse(Issue.NEGATION_LOST in TranslationQualityGate.CORRUPTING)
         assertFalse(Issue.UNTRANSLATED in TranslationQualityGate.CORRUPTING)
+    }
+
+    @Test fun `cancellation during the first attempt propagates and never starts the retry`() {
+        var retried = false
+        val job = kotlinx.coroutines.GlobalScope.launch(kotlinx.coroutines.Dispatchers.Default) {
+            BoundedRetry.run(
+                first = { kotlinx.coroutines.delay(10_000); "bad" },
+                retry = { retried = true; "good" },
+                isCorrupt = { it == "bad" },
+            )
+        }
+        runBlocking { kotlinx.coroutines.delay(100); job.cancelAndJoin() }
+        assertTrue(job.isCancelled); assertFalse(retried)
     }
 }

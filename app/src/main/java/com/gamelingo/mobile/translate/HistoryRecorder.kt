@@ -9,9 +9,10 @@ import com.gamelingo.mobile.data.local.TranslationHistoryEntity
  * - The same subtitle appearance ([subtitleId]) that is published again
  *   (better text, a cache hit after a retry) UPDATES its row; it never adds
  *   a second one.
- * - The same source and translation written again within [DUPLICATE_WINDOW_MILLIS]
- *   (the line re-read from the screen) is skipped.
- * - A line that reappears much later is a new occurrence and is saved.
+ * - A new subtitle id is a new occurrence and always gets its own row, even
+ *   for identical text (the same line shown again later stays a new entry).
+ * - Records without a subtitle id: the same source and translation within
+ *   [DUPLICATE_WINDOW_MILLIS] is skipped.
  *
  * Only accepted translations reach this class: rejected or failed output
  * throws before publication. Nothing existing is deleted or rewritten.
@@ -35,9 +36,11 @@ class HistoryRecorder(private val store: Store) {
             store.update(known, entry)
             return
         }
-        val duplicate = store.findRecentDuplicate(
+        // A distinct subtitle id is a distinct occurrence: it is always its own
+        // entry, even for identical text. Only id-less records are de-duplicated.
+        val duplicate = if (subtitleId == noId) store.findRecentDuplicate(
             entry.sourceText, entry.translatedText, entry.createdAt - DUPLICATE_WINDOW_MILLIS,
-        )
+        ) else null
         if (duplicate != null) {
             if (subtitleId != noId) synchronized(rowBySubtitle) { rowBySubtitle[subtitleId] = duplicate }
             return
