@@ -468,6 +468,9 @@
     <string name="diag_last_error">آخر خطأ</string>
     <string name="diag_last_error_fmt">الخطأ: %1$s</string>
     <string name="diag_end_to_end">زمن السطر من الشاشة للترجمة</string>
+    <string name="diag_geometry_export">مشاركة تقرير دوران الشاشة</string>
+    <string name="diag_geometry_export_hint">ملف نصي فيه أبعاد الشاشة والالتقاط والمنطقة عند كل دوران، عشان نعرف المشكلة لو ظهرت</string>
+    <string name="diag_geometry_share_title">تقرير دوران الشاشة</string>
     <string name="diag_timing_hint">قياسات الأداء التفصيلية بتتسجل في نسخة التطوير بس</string>
     <string name="diag_ms_fmt">%1$d مللي ثانية</string>
     <string name="diag_ago_fmt">من %1$d ثانية</string>

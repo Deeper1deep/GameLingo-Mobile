@@ -14,12 +14,15 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gamelingo.mobile.R
 import com.gamelingo.mobile.core.capture.CaptureHealth
 import com.gamelingo.mobile.core.session.TranslationSessionBus
 import com.gamelingo.mobile.core.timing.PipelineTiming
+import com.gamelingo.mobile.ui.components.GlButton
+import com.gamelingo.mobile.ui.components.GlButtonStyle
 import com.gamelingo.mobile.ui.components.GlCard
 import com.gamelingo.mobile.ui.components.HintText
 import com.gamelingo.mobile.ui.components.InfoRow
@@ -131,6 +134,16 @@ fun DiagnosticsScreen() {
             HintText(stringResource(R.string.diag_timing_hint))
         }
 
+        val context = LocalContext.current
+        GlCard {
+            HintText(stringResource(R.string.diag_geometry_export_hint))
+            GlButton(
+                text = stringResource(R.string.diag_geometry_export),
+                onClick = { shareGeometryReport(context) },
+                style = GlButtonStyle.Secondary,
+            )
+        }
+
         snapshot.lastError?.let { error ->
             SectionHeader(stringResource(R.string.diag_last_error))
             GlCard {
@@ -175,3 +188,26 @@ private fun ago(timestampMillis: Long, now: Long): String =
         val seconds = ((now - timestampMillis) / 1_000L).coerceAtLeast(0L)
         stringResource(R.string.diag_ago_fmt, seconds)
     }
+
+/** Writes the geometry diagnostics to a cache file and offers it through the share sheet. */
+private fun shareGeometryReport(context: android.content.Context) {
+    runCatching {
+        val dir = java.io.File(context.cacheDir, "diagnostics").apply { mkdirs() }
+        val file = java.io.File(dir, "geometry-diagnostics.txt")
+        val header = "app=${context.packageName} sdk=${android.os.Build.VERSION.SDK_INT} " +
+            "device=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL}"
+        file.writeText(com.gamelingo.mobile.core.diagnostics.GeometryDiagnostics.export(header))
+        val uri = androidx.core.content.FileProvider.getUriForFile(
+            context, context.packageName + ".fileprovider", file,
+        )
+        val send = android.content.Intent(android.content.Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(android.content.Intent.EXTRA_STREAM, uri)
+            addFlags(android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        }
+        val chooser = android.content.Intent.createChooser(
+            send, context.getString(R.string.diag_geometry_share_title),
+        ).addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK)
+        context.startActivity(chooser)
+    }.onFailure { android.util.Log.w("Diagnostics", "geometry export failed", it) }
+}
