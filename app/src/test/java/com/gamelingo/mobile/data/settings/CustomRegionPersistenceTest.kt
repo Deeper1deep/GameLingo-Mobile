@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.gamelingo.mobile.core.region.NormalizedRegion
 import com.gamelingo.mobile.core.region.RegionSensitivity
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -145,7 +146,7 @@ class CustomRegionPersistenceTest {
         // every later caller leaves it unchanged (no caller can overwrite a valid linked region).
         kotlinx.coroutines.coroutineScope {
             (0 until 16).map { i ->
-                kotlinx.coroutines.async(kotlinx.coroutines.Dispatchers.Default) {
+                async(kotlinx.coroutines.Dispatchers.Default) {
                     repo.migrateLinkedRegion(preferLandscape = i % 2 == 0)
                 }
             }.forEach { it.await() }
