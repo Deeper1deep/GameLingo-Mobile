@@ -25,8 +25,9 @@ object ArabicStylePrompt {
         ArabicTranslationMode.MODERN_STANDARD_ARABIC -> MSA_PROMPT_VERSION
     }
 
+    // v4: the local engine's MSA instruction gained the screen-text guard.
     // v2: tense/question/negation fidelity and no-padding rules (brief 9 §5).
-    const val MSA_PROMPT_VERSION = 3
+    const val MSA_PROMPT_VERSION = 4
 
     /**
      * MSA mandate: contemporary Modern Standard Arabic, natural and clear,

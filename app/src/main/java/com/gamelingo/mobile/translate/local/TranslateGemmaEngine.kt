@@ -236,6 +236,9 @@ class TranslateGemmaEngine @Inject constructor(
                 "of the source (never soften or delete profanity, never add profanity that is not there); keep " +
                 "sarcasm and tone; keep character names transliterated in Arabic letters; keep gaming terms " +
                 "natural; translate idioms by meaning, never word-for-word; never omit any part of the line. " +
+                "Use authentic Egyptian vocabulary, expressions and sentence structure; do not translate into " +
+                "Modern Standard Arabic; do not merely swap a few words for Egyptian ones, but do not force " +
+                "slang where it would sound unnatural. " +
                 "Output ONLY the translated line, with no explanations, no notes, no quotes."
 
         /**
@@ -257,9 +260,10 @@ class TranslateGemmaEngine @Inject constructor(
         internal fun systemInstructionFor(
             mode: com.gamelingo.mobile.data.settings.ArabicTranslationMode,
         ): String = when (mode) {
-            com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC -> SYSTEM_INSTRUCTION
+            com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC ->
+                SYSTEM_INSTRUCTION + " " + com.gamelingo.mobile.translate.PromptComposer.GUARD_MODULE
             com.gamelingo.mobile.data.settings.ArabicTranslationMode.MODERN_STANDARD_ARABIC ->
-                SYSTEM_INSTRUCTION_MSA
+                SYSTEM_INSTRUCTION_MSA + " " + com.gamelingo.mobile.translate.PromptComposer.GUARD_MODULE
         }
 
         private fun buildPrompt(request: TranslationRequest): String {

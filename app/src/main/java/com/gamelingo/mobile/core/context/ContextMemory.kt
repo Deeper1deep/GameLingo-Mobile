@@ -58,6 +58,49 @@ class ContextMemory(
     @Synchronized
     fun snapshot(): List<String> = entries.map { it.line }
 
+    /**
+     * The context to send with [current]: bounded by [maxLines] and [maxChars],
+     * newest first when trimming, returned oldest first.
+     *
+     * - The previous line is always eligible: replies ("I don't know.") only
+     *   make sense next to the question before them.
+     * - Older lines are included only when they share a name or a content
+     *   word with [current], so unrelated chatter does not steer the line.
+     * - Menu text and mission objectives never count as dialogue context.
+     */
+    @Synchronized
+    fun select(current: String, maxLines: Int, maxChars: Int): List<String> {
+        if (maxLines <= 0 || maxChars <= 0) return emptyList()
+        val currentWords = contentWords(current)
+        val picked = ArrayDeque<String>()
+        var used = 0
+        var distance = 0
+        for (entry in entries.reversed()) {
+            distance++
+            val kind = com.gamelingo.mobile.core.translation.LineClassifier.classify(entry.line)
+            if (kind == com.gamelingo.mobile.core.translation.LineKind.UI_MESSAGE ||
+                kind == com.gamelingo.mobile.core.translation.LineKind.OBJECTIVE
+            ) continue
+            val related = distance == 1 || contentWords(entry.line).any { it in currentWords }
+            if (!related) continue
+            if (picked.size >= maxLines) break
+            val cost = entry.line.length
+            if (used + cost > maxChars) {
+                // The newest line is kept even when it alone exceeds the budget, trimmed.
+                if (picked.isEmpty()) { picked.addFirst(entry.line.take(maxChars)); used = maxChars }
+                break
+            }
+            picked.addFirst(entry.line)
+            used += cost
+        }
+        return picked.toList()
+    }
+
+    private fun contentWords(text: String): Set<String> =
+        text.split(NON_WORD).map { it.lowercase() }
+            .filter { it.length >= 4 && it !in STOP_WORDS }
+            .toSet()
+
     @Synchronized
     fun clear() {
         entries.clear()
@@ -67,6 +110,13 @@ class ContextMemory(
     fun size(): Int = entries.size
 
     companion object {
+        private val NON_WORD = Regex("[^\\p{L}\\p{N}']+")
+        private val STOP_WORDS = setOf(
+            "that", "this", "with", "have", "from", "they", "what", "your", "will", "just",
+            "there", "their", "about", "would", "could", "should", "been", "were", "then",
+            "than", "them", "into", "here", "when", "where", "which", "know", "dont", "don't",
+        )
+
         /** A pause longer than a minute means the next line starts a new scene. */
         const val DEFAULT_SCENE_GAP_MILLIS = 60_000L
     }

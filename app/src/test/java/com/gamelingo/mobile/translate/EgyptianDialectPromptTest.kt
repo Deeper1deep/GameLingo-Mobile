@@ -29,7 +29,7 @@ class EgyptianDialectPromptTest {
 
     @Test
     fun `prompt version bumped so cached pre-mandate translations are never served`() {
-        assertEquals(3, EgyptianDialectPrompt.PROMPT_VERSION)
+        assertEquals(4, EgyptianDialectPrompt.PROMPT_VERSION)
     }
 
     @Test
@@ -95,5 +95,27 @@ class EgyptianDialectPromptTest {
         assertEquals(emptyList<String>(), request.contextLines)
         assertEquals(emptyList<String>(), request.characterNames)
         assertEquals(emptyMap<String, String>(), request.glossary)
+    }
+
+    @Test
+    fun `egyptian prompt forbids MSA and word swapping`() {
+        val prompt = EgyptianDialectPrompt.SYSTEM_PROMPT
+        assertTrue(prompt.contains("Do not translate into Modern Standard Arabic"))
+        assertTrue(prompt.contains("Do not merely replace a few words"))
+        assertTrue(prompt.contains("authentic Egyptian vocabulary"))
+    }
+
+    @Test
+    fun `local instructions carry the dialect rules and the screen text guard`() {
+        val egy = com.gamelingo.mobile.translate.local.TranslateGemmaEngine.systemInstructionFor(
+            com.gamelingo.mobile.data.settings.ArabicTranslationMode.EGYPTIAN_ARABIC,
+        )
+        val msa = com.gamelingo.mobile.translate.local.TranslateGemmaEngine.systemInstructionFor(
+            com.gamelingo.mobile.data.settings.ArabicTranslationMode.MODERN_STANDARD_ARABIC,
+        )
+        assertTrue(egy.contains("do not translate into Modern Standard Arabic"))
+        assertTrue(egy.contains(PromptComposer.GUARD_MODULE))
+        assertTrue(msa.contains(PromptComposer.GUARD_MODULE))
+        assertTrue(!msa.contains("Egyptian colloquial Arabic (عامية"))
     }
 }

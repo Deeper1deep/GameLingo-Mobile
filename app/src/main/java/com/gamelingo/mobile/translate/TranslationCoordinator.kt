@@ -54,6 +54,7 @@ class TranslationCoordinator @Inject constructor(
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val started = AtomicBoolean(false)
     private val contextMemory = ContextMemory(maxLines = MAX_CONTEXT_LINES)
+    @Volatile private var lastContextMode: com.gamelingo.mobile.data.settings.ArabicTranslationMode? = null
     private val historyRecorder = HistoryRecorder.over(historyDao)
 
     /** Visible for tests: the worker driving every translation request. */
@@ -134,7 +135,11 @@ class TranslationCoordinator @Inject constructor(
         }
         val settings = settingsRepository.settings.first()
         val arabicMode = settings.arabicTranslationMode
-        val contextLines = contextMemory.snapshot().takeLast(settings.contextLines)
+        // A different Arabic style is a different conversation setup: the old
+        // lines were translated under the other style and must not steer this one.
+        if (lastContextMode != null && lastContextMode != arabicMode) contextMemory.clear()
+        lastContextMode = arabicMode
+        val contextLines = contextMemory.select(request.text, settings.contextLines, MAX_CONTEXT_CHARS)
         val plannedEngine = hybridEngine.plannedEngineId()
         val cacheContext = CacheContext(
             aiMode = settings.aiMode,
@@ -419,6 +424,9 @@ class TranslationCoordinator @Inject constructor(
 
     internal companion object {
         const val MAX_CONTEXT_LINES = 20
+
+        /** Character budget for the context sent with one line: keeps the local model fast. */
+        const val MAX_CONTEXT_CHARS = 400
 
         /** Gate findings that justify swapping in a known whole-line rendering. */
         val REPLACEABLE_ISSUES = setOf(
