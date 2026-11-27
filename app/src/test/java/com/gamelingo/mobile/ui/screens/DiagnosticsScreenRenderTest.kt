@@ -27,7 +27,7 @@ import org.robolectric.annotation.GraphicsMode
 @org.robolectric.annotation.Config(sdk = [35], application = android.app.Application::class, qualifiers = "w411dp-h891dp-xxhdpi")
 class DiagnosticsScreenRenderTest {
     @get:Rule
-    val rule = createComposeRule()
+    val rule = androidx.compose.ui.test.junit4.createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
     @Test
     fun `the geometry share button renders on the diagnostics screen`() {
@@ -41,13 +41,17 @@ class DiagnosticsScreenRenderTest {
         // on one frame before capture; the layout is already settled by the assertion above.
         rule.mainClock.autoAdvance = false
         rule.mainClock.advanceTimeByFrame()
-        val image = rule.onRoot().captureToImage()
-        val pixels = IntArray(image.width * image.height)
-        image.readPixels(pixels)
+        // captureToImage waits for Compose idle, which the pulsing pills never allow. Draw the
+        // activity's decor view directly instead (same pixels, no idle wait).
+        val view = rule.activity.window.decorView
+        val w = view.width.coerceAtLeast(1)
+        val h = view.height.coerceAtLeast(1)
+        val bitmap = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(bitmap))
+        val pixels = IntArray(w * h)
+        bitmap.getPixels(pixels, 0, w, 0, 0, w, h)
         assertTrue("screen rendered a blank image", pixels.toSet().size > 8)
 
-        val bitmap = android.graphics.Bitmap.createBitmap(image.width, image.height, android.graphics.Bitmap.Config.ARGB_8888)
-        bitmap.setPixels(pixels, 0, image.width, 0, 0, image.width, image.height)
         val out = java.io.ByteArrayOutputStream()
         bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
         val dir = java.io.File("build/diagnostics-render").apply { mkdirs() }
