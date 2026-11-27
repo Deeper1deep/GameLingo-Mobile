@@ -39,7 +39,11 @@ data class AppSettings(
      * rectangle is read and translated. Off by default = the scan band above.
      */
     val customRegionEnabled: Boolean = false,
-    /** One saved rectangle per orientation, as screen fractions. */
+    /** The single region used in every orientation (default model). */
+    val linkedRegion: com.gamelingo.mobile.core.region.NormalizedRegion? = null,
+    /** Off by default: one linked region. On: [customRegions] hold per-orientation overrides. */
+    val independentRegions: Boolean = false,
+    /** Per-orientation rectangles (legacy values and independent-mode overrides), as screen fractions. */
     val customRegions: com.gamelingo.mobile.core.region.OrientedRegions =
         com.gamelingo.mobile.core.region.OrientedRegions(),
     /**
@@ -107,6 +111,16 @@ data class AppSettings(
             customTop = regionTopFraction,
             customBottom = regionBottomFraction,
         )
+
+    /**
+     * The custom area to scan for a frame of this size. Never null: a missing
+     * orientation inherits the linked region, and a missing region altogether
+     * falls to the safe default band, never to the full screen.
+     */
+    fun resolveCustomRegion(frameWidth: Int, frameHeight: Int): com.gamelingo.mobile.core.region.ResolvedRegion =
+        com.gamelingo.mobile.core.region.RegionResolver.resolve(
+            linkedRegion, customRegions, independentRegions, frameWidth, frameHeight,
+        )
 }
 
 /** One user-pinned term: [en] must be rendered [ar], in both Arabic modes. */
@@ -127,6 +141,21 @@ interface SettingsRepository {
     suspend fun setRegionTopFraction(fraction: Float)
     suspend fun setRegionBottomFraction(fraction: Float)
     suspend fun setCustomRegionEnabled(enabled: Boolean)
+
+    /** Saves the single linked region used in every orientation. */
+    suspend fun setLinkedRegion(region: com.gamelingo.mobile.core.region.NormalizedRegion?)
+    suspend fun setIndependentRegions(enabled: Boolean)
+
+    /** Removes the linked region and every per-orientation rectangle (explicit user reset only). */
+    suspend fun clearCustomRegions()
+
+    /**
+     * One-time, non-destructive move to the linked model: when no linked
+     * region exists yet, the active orientation's saved rectangle (else the
+     * other valid one) becomes the linked region. Old per-orientation values
+     * stay untouched. Safe to call repeatedly.
+     */
+    suspend fun migrateLinkedRegion(preferLandscape: Boolean)
 
     /** Saves the translation placement; never touches the OCR region. */
     suspend fun setTranslationPlacement(placement: com.gamelingo.mobile.core.overlay.TranslationPlacement)

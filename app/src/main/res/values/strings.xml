@@ -533,7 +533,7 @@
     <string name="region_selector_hint">اسحب الزوايا لتغيير الحجم، واسحب الداخل لتحريك المنطقة</string>
     <string name="region_preview_needs_session">شغّل الترجمة أولًا لعرض معاينة النص داخل المنطقة</string>
     <string name="region_saved">تم حفظ المنطقة</string>
-    <string name="region_reset_done">رجعت لاستخدام الشاشة بالكامل</string>
+    <string name="region_reset_done">تم إيقاف المنطقة المخصصة ومسح حدودها</string>
     <string name="region_invalid">المنطقة غير صالحة، جرّب مرة أخرى</string>
     <string name="region_need_overlay_permission">فعّل إذن العرض فوق التطبيقات أولًا</string>
     <string name="region_status_saved">المنطقة محفوظة. يتم تجاهل أي نص خارجها.</string>
@@ -566,4 +566,13 @@
     <string name="placement_ocr_hint">منطقة القراءة تحدد ما يُترجم، وتتحرك وتتغير من «تعديل المنطقة» في إعدادات القراءة، دون أن تحرّك الترجمة.</string>
     <string name="style_max_lines">أقصى عدد أسطر: %1$d</string>
     <string name="style_max_lines_unlimited">أقصى عدد أسطر: بلا حد</string>
+    <string name="region_independent">مناطق مستقلة لكل اتجاه</string>
+    <string name="region_independent_hint">متوقف افتراضيًا: منطقة واحدة مرتبطة تبقى في نفس المكان النسبي عند تدوير الهاتف. فعّله فقط لو أردت منطقة مختلفة للوضع العمودي والأفقي.</string>
+    <string name="region_hint_linked">منطقة واحدة مشتركة بين الاتجاهين</string>
+    <string name="region_hint_portrait">تحرير منطقة الاتجاه العمودي</string>
+    <string name="region_hint_landscape">تحرير منطقة الاتجاه الأفقي</string>
+    <string name="region_status_independent_portrait">الاتجاه الحالي: عمودي (منطقة مستقلة)</string>
+    <string name="region_status_independent_landscape">الاتجاه الحالي: أفقي (منطقة مستقلة)</string>
+    <string name="region_status_linked">منطقة واحدة مرتبطة بالاتجاهين</string>
+    <string name="region_status_default">لم تُحفظ منطقة بعد؛ تُستخدم منطقة افتراضية أسفل الشاشة (لا تُقرأ الشاشة كاملة) حتى تحدد منطقتك.</string>
 </resources>

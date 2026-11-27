@@ -217,6 +217,18 @@ class SettingsViewModel @Inject constructor(
     fun saveCustomPreset(a: com.gamelingo.mobile.core.overlay.OverlayAppearance?) =
         viewModelScope.launch { repository.setCustomOverlayPreset(a) }
 
+    fun setIndependentRegions(enabled: Boolean) =
+        viewModelScope.launch { repository.setIndependentRegions(enabled) }
+
+    fun migrateLinkedRegion(preferLandscape: Boolean) =
+        viewModelScope.launch { repository.migrateLinkedRegion(preferLandscape) }
+
+    /** Explicit user reset: turns the custom area off and forgets its rectangles. */
+    fun resetCustomRegions() = viewModelScope.launch {
+        repository.setCustomRegionEnabled(false)
+        repository.clearCustomRegions()
+    }
+
     fun setCustomRegionEnabled(enabled: Boolean) =
         viewModelScope.launch { repository.setCustomRegionEnabled(enabled) }
 

@@ -216,3 +216,59 @@ object RegionEditor {
     /** A sensible first rectangle: the lower third band, where subtitles usually sit. */
     val DEFAULT_START = NormalizedRegion(0.10f, 0.68f, 0.90f, 0.95f)
 }
+
+/** Where the active region came from; reported in diagnostics. */
+enum class RegionSource {
+    /** The single linked region used in every orientation (the default). */
+    LINKED,
+
+    /** Independent mode: this orientation's own rectangle. */
+    ORIENTATION_OVERRIDE,
+
+    /** No linked region saved yet: an older per-orientation rectangle, used in both orientations. */
+    LEGACY_SAVED,
+
+    /** Nothing valid saved: the safe default band. */
+    DEFAULT,
+}
+
+data class ResolvedRegion(val region: NormalizedRegion, val source: RegionSource)
+
+/**
+ * Decides which rectangle is active. It never returns null: custom region
+ * mode must always scan a real, valid rectangle and can never fall back to
+ * the full screen. Rotation changes only the pixel size the same fractions
+ * are applied to, never which rectangle is used (unless the user switched
+ * on independent regions per orientation).
+ */
+object RegionResolver {
+
+    fun resolve(
+        linked: NormalizedRegion?,
+        perOrientation: OrientedRegions,
+        independent: Boolean,
+        frameWidth: Int,
+        frameHeight: Int,
+    ): ResolvedRegion {
+        if (independent) {
+            perOrientation.forFrame(frameWidth, frameHeight)
+                ?.let { return ResolvedRegion(it, RegionSource.ORIENTATION_OVERRIDE) }
+        }
+        linked?.sanitizedOrNull()?.let { return ResolvedRegion(it, RegionSource.LINKED) }
+        // Settings saved before the linked model: a fixed, orientation-free
+        // choice, so rotating never swaps one rectangle for another.
+        migrationCandidate(perOrientation, preferLandscape = false)
+            ?.let { return ResolvedRegion(it, RegionSource.LEGACY_SAVED) }
+        return ResolvedRegion(RegionEditor.DEFAULT_START, RegionSource.DEFAULT)
+    }
+
+    /**
+     * The saved rectangle that becomes the linked one: the active
+     * orientation's when valid, else the other, else null. Never invents a region.
+     */
+    fun migrationCandidate(perOrientation: OrientedRegions, preferLandscape: Boolean): NormalizedRegion? {
+        val first = if (preferLandscape) perOrientation.landscape else perOrientation.portrait
+        val second = if (preferLandscape) perOrientation.portrait else perOrientation.landscape
+        return first?.sanitizedOrNull() ?: second?.sanitizedOrNull()
+    }
+}

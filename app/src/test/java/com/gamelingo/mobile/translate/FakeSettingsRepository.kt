@@ -130,6 +130,27 @@ class FakeSettingsRepository(
         state.value = state.value.copy(customRegionEnabled = enabled)
     }
 
+    override suspend fun setLinkedRegion(region: com.gamelingo.mobile.core.region.NormalizedRegion?) {
+        state.value = state.value.copy(linkedRegion = region?.sanitizedOrNull())
+    }
+
+    override suspend fun setIndependentRegions(enabled: Boolean) {
+        state.value = state.value.copy(independentRegions = enabled)
+    }
+
+    override suspend fun clearCustomRegions() {
+        state.value = state.value.copy(
+            linkedRegion = null, customRegions = com.gamelingo.mobile.core.region.OrientedRegions(),
+        )
+    }
+
+    override suspend fun migrateLinkedRegion(preferLandscape: Boolean) {
+        val s = state.value
+        if (s.linkedRegion != null) return
+        val c = com.gamelingo.mobile.core.region.RegionResolver.migrationCandidate(s.customRegions, preferLandscape) ?: return
+        state.value = s.copy(linkedRegion = c)
+    }
+
     override suspend fun setCustomRegion(
         landscape: Boolean,
         region: com.gamelingo.mobile.core.region.NormalizedRegion?,
