@@ -32,3 +32,13 @@
 # v0.4.0 on device (decoder error -> native throw -> class not found -> SIGABRT).
 -keep class ai.onnxruntime.** { *; }
 -keep class com.google.ai.edge.litertlm.** { *; }
+
+# Vosk (offline speech recognition) talks to its native library through JNA,
+# which finds classes, fields and callbacks by name. Renaming or removing them
+# would break speech recognition in release builds only. JNA also references
+# desktop-only AWT classes that do not exist on Android.
+-keep class org.vosk.** { *; }
+-keep class com.sun.jna.** { *; }
+-keep class * extends com.sun.jna.** { *; }
+-dontwarn java.awt.**
+-dontwarn com.sun.jna.**
