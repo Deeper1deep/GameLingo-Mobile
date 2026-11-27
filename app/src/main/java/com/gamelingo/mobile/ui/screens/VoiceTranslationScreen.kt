@@ -38,7 +38,7 @@ fun VoiceTranslationScreen(viewModel: AudioViewModel = hiltViewModel()) {
         settings = settings, model = model, status = status,
         modelSizeBytes = viewModel.modelSizeBytes, modelLicense = viewModel.modelLicense,
         onDownload = viewModel::downloadModel, onCancel = viewModel::cancelDownload, onDelete = viewModel::deleteModel,
-        onWifiOnly = viewModel::setWifiOnly, onTts = viewModel::setTts,
+        onWifiOnly = viewModel::setWifiOnly, onTts = viewModel::setTts, onProfile = viewModel::setProfile,
         onSpeech = { on ->
             viewModel.setSpeech(on)
             if (on) micPermission.launch(Manifest.permission.RECORD_AUDIO)
@@ -60,6 +60,7 @@ fun VoiceTranslationContent(
     onWifiOnly: (Boolean) -> Unit,
     onTts: (Boolean) -> Unit,
     onSpeech: (Boolean) -> Unit,
+    onProfile: (com.gamelingo.mobile.core.optimize.OptimizationProfile) -> Unit = {},
 ) {
     val sizeMb = modelSizeBytes / 1_000_000
 
@@ -129,6 +130,30 @@ fun VoiceTranslationContent(
             checked = settings.ttsEnabled,
             onCheckedChange = onTts,
         )
+        GlCard {
+            Text(
+                text = stringResource(R.string.voice_profile_title),
+                style = MaterialTheme.typography.titleMedium,
+                color = GlColors.TextPrimary,
+            )
+            com.gamelingo.mobile.ui.components.SegmentedSelector(
+                options = com.gamelingo.mobile.core.optimize.OptimizationProfile.entries,
+                selected = settings.profile,
+                optionLabel = { p ->
+                    stringResource(
+                        when (p) {
+                            com.gamelingo.mobile.core.optimize.OptimizationProfile.SMART_AUTO -> R.string.optimize_profile_auto
+                            com.gamelingo.mobile.core.optimize.OptimizationProfile.BEST_QUALITY -> R.string.optimize_profile_quality
+                            com.gamelingo.mobile.core.optimize.OptimizationProfile.BALANCED -> R.string.optimize_profile_balanced
+                            com.gamelingo.mobile.core.optimize.OptimizationProfile.PERFORMANCE -> R.string.optimize_profile_performance
+                            com.gamelingo.mobile.core.optimize.OptimizationProfile.BATTERY_SAVER -> R.string.optimize_profile_battery
+                        },
+                    )
+                },
+                onSelect = onProfile,
+            )
+            HintText(stringResource(R.string.voice_profile_hint), modifier = Modifier.padding(top = GlSpacing.md))
+        }
         GlCard {
             HintText(stringResource(R.string.voice_limits))
         }

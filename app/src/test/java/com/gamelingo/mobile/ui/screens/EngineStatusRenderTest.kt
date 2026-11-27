@@ -45,6 +45,7 @@ class EngineStatusRenderTest {
                             com.gamelingo.mobile.core.engine.EngineRow(com.gamelingo.mobile.core.engine.EngineKey.ASR, com.gamelingo.mobile.core.engine.EngineHealth.DOWNLOADING, percent = 42),
                             com.gamelingo.mobile.core.engine.EngineRow(com.gamelingo.mobile.core.engine.EngineKey.TTS, com.gamelingo.mobile.core.engine.EngineHealth.OFF),
                         ),
+                        com.gamelingo.mobile.core.engine.ResourceAdvisor.advise(3000, 8000, false, 412, 2100, 160, true),
                     ),
                 )
               }

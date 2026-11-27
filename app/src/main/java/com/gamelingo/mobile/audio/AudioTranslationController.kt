@@ -36,6 +36,7 @@ class AudioTranslationController @Inject constructor(
     @ApplicationContext private val context: Context,
     private val prefs: AudioPrefs,
     private val models: AsrModelManager,
+    private val optimizer: com.gamelingo.mobile.data.optimize.OptimizationManager,
 ) {
     enum class Status { OFF, NO_MODEL, NO_PERMISSION, LOADING, LISTENING, FAILED }
 
@@ -59,8 +60,10 @@ class AudioTranslationController @Inject constructor(
             _status.value = Status.NO_PERMISSION; return
         }
         _status.value = Status.LOADING
-        val frames = Channel<Pair<ShortArray, Long>>(capacity = 400, onBufferOverflow = BufferOverflow.DROP_OLDEST)
         jobs += scope.launch(Dispatchers.Default) {
+            // Real device readings for Smart Auto; an explicit profile ignores them.
+            val tuning = com.gamelingo.mobile.core.audio.AudioTuningPolicy.forRequest(settings.profile, optimizer.analyze())
+            val frames = Channel<Pair<ShortArray, Long>>(capacity = tuning.frameQueueCapacity, onBufferOverflow = BufferOverflow.DROP_OLDEST)
             val asr = try { VoskAsrEngine(modelDir) } catch (e: Throwable) {
                 Log.w(TAG, "speech model failed to load", e)
                 _status.value = Status.FAILED; return@launch
@@ -70,7 +73,10 @@ class AudioTranslationController @Inject constructor(
             var adoptedAsr: com.gamelingo.mobile.core.audio.AsrEngine? = null
             if (!com.gamelingo.mobile.core.engine.ModelLifecycle.adoptOrClose(isActive, asr) { adoptedAsr = it }) return@launch
             val p = AudioUtterancePipeline(
-                segmenter = UtteranceSegmenter(),
+                segmenter = UtteranceSegmenter(
+                    hangoverMillis = tuning.hangoverMillis,
+                    maxUtteranceMillis = tuning.maxUtteranceMillis,
+                ),
                 asr = adoptedAsr!!,
                 onUtterance = { u ->
                     val id = TranslationSessionBus.onAudioLine(u.text, System.currentTimeMillis(), u.utteranceId)

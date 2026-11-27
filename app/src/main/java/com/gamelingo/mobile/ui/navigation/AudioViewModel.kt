@@ -32,6 +32,7 @@ class AudioViewModel @Inject constructor(
 
     fun setSpeech(on: Boolean) = prefs.update { it.copy(speechEnabled = on) }
     fun setTts(on: Boolean) = prefs.update { it.copy(ttsEnabled = on) }
+    fun setProfile(p: com.gamelingo.mobile.core.optimize.OptimizationProfile) = prefs.update { it.copy(profile = p) }
     fun setWifiOnly(on: Boolean) = prefs.update { it.copy(wifiOnlyDownload = on) }
 
     /** Only ever called from the user's tap on the download button. */

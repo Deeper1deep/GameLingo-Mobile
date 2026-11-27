@@ -40,9 +40,16 @@ class EngineStatusViewModel @Inject constructor(
                 ?.sizeBytes?.div(1_000_000)
         return built.copy(
             advice = com.gamelingo.mobile.core.engine.ResourceAdvisor.advise(
-                totalRamMb = mem.totalMem / 1_000_000,
-                gemmaLoadedMb = loadedMb(com.gamelingo.mobile.core.engine.EngineKey.GEMMA),
-                marianLoadedMb = loadedMb(com.gamelingo.mobile.core.engine.EngineKey.MARIAN),
+                availableMb = mem.availMem / 1_000_000,
+                totalMb = mem.totalMem / 1_000_000,
+                systemLowMemory = mem.lowMemory,
+                appPssMb = runCatching {
+                    val info = android.os.Debug.MemoryInfo()
+                    android.os.Debug.getMemoryInfo(info)
+                    info.totalPss / 1_000L
+                }.getOrNull(),
+                gemmaFilesMb = loadedMb(com.gamelingo.mobile.core.engine.EngineKey.GEMMA),
+                marianFilesMb = loadedMb(com.gamelingo.mobile.core.engine.EngineKey.MARIAN),
                 speechOn = a.speechEnabled,
             ),
         )
