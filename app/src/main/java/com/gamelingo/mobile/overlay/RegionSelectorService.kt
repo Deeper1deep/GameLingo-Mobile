@@ -69,25 +69,17 @@ class RegionSelectorService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun screenSize(): Pair<Int, Int> {
-        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val b = wm.currentWindowMetrics.bounds
-            b.width() to b.height()
-        } else {
-            val m = android.util.DisplayMetrics()
-            @Suppress("DEPRECATION")
-            wm.defaultDisplay.getRealMetrics(m)
-            m.widthPixels to m.heightPixels
-        }
-    }
+    private fun screenSize(): Pair<Int, Int> = ScreenGeometryProvider.displaySize(this)
 
     private suspend fun show() {
         settings = settingsRepository.settings.first()
         val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         windowManager = wm
         val (sw, sh) = screenSize()
-        val initial = settings.customRegions.forFrame(sw, sh) ?: RegionEditor.DEFAULT_START
+        // The same resolver the capture pipeline uses: what the selector shows
+        // is exactly what OCR will scan (linked region, or this orientation's
+        // override in independent mode).
+        val initial = settings.resolveCustomRegion(sw, sh).region
 
         val density = resources.displayMetrics.density
         val view = RegionSelectorView(this).apply {
@@ -107,7 +99,13 @@ class RegionSelectorService : Service() {
             background = pill(Color.argb(190, 20, 16, 32), 12f * density)
             val pad = (8 * density).toInt()
             setPadding(pad * 2, pad, pad * 2, pad)
-            text = getString(R.string.region_selector_hint)
+            text = getString(R.string.region_selector_hint) + "\n" + getString(
+                when {
+                    !settings.independentRegions -> R.string.region_hint_linked
+                    sw > sh -> R.string.region_hint_landscape
+                    else -> R.string.region_hint_portrait
+                },
+            )
         }
         hint = hintView
 
@@ -180,29 +178,39 @@ class RegionSelectorService : Service() {
         val loc = IntArray(2)
         view.getLocationOnScreen(loc)
         val (sw, sh) = screenSize()
+        val geometry = ScreenGeometryProvider.snapshot(this, sw, sh)
         val r = view.region
         val w = view.width.toFloat()
         val h = view.height.toFloat()
-        val saved = NormalizedRegion.fromWindowRect(
+        // Window pixels -> display fractions, the window origin added once.
+        val saved = geometry.selectorToNormalized(
             r.left * w, r.top * h, r.right * w, r.bottom * h,
-            loc[0].toFloat(), loc[1].toFloat(), sw, sh,
+            loc[0].toFloat(), loc[1].toFloat(),
         )
         if (saved == null) {
             Toast.makeText(this, R.string.region_invalid, Toast.LENGTH_SHORT).show()
             return
         }
         scope.launch {
-            settingsRepository.setCustomRegion(landscape = sw > sh, region = saved)
+            if (settings.independentRegions) {
+                // Independent mode: only this orientation's rectangle changes.
+                settingsRepository.setCustomRegion(landscape = geometry.isLandscape, region = saved)
+            } else {
+                // Default: one linked region for every orientation. The older
+                // per-orientation values are left untouched.
+                settingsRepository.setLinkedRegion(saved)
+            }
             settingsRepository.setCustomRegionEnabled(true)
             Toast.makeText(this@RegionSelectorService, R.string.region_saved, Toast.LENGTH_SHORT).show()
             stopSelf()
         }
     }
 
+    /** Explicit reset: turns the custom area off and forgets its rectangles. */
     private fun useFullScreen() {
-        val (sw, sh) = screenSize()
         scope.launch {
-            settingsRepository.setCustomRegion(landscape = sw > sh, region = null)
+            settingsRepository.setCustomRegionEnabled(false)
+            settingsRepository.clearCustomRegions()
             Toast.makeText(this@RegionSelectorService, R.string.region_reset_done, Toast.LENGTH_SHORT).show()
             stopSelf()
         }

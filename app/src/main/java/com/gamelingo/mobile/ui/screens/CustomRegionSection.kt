@@ -38,7 +38,15 @@ private fun Context.findActivity(): Activity? {
 @Composable
 fun CustomRegionSection(settings: AppSettings, viewModel: SettingsViewModel) {
     val context = LocalContext.current
-    val hasRegion = settings.customRegions.portrait != null || settings.customRegions.landscape != null
+    val hasRegion = settings.linkedRegion != null ||
+        settings.customRegions.portrait != null || settings.customRegions.landscape != null
+    val landscape = context.resources.configuration.orientation ==
+        android.content.res.Configuration.ORIENTATION_LANDSCAPE
+    // Older per-orientation values become the linked region once, without
+    // deleting anything; safe to repeat.
+    androidx.compose.runtime.LaunchedEffect(settings.customRegionEnabled) {
+        if (settings.customRegionEnabled) viewModel.migrateLinkedRegion(landscape)
+    }
 
     SwitchCard(
         title = stringResource(R.string.region_title),
@@ -51,7 +59,14 @@ fun CustomRegionSection(settings: AppSettings, viewModel: SettingsViewModel) {
     GlCard {
         Column(verticalArrangement = Arrangement.spacedBy(GlSpacing.sm)) {
             HintText(
-                stringResource(if (hasRegion) R.string.region_status_saved else R.string.region_status_none),
+                stringResource(
+                    when {
+                        !hasRegion -> R.string.region_status_default
+                        settings.independentRegions && landscape -> R.string.region_status_independent_landscape
+                        settings.independentRegions -> R.string.region_status_independent_portrait
+                        else -> R.string.region_status_linked
+                    },
+                ),
             )
             GlButton(
                 text = stringResource(if (hasRegion) R.string.region_edit else R.string.region_select),
@@ -69,16 +84,19 @@ fun CustomRegionSection(settings: AppSettings, viewModel: SettingsViewModel) {
             if (hasRegion) {
                 GlTextButton(
                     text = stringResource(R.string.region_use_full_screen),
-                    onClick = {
-                        viewModel.setCustomRegion(landscape = false, region = null)
-                        viewModel.setCustomRegion(landscape = true, region = null)
-                    },
+                    onClick = { viewModel.resetCustomRegions() },
                     modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
     }
 
+    SwitchCard(
+        title = stringResource(R.string.region_independent),
+        subtitle = stringResource(R.string.region_independent_hint),
+        checked = settings.independentRegions,
+        onCheckedChange = viewModel::setIndependentRegions,
+    )
     SwitchCard(
         title = stringResource(R.string.region_show_border),
         subtitle = stringResource(R.string.region_show_border_hint),

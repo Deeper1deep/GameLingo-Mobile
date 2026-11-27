@@ -85,5 +85,54 @@ class CustomRegionPersistenceTest {
         // Reset to full screen = clearing the rectangle.
         repo.setCustomRegion(landscape = false, region = null)
         assertNull(repo.settings.first().customRegions.portrait)
+
+        // ---- linked region + safe migration -------------------------------------
+        val legacyPortrait = NormalizedRegion(0.1f, 0.68f, 0.9f, 0.95f)
+        val legacyLandscape = NormalizedRegion(0.3f, 0.6f, 0.7f, 0.9f)
+        repo.setCustomRegion(landscape = false, region = legacyPortrait)
+        repo.setCustomRegion(landscape = true, region = legacyLandscape)
+        val before = repo.settings.first()
+        assertNull(before.linkedRegion)
+        assertFalse(before.independentRegions) // never silently switched on
+
+        repo.migrateLinkedRegion(preferLandscape = true)
+        val migrated = repo.settings.first()
+        assertEquals(legacyLandscape, migrated.linkedRegion) // active orientation preferred
+        // Nothing deleted, nothing overwritten.
+        assertEquals(legacyPortrait, migrated.customRegions.portrait)
+        assertEquals(legacyLandscape, migrated.customRegions.landscape)
+        // Idempotent: a second run (even preferring the other side) changes nothing.
+        repo.migrateLinkedRegion(preferLandscape = false)
+        assertEquals(legacyLandscape, repo.settings.first().linkedRegion)
+
+        // The linked region resolves identically in both orientations.
+        val s = repo.settings.first()
+        assertEquals(s.resolveCustomRegion(1080, 2400).region, s.resolveCustomRegion(2400, 1080).region)
+
+        // Selecting in linked mode writes only the linked region.
+        val picked = NormalizedRegion(0.2f, 0.7f, 0.8f, 0.9f)
+        repo.setLinkedRegion(picked)
+        val afterPick = repo.settings.first()
+        assertEquals(picked, afterPick.linkedRegion)
+        assertEquals(legacyPortrait, afterPick.customRegions.portrait)
+
+        // Independent mode (explicit) uses the override of the orientation.
+        repo.setIndependentRegions(true)
+        val ind = repo.settings.first()
+        assertEquals(legacyLandscape, ind.resolveCustomRegion(2400, 1080).region)
+        assertEquals(legacyPortrait, ind.resolveCustomRegion(1080, 2400).region)
+        repo.setCustomRegion(landscape = true, region = null)
+        assertEquals(picked, repo.settings.first().resolveCustomRegion(2400, 1080).region) // inherits linked
+
+        // Explicit reset forgets everything; resolution is still a real region.
+        repo.clearCustomRegions()
+        val cleared = repo.settings.first()
+        assertNull(cleared.linkedRegion)
+        assertNull(cleared.customRegions.portrait)
+        assertNotNull(cleared.resolveCustomRegion(1080, 2400).region)
+        assertEquals(
+            com.gamelingo.mobile.core.region.RegionSource.DEFAULT,
+            cleared.resolveCustomRegion(1080, 2400).source,
+        )
     }
 }

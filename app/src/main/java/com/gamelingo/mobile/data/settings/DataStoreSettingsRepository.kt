@@ -73,6 +73,9 @@ class DataStoreSettingsRepository @Inject constructor(
             regionTopFraction = region.top,
             regionBottomFraction = region.bottom,
             customRegionEnabled = prefs[KEY_CUSTOM_REGION_ON] ?: false,
+            linkedRegion = com.gamelingo.mobile.core.region.NormalizedRegion
+                .decodeOrNull(prefs[KEY_CUSTOM_REGION_LINKED]),
+            independentRegions = prefs[KEY_REGION_INDEPENDENT] ?: false,
             customRegions = com.gamelingo.mobile.core.region.OrientedRegions(
                 portrait = com.gamelingo.mobile.core.region.NormalizedRegion.decodeOrNull(prefs[KEY_CUSTOM_REGION_PORTRAIT]),
                 landscape = com.gamelingo.mobile.core.region.NormalizedRegion.decodeOrNull(prefs[KEY_CUSTOM_REGION_LANDSCAPE]),
@@ -142,6 +145,38 @@ class DataStoreSettingsRepository @Inject constructor(
 
     override suspend fun setCustomRegionEnabled(enabled: Boolean) {
         dataStore.edit { it[KEY_CUSTOM_REGION_ON] = enabled }
+    }
+
+    override suspend fun setLinkedRegion(region: com.gamelingo.mobile.core.region.NormalizedRegion?) {
+        val clean = region?.sanitizedOrNull()
+        dataStore.edit { if (clean == null) it.remove(KEY_CUSTOM_REGION_LINKED) else it[KEY_CUSTOM_REGION_LINKED] = clean.encode() }
+    }
+
+    override suspend fun setIndependentRegions(enabled: Boolean) {
+        dataStore.edit { it[KEY_REGION_INDEPENDENT] = enabled }
+    }
+
+    override suspend fun clearCustomRegions() {
+        dataStore.edit {
+            it.remove(KEY_CUSTOM_REGION_LINKED)
+            it.remove(KEY_CUSTOM_REGION_PORTRAIT)
+            it.remove(KEY_CUSTOM_REGION_LANDSCAPE)
+        }
+    }
+
+    override suspend fun migrateLinkedRegion(preferLandscape: Boolean) {
+        dataStore.edit { prefs ->
+            // Idempotent: a valid linked region is never overwritten.
+            if (com.gamelingo.mobile.core.region.NormalizedRegion.decodeOrNull(prefs[KEY_CUSTOM_REGION_LINKED]) != null) {
+                return@edit
+            }
+            val legacy = com.gamelingo.mobile.core.region.OrientedRegions(
+                portrait = com.gamelingo.mobile.core.region.NormalizedRegion.decodeOrNull(prefs[KEY_CUSTOM_REGION_PORTRAIT]),
+                landscape = com.gamelingo.mobile.core.region.NormalizedRegion.decodeOrNull(prefs[KEY_CUSTOM_REGION_LANDSCAPE]),
+            )
+            com.gamelingo.mobile.core.region.RegionResolver.migrationCandidate(legacy, preferLandscape)
+                ?.let { prefs[KEY_CUSTOM_REGION_LINKED] = it.encode() }
+        }
     }
 
     override suspend fun setCustomRegion(
@@ -386,6 +421,8 @@ class DataStoreSettingsRepository @Inject constructor(
         val KEY_SHOW_ORIGINAL = booleanPreferencesKey("show_original_text")
         val KEY_PRESERVE_COLORS = booleanPreferencesKey("preserve_source_colors")
         val KEY_CUSTOM_REGION_ON = booleanPreferencesKey("custom_region_enabled")
+        val KEY_CUSTOM_REGION_LINKED = stringPreferencesKey("custom_region_linked")
+        val KEY_REGION_INDEPENDENT = booleanPreferencesKey("custom_region_independent")
         val KEY_CUSTOM_REGION_PORTRAIT = stringPreferencesKey("custom_region_portrait")
         val KEY_CUSTOM_REGION_LANDSCAPE = stringPreferencesKey("custom_region_landscape")
         val KEY_TRANSLATION_PLACEMENT = stringPreferencesKey("translation_placement_json")

@@ -266,6 +266,10 @@ class ScreenCaptureService : Service() {
         }
 
         appliedRegionKey = null
+        serviceScope.launch {
+            val land = resources.displayMetrics.let { it.widthPixels > it.heightPixels }
+            runCatching { settingsRepository.migrateLinkedRegion(land) }
+        }
         TranslationSessionBus.onSessionStarted()
         CaptureHealth.onSessionStarted()
         lastStallReportAt = 0L
@@ -286,6 +290,30 @@ class ScreenCaptureService : Service() {
             if (TranslationSessionBus.onHeartbeat(System.currentTimeMillis())) {
                 resetLineGates.set(true)
             }
+        }
+    }
+
+    /** Logs how the active region was resolved (why, from what, in which pixels). */
+    private fun logRegionDiagnostics(
+        geometry: DisplayGeometry,
+        settings: AppSettings,
+        resolved: com.gamelingo.mobile.core.region.ResolvedRegion?,
+    ) {
+        val g = com.gamelingo.mobile.overlay.ScreenGeometryProvider.snapshot(this, geometry.width, geometry.height)
+        if (resolved == null) {
+            Log.i(TAG, "region: custom OFF; ${g.describe()}")
+            return
+        }
+        val px = g.toCapturePixels(resolved.region)
+        Log.i(
+            TAG,
+            "region: mode=${if (settings.independentRegions) "independent" else "linked"} " +
+                "source=${resolved.source} norm=${resolved.region.encode()} " +
+                "capturePx=[${px.left},${px.top},${px.right},${px.bottom}] ${g.describe()}" +
+                if (g.captureAspectMismatch()) " WARNING capture aspect differs from display" else "",
+        )
+        if (resolved.source == com.gamelingo.mobile.core.region.RegionSource.DEFAULT) {
+            Log.w(TAG, "region: no saved custom region; using the default band instead of the full screen")
         }
     }
 
@@ -446,13 +474,26 @@ class ScreenCaptureService : Service() {
             }
             try {
                 rebuildDisplayIfNeeded()
-                val geometry = currentGeometry
-                if (geometry != null) {
-                    displayMutex.withLock {
-                        val image = imageReader?.acquireLatestImage()
-                        if (image != null) {
-                            CaptureHealth.onFrameAcquired()
-                            image.use { processFrame(it, geometry, settings) }
+                // Geometry and reader are read together under the lock: a
+                // rotation rebuild can no longer swap the reader between
+                // the two reads, which would decode a new-size frame with the
+                // old size (garbled bitmap, regions on the wrong pixels).
+                displayMutex.withLock {
+                    val geometry = currentGeometry
+                    val image = if (geometry != null) imageReader?.acquireLatestImage() else null
+                    if (image != null && geometry != null) {
+                        image.use {
+                            if (!com.gamelingo.mobile.core.region.FrameGeometryGuard.matches(
+                                    it.width, it.height, geometry.width, geometry.height,
+                                )
+                            ) {
+                                // A frame from before/after a rotation: never
+                                // process it with the other geometry.
+                                Log.d(TAG, "stale frame ${it.width}x${it.height} vs ${geometry.width}x${geometry.height}; dropped")
+                            } else {
+                                CaptureHealth.onFrameAcquired()
+                                processFrame(it, geometry, settings)
+                            }
                         }
                     }
                 }
@@ -549,18 +590,23 @@ class ScreenCaptureService : Service() {
                 }
                 return
             }
-            // Custom translation area: the user's own rectangle for the
-            // current orientation. Null = the classic scan band / full frame.
-            val customRegion = if (settings.customRegionEnabled) {
-                settings.customRegions.forFrame(geometry.width, geometry.height)
+            // Custom translation area. Invariant: when it is on, a valid
+            // region is resolved BEFORE any OCR work, so the pipeline can
+            // never fall through to scanning the whole screen. A missing
+            // orientation inherits the linked region; nothing saved at all
+            // uses the safe default band.
+            val resolved = if (settings.customRegionEnabled) {
+                settings.resolveCustomRegion(geometry.width, geometry.height)
             } else {
                 null
             }
+            val customRegion = resolved?.region
             var regionChanged = false
-            val regionKey = customRegion?.let {
-                "${geometry.width}x${geometry.height}:${it.encode()}:${settings.regionSensitivity}"
+            val regionKey = resolved?.let {
+                "${geometry.width}x${geometry.height}:r${geometry.rotation}:${it.region.encode()}:${it.source}:${settings.regionSensitivity}"
             } ?: "full"
             if (regionKey != appliedRegionKey) {
+                logRegionDiagnostics(geometry, settings, resolved)
                 val firstFrame = appliedRegionKey == null
                 regionChanged = !firstFrame
                 appliedRegionKey = regionKey
@@ -609,8 +655,7 @@ class ScreenCaptureService : Service() {
                 cropLeft = l
                 cropTop = t
                 Bitmap.createBitmap(fullBitmap, l, t, r - l, b - t).also { ocrBitmap = it }
-            } else if (settings.restrictToTextRegion && !settings.customRegionEnabled) {
-                // (custom area on but none saved for this orientation = full screen)
+            } else if (settings.restrictToTextRegion) {
                 val region = settings.effectiveRegion
                 val rect = RegionMapper.mapToPixels(
                     topFraction = region.top,

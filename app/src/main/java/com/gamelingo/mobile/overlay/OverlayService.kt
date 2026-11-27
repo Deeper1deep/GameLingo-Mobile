@@ -187,23 +187,12 @@ class OverlayService : Service() {
         }
     }
 
-    private fun screenSize(): Pair<Int, Int> {
-        val wm = windowManager ?: return resources.displayMetrics.widthPixels to resources.displayMetrics.heightPixels
-        return if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            val b = wm.currentWindowMetrics.bounds
-            b.width() to b.height()
-        } else {
-            val m = android.util.DisplayMetrics()
-            @Suppress("DEPRECATION")
-            wm.defaultDisplay.getRealMetrics(m)
-            m.widthPixels to m.heightPixels
-        }
-    }
+    private fun screenSize(): Pair<Int, Int> = ScreenGeometryProvider.displaySize(this)
 
     /** The scanned area as a box, read-only: placement never writes the region. */
     private fun regionBox(settings: AppSettings, sw: Int, sh: Int): NormalizedBox? {
         if (!settings.customRegionEnabled) return null
-        val r = settings.customRegions.forFrame(sw, sh) ?: return null
+        val r = settings.resolveCustomRegion(sw, sh).region
         return NormalizedBox(r.left, r.top, r.right, r.bottom)
     }
 

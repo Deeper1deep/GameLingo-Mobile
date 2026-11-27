@@ -61,18 +61,7 @@ class PlacementEditorService : Service() {
         return START_NOT_STICKY
     }
 
-    private fun screenSize(): Pair<Int, Int> {
-        val wm = getSystemService(Context.WINDOW_SERVICE) as WindowManager
-        return if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-            val b = wm.currentWindowMetrics.bounds
-            b.width() to b.height()
-        } else {
-            val m = android.util.DisplayMetrics()
-            @Suppress("DEPRECATION")
-            wm.defaultDisplay.getRealMetrics(m)
-            m.widthPixels to m.heightPixels
-        }
-    }
+    private fun screenSize(): Pair<Int, Int> = ScreenGeometryProvider.displaySize(this)
 
     private suspend fun show() {
         val settings = settingsRepository.settings.first()
@@ -102,7 +91,7 @@ class PlacementEditorService : Service() {
             latinSample = getString(R.string.overlay_preview_original)
             // Reference only: the scanned area, drawn but never editable here.
             ocrRegion = if (settings.customRegionEnabled) {
-                settings.customRegions.forFrame(sw, sh)?.let { NormalizedBox(it.left, it.top, it.right, it.bottom) }
+                settings.resolveCustomRegion(sw, sh).region.let { NormalizedBox(it.left, it.top, it.right, it.bottom) }
             } else {
                 null
             }
