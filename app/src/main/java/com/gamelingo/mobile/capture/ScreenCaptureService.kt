@@ -30,6 +30,7 @@ import com.gamelingo.mobile.core.capture.CaptureHealth
 import com.gamelingo.mobile.core.capture.CaptureGeometryValidator
 import com.gamelingo.mobile.core.capture.CaptureSurface
 import com.gamelingo.mobile.core.capture.CaptureSurfaceSwap
+import com.gamelingo.mobile.core.capture.CaptureSwapException
 import com.gamelingo.mobile.core.capture.DisplayGeometry
 import com.gamelingo.mobile.core.capture.SurfaceDisplay
 import com.gamelingo.mobile.core.capture.SurfaceReader
@@ -422,6 +423,15 @@ class ScreenCaptureService : Service() {
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
+                if (error is CaptureSwapException) {
+                    // The display kept its old size or reader: whatever geometry
+                    // was published no longer provably matches it. Invalidate it
+                    // so OCR pauses (no reads against an unproven mapping) until a
+                    // later resize/setSurface succeeds. Nothing is recreated.
+                    currentGeometry = null
+                    readerGeneration = geometryGeneration.incrementAndGet()
+                    geoLog("geometry: swap failed, OCR paused until the surface is re-fitted: ${error.message}")
+                }
                 // A full-screen or rotation switch can make the projection
                 // refuse a new capture surface for a moment. That transition
                 // must not eat the 5-failure session budget: rebuilds get
