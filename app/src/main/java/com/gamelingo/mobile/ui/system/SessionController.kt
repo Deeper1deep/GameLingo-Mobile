@@ -146,7 +146,8 @@ fun rememberSessionController(): SessionController {
                     // Default: the normal system picker (share one app or the entire screen).
                     // Only when the user switched to "whole screen only" on API 34+ is the
                     // default display requested, which is provably the full display.
-                    val intent = if (com.gamelingo.mobile.capture.CaptureIntentPolicy.requestsDefaultDisplayOnly(
+                    val intent = if (Build.VERSION.SDK_INT >= 34 &&
+                        com.gamelingo.mobile.capture.CaptureIntentPolicy.requestsDefaultDisplayOnly(
                             Build.VERSION.SDK_INT,
                             com.gamelingo.mobile.capture.CaptureMode.appWindowChosen(context),
                         )
