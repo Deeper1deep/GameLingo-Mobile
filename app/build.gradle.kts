@@ -194,3 +194,20 @@ configurations.all {
         force("org.jetbrains.kotlin:kotlin-stdlib:2.3.20")
     }
 }
+
+// TEMPORARY, branch-only diagnostic (remove before any merge): on CI, also run the
+// minified release build after the debug build so R8/shrinking is checked without
+// publishing, and print the release APK size. The release is unsigned here (no
+// keystore on PR runs) and is never uploaded.
+if (System.getenv("CI") == "true") {
+    afterEvaluate {
+        tasks.named("assembleDebug") { finalizedBy("assembleRelease") }
+        tasks.named("assembleRelease") {
+            doLast {
+                layout.buildDirectory.dir("outputs/apk/release").get().asFile
+                    .walkTopDown().filter { it.extension == "apk" }
+                    .forEach { println("RELEASE_APK ${it.name} bytes=${it.length()}") }
+            }
+        }
+    }
+}
