@@ -44,6 +44,26 @@ fun EngineStatusContent(status: EngineStatus) {
             InfoRow(label = stringResource(R.string.engine_planned), value = status.plannedEngineId)
             HintText(stringResource(R.string.engine_status_hint))
         }
+        status.advice?.let { adv ->
+            GlCard {
+                Text(
+                    text = stringResource(R.string.engine_memory_title),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = GlColors.TextPrimary,
+                )
+                InfoRow(
+                    label = stringResource(R.string.engine_memory_level),
+                    value = stringResource(
+                        when (adv.level) {
+                            com.gamelingo.mobile.core.engine.ResourceAdvisor.Level.COMFORTABLE -> R.string.engine_mem_ok
+                            com.gamelingo.mobile.core.engine.ResourceAdvisor.Level.TIGHT -> R.string.engine_mem_tight
+                            com.gamelingo.mobile.core.engine.ResourceAdvisor.Level.RISKY -> R.string.engine_mem_risky
+                        },
+                    ),
+                )
+                HintText(stringResource(R.string.engine_memory_hint))
+            }
+        }
         status.rows.forEach { row ->
             GlCard {
                 Text(

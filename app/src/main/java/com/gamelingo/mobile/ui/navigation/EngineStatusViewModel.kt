@@ -19,11 +19,12 @@ class EngineStatusViewModel @Inject constructor(
     private val chain: LocalEngineChain,
     private val asr: AsrModelManager,
     private val audio: AudioPrefs,
+    @dagger.hilt.android.qualifiers.ApplicationContext private val context: android.content.Context,
 ) : ViewModel() {
     suspend fun snapshot(): EngineStatus {
         val s = settings.settings.first()
         val a = audio.settings.value
-        return EngineStatusBuilder.build(
+        val built = EngineStatusBuilder.build(
             plannedEngineId = chain.plannedLocalEngineId(),
             gemmaOptIn = s.gemmaHdOptIn,
             gemma = models.stateOf(LocalModelManager.MODEL_TRANSLATEGEMMA),
@@ -31,6 +32,19 @@ class EngineStatusViewModel @Inject constructor(
             asr = asr.state.value,
             speechEnabled = a.speechEnabled,
             ttsEnabled = a.ttsEnabled,
+        )
+        val mem = android.app.ActivityManager.MemoryInfo()
+        context.getSystemService(android.app.ActivityManager::class.java)?.getMemoryInfo(mem)
+        fun loadedMb(key: com.gamelingo.mobile.core.engine.EngineKey) =
+            built.rows.firstOrNull { it.key == key && it.health == com.gamelingo.mobile.core.engine.EngineHealth.READY }
+                ?.sizeBytes?.div(1_000_000)
+        return built.copy(
+            advice = com.gamelingo.mobile.core.engine.ResourceAdvisor.advise(
+                totalRamMb = mem.totalMem / 1_000_000,
+                gemmaLoadedMb = loadedMb(com.gamelingo.mobile.core.engine.EngineKey.GEMMA),
+                marianLoadedMb = loadedMb(com.gamelingo.mobile.core.engine.EngineKey.MARIAN),
+                speechOn = a.speechEnabled,
+            ),
         )
     }
 }

@@ -89,6 +89,7 @@ class ScreenCaptureService : Service() {
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var recognizerEngine: TextRecognizerEngine
     @Inject lateinit var audioController: com.gamelingo.mobile.audio.AudioTranslationController
+    @Inject lateinit var localAiRouter: com.gamelingo.mobile.translate.local.LocalAiRouter
 
     // A stray async exception must never reach the default uncaught handler:
     // that kills the whole app. The capture loop handles its own failures and
@@ -1182,6 +1183,19 @@ class ScreenCaptureService : Service() {
             )
         } else {
             startForeground(NOTIFICATION_ID, notification)
+        }
+    }
+
+    /**
+     * Critical memory pressure: release the on-device translation models. They reload
+     * lazily on the next line (slower, never switched off); a close during a running
+     * generation is deferred by the engines themselves.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (com.gamelingo.mobile.core.engine.ModelLifecycle.shouldReleaseTranslationModels(level)) {
+            Log.w(TAG, "memory pressure level=$level: releasing local translation models")
+            runCatching { localAiRouter.close() }
         }
     }
 

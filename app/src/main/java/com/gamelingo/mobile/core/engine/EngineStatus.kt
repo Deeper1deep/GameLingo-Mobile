@@ -10,7 +10,7 @@ enum class EngineHealth { READY, OFF, NOT_INSTALLED, DOWNLOADING, VERIFYING, FAI
 /** [detail] is a size in bytes for READY, a percentage for DOWNLOADING, a reason for FAILED; null otherwise. */
 data class EngineRow(val key: EngineKey, val health: EngineHealth, val sizeBytes: Long? = null, val percent: Int? = null, val reason: String? = null)
 
-data class EngineStatus(val plannedEngineId: String, val rows: List<EngineRow>)
+data class EngineStatus(val plannedEngineId: String, val rows: List<EngineRow>, val advice: ResourceAdvisor.Advice? = null)
 
 /** Pure read-only summary of what each engine is doing. It never starts a download or changes a setting. */
 object EngineStatusBuilder {

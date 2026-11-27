@@ -586,6 +586,12 @@
     <string name="engine_status_title">حالة المحركات</string>
     <string name="engine_planned">المحرك اللي هيترجم السطر الجاي</string>
     <string name="engine_status_hint">للعرض بس. مفيش تحميل بيبدأ من هنا.</string>
+    <string name="engine_memory_title">الذاكرة (تقدير)</string>
+    <string name="engine_memory_level">الحمل المتوقع على الرام</string>
+    <string name="engine_mem_ok">مريح</string>
+    <string name="engine_mem_tight">مشدود</string>
+    <string name="engine_mem_risky">ثقيل على جهازك</string>
+    <string name="engine_memory_hint">تقدير بسيط من أحجام النماذج المفعّلة ورام الجهاز، مش قياس حقيقي. مفيش حاجة بتتقفل لوحدها؛ لو الرام اتضغطت جدًا النماذج المحلية بتتفرّغ وبترجع تتحمّل لما تحتاجها.</string>
     <string name="engine_state">الحالة</string>
     <string name="engine_gemma">نموذج الجودة العالية (TranslateGemma)</string>
     <string name="engine_marian">النموذج المحلي الخفيف</string>

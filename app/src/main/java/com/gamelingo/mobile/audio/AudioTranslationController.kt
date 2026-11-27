@@ -16,6 +16,7 @@ import javax.inject.Singleton
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.channels.BufferOverflow
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
@@ -64,9 +65,13 @@ class AudioTranslationController @Inject constructor(
                 Log.w(TAG, "speech model failed to load", e)
                 _status.value = Status.FAILED; return@launch
             }
+            // stop() may have run while the blocking model load was in progress: do not adopt a
+            // stale model or start capture for a session that has already ended.
+            var adoptedAsr: com.gamelingo.mobile.core.audio.AsrEngine? = null
+            if (!com.gamelingo.mobile.core.engine.ModelLifecycle.adoptOrClose(isActive, asr) { adoptedAsr = it }) return@launch
             val p = AudioUtterancePipeline(
                 segmenter = UtteranceSegmenter(),
-                asr = asr,
+                asr = adoptedAsr!!,
                 onUtterance = { u ->
                     val id = TranslationSessionBus.onAudioLine(u.text, System.currentTimeMillis(), u.utteranceId)
                     PipelineTrace.record(
