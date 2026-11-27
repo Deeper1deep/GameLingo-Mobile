@@ -30,6 +30,7 @@
     <string name="home_translation_failed">تعذّرت ترجمة آخر جملة — هتتعاد مع الجملة الجاية</string>
     <string name="home_latest_ocr">آخر نص مقروء: %1$s</string>
     <string name="notif_channel_capture">التقاط الشاشة</string>
+    <string name="notif_stop_action">إيقاف</string>
     <string name="notif_capture_title">GameLingo شغال</string>
     <string name="notif_capture_text">جاري قراءة النص الإنجليزي من الشاشة وترجمته على جهازك.</string>
     <string name="history_showing_recent">يعرض آخر %1$d من %2$d ترجمة (استخدم البحث للباقي)</string>

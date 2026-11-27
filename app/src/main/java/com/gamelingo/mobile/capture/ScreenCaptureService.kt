@@ -1076,6 +1076,17 @@ class ScreenCaptureService : Service() {
             .setContentTitle(getString(R.string.notif_capture_title))
             .setContentText(getString(R.string.notif_capture_text))
             .setOngoing(true)
+            .addAction(
+                0,
+                getString(R.string.notif_stop_action),
+                android.app.PendingIntent.getService(
+                    this,
+                    STOP_REQUEST_CODE,
+                    stopIntent(this),
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or
+                        android.app.PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -1138,6 +1149,7 @@ class ScreenCaptureService : Service() {
 
         /** Floor for the capture tick delay when OCR outlasts the interval. */
         private const val MIN_TICK_DELAY_MS = 50L
+        private const val STOP_REQUEST_CODE = 7301
 
         fun startIntent(context: Context, resultCode: Int, data: Intent): Intent =
             Intent(context, ScreenCaptureService::class.java)
