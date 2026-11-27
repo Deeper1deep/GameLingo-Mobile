@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.test.core.app.ApplicationProvider
 import com.gamelingo.mobile.core.region.NormalizedRegion
 import com.gamelingo.mobile.core.region.RegionSensitivity
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
@@ -134,5 +135,50 @@ class CustomRegionPersistenceTest {
             com.gamelingo.mobile.core.region.RegionSource.DEFAULT,
             cleared.resolveCustomRegion(1080, 2400).source,
         )
+
+        // ---- migration under concurrency and restart ------------------------------------
+        val p1 = NormalizedRegion(0.1f, 0.68f, 0.9f, 0.95f)
+        val l1 = NormalizedRegion(0.3f, 0.6f, 0.7f, 0.9f)
+        repo.setCustomRegion(landscape = false, region = p1)
+        repo.setCustomRegion(landscape = true, region = l1)
+        // Many concurrent callers with DIFFERENT orientation preferences: DataStore edits are
+        // serialized, so exactly one value is chosen, it is one of the saved rectangles, and
+        // every later caller leaves it unchanged (no caller can overwrite a valid linked region).
+        kotlinx.coroutines.coroutineScope {
+            (0 until 16).map { i ->
+                async(kotlinx.coroutines.Dispatchers.Default) {
+                    repo.migrateLinkedRegion(preferLandscape = i % 2 == 0)
+                }
+            }.forEach { it.await() }
+        }
+        val concurrent = repo.settings.first()
+        assertTrue(concurrent.linkedRegion == p1 || concurrent.linkedRegion == l1)
+        assertEquals(p1, concurrent.customRegions.portrait) // nothing deleted
+        assertEquals(l1, concurrent.customRegions.landscape)
+        val chosen = concurrent.linkedRegion
+        repo.migrateLinkedRegion(preferLandscape = true)
+        repo.migrateLinkedRegion(preferLandscape = false)
+        assertEquals(chosen, repo.settings.first().linkedRegion)
+        // After a process restart (fresh repository) the linked region is the same and a repeat is a no-op.
+        val restarted = DataStoreSettingsRepository(context, ApiKeyCipher())
+        assertEquals(chosen, restarted.settings.first().linkedRegion)
+        restarted.migrateLinkedRegion(preferLandscape = chosen == l1)
+        restarted.migrateLinkedRegion(preferLandscape = chosen != l1)
+        assertEquals(chosen, restarted.settings.first().linkedRegion)
+
+        // Only a landscape legacy value, migrated from a portrait session: still picked (other valid side).
+        repo.clearCustomRegions()
+        repo.setCustomRegion(landscape = true, region = l1)
+        repo.migrateLinkedRegion(preferLandscape = false)
+        assertEquals(l1, repo.settings.first().linkedRegion)
+        // Only a portrait legacy value, migrated from a landscape session.
+        repo.clearCustomRegions()
+        repo.setCustomRegion(landscape = false, region = p1)
+        repo.migrateLinkedRegion(preferLandscape = true)
+        assertEquals(p1, repo.settings.first().linkedRegion)
+        // Nothing saved: migration invents nothing.
+        repo.clearCustomRegions()
+        repo.migrateLinkedRegion(preferLandscape = true)
+        assertNull(repo.settings.first().linkedRegion)
     }
 }

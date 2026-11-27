@@ -187,8 +187,7 @@ class RegionSelectorService : Service() {
         // but its true origin and size are read after layout and the origin
         // is added exactly once below. Any gap to the display is logged.
         val winSize = ScreenGeometryProvider.currentWindowSize(this)
-        android.util.Log.i(
-            "RegionSelector",
+        logSelector(
             "selector: viewOnScreen=(${loc[0]},${loc[1]}) viewSize=${view.width}x${view.height} " +
                 "display=${sw}x$sh currentWindow=${winSize?.first}x${winSize?.second} " +
                 "insets=[${geometry.insetLeft},${geometry.insetTop},${geometry.insetRight},${geometry.insetBottom}] " +
@@ -200,7 +199,7 @@ class RegionSelectorService : Service() {
             r.left * w, r.top * h, r.right * w, r.bottom * h,
             loc[0].toFloat(), loc[1].toFloat(),
         )
-        android.util.Log.i("RegionSelector", "selector: saved normalized=${saved?.encode()} linked=${!settings.independentRegions}")
+        logSelector("selector: saved normalized=${saved?.encode()} linked=${!settings.independentRegions}")
         if (saved == null) {
             Toast.makeText(this, R.string.region_invalid, Toast.LENGTH_SHORT).show()
             return
@@ -228,6 +227,11 @@ class RegionSelectorService : Service() {
             Toast.makeText(this@RegionSelectorService, R.string.region_reset_done, Toast.LENGTH_SHORT).show()
             stopSelf()
         }
+    }
+
+    private fun logSelector(message: String) {
+        android.util.Log.i("RegionSelector", message)
+        com.gamelingo.mobile.core.diagnostics.GeometryDiagnostics.record(message)
     }
 
     private fun pill(color: Int, radius: Float) = GradientDrawable().apply {

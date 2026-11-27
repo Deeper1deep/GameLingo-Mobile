@@ -27,7 +27,12 @@ import com.gamelingo.mobile.MainActivity
 import com.gamelingo.mobile.R
 import com.gamelingo.mobile.core.capture.BlockDynamicsTracker
 import com.gamelingo.mobile.core.capture.CaptureHealth
+import com.gamelingo.mobile.core.capture.CaptureGeometryValidator
+import com.gamelingo.mobile.core.capture.CaptureSurface
+import com.gamelingo.mobile.core.capture.CaptureSurfaceSwap
 import com.gamelingo.mobile.core.capture.DisplayGeometry
+import com.gamelingo.mobile.core.capture.SurfaceDisplay
+import com.gamelingo.mobile.core.capture.SurfaceReader
 import com.gamelingo.mobile.core.capture.FailureTracker
 import com.gamelingo.mobile.core.capture.SubtitleBlockScorer
 import com.gamelingo.mobile.core.capture.shifted
@@ -248,7 +253,7 @@ class ScreenCaptureService : Service() {
                     if (width <= 0 || height <= 0) return
                     val previous = reportedContentSize
                     reportedContentSize = width to height
-                    Log.i(TAG, "geometry: onCapturedContentResize ${width}x$height (was $previous)")
+                    geoLog("geometry: onCapturedContentResize ${width}x$height (was $previous)")
                     if (previous != width to height && captureJob?.isActive == true) {
                         serviceScope.launch {
                             runCatching { rebuildDisplayIfNeeded() }
@@ -307,8 +312,7 @@ class ScreenCaptureService : Service() {
             val before = runCatching { settingsRepository.settings.first() }.getOrNull()
             runCatching { settingsRepository.migrateLinkedRegion(land) }
             val after = runCatching { settingsRepository.settings.first() }.getOrNull()
-            Log.i(
-                TAG,
+            geoLog(
                 "migration: activeOrientation=${if (land) "landscape" else "portrait"} " +
                     "linkedBefore=${before?.linkedRegion?.encode()} linkedAfter=${after?.linkedRegion?.encode()} " +
                     "legacyPortrait=${after?.customRegions?.portrait?.encode()} legacyLandscape=${after?.customRegions?.landscape?.encode()}",
@@ -344,14 +348,13 @@ class ScreenCaptureService : Service() {
         resolved: com.gamelingo.mobile.core.region.ResolvedRegion?,
     ) {
         val g = com.gamelingo.mobile.overlay.ScreenGeometryProvider.snapshot(this, geometry.width, geometry.height)
-        Log.i(TAG, "geometry: ${describeGeometry(geometry)} insets=[${g.insetLeft},${g.insetTop},${g.insetRight},${g.insetBottom}]")
+        geoLog("geometry: ${describeGeometry(geometry)} insets=[${g.insetLeft},${g.insetTop},${g.insetRight},${g.insetBottom}]")
         if (resolved == null) {
             Log.i(TAG, "region: custom OFF; ${g.describe()}")
             return
         }
         val px = g.toCapturePixels(resolved.region)
-        Log.i(
-            TAG,
+        geoLog(
             "region: mode=${if (settings.independentRegions) "independent" else "linked"} " +
                 "source=${resolved.source} norm=${resolved.region.encode()} " +
                 "gen=${geometry.generation} capturePx=[${px.left},${px.top},${px.right},${px.bottom}] ${g.describe()}" +
@@ -400,7 +403,7 @@ class ScreenCaptureService : Service() {
                 // display facts changed: publish the new geometry atomically
                 // (new generation) without touching the surface.
                 val published = latest.copy(generation = geometryGeneration.incrementAndGet())
-                Log.i(TAG, "geometry: update gen=${published.generation} ${describeGeometry(published)}")
+                geoLog("geometry: update gen=${published.generation} ${describeGeometry(published)}")
                 readerGeneration = published.generation
                 currentGeometry = published
                 resetGeometryDependentTracking()
@@ -465,46 +468,37 @@ class ScreenCaptureService : Service() {
             PixelFormat.RGBA_8888,
             2,
         )
+        // The transaction itself (resize, surface swap, old-reader close
+        // order, recreate-on-failure, no leak, never two displays) lives in
+        // CaptureSurfaceSwap, where it is unit tested.
+        val surface = CaptureSurface<ReaderAdapter, DisplayAdapter>(
+            display = virtualDisplay?.let { DisplayAdapter(it) },
+            reader = imageReader?.let { ReaderAdapter(it) },
+        )
         try {
-            val existing = virtualDisplay
-            var reused = false
-            if (existing != null) {
-                // Reuse the live display: resize first so its output matches
-                // the new geometry, then swap the surface atomically, then
-                // retire the old reader (its surface must outlive the swap).
-                val oldReader = imageReader
-                try {
-                    existing.resize(width, height, densityDpi)
-                    existing.setSurface(reader.surface)
-                    imageReader = null
-                    runCatching { oldReader?.close() }
-                    reused = true
-                } catch (error: RuntimeException) {
-                    // The display could not be resized: drop it and create a
-                    // fresh one below instead of retrying a dead display.
-                    Log.w(TAG, "virtual display resize failed, recreating", error)
-                    runCatching { existing.release() }
-                    virtualDisplay = null
-                }
-            }
-            if (!reused) {
-                runCatching { imageReader?.close() }
-                imageReader = null
-                virtualDisplay = projection.createVirtualDisplay(
-                    "gamelingo-capture",
-                    width,
-                    height,
-                    densityDpi,
-                    DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
-                    reader.surface,
-                    null,
-                    null,
+            val outcome = CaptureSurfaceSwap.swap(
+                surface, width, height, densityDpi, ReaderAdapter(reader),
+            ) { newReader ->
+                DisplayAdapter(
+                    projection.createVirtualDisplay(
+                        "gamelingo-capture",
+                        width,
+                        height,
+                        densityDpi,
+                        DisplayManager.VIRTUAL_DISPLAY_FLAG_AUTO_MIRROR,
+                        newReader.reader.surface,
+                        null,
+                        null,
+                    ) ?: throw IllegalStateException("createVirtualDisplay returned null"),
                 )
             }
-        } catch (error: Exception) {
-            // Never leak the new reader when the display could not take it.
-            runCatching { reader.close() }
-            throw error
+            if (outcome != CaptureSurfaceSwap.Outcome.REUSED) {
+                geoLog("geometry: capture surface $outcome")
+            }
+        } finally {
+            // Whatever happened, the service's fields mirror the surface state.
+            virtualDisplay = surface.display?.display
+            imageReader = surface.reader?.reader
         }
         // Publish the reader and the geometry together, under the display
         // mutex, with a new generation: nothing sees a half-updated state.
@@ -513,8 +507,18 @@ class ScreenCaptureService : Service() {
         readerGeneration = published.generation
         currentGeometry = published
         CaptureHealth.onDisplayRebuilt()
-        Log.i(TAG, "geometry: rebuilt gen=${published.generation} ${describeGeometry(published)}")
+        geoLog("geometry: rebuilt gen=${published.generation} ${describeGeometry(published)}")
         resetGeometryDependentTracking()
+    }
+
+    private class ReaderAdapter(val reader: ImageReader) : SurfaceReader {
+        override fun close() = reader.close()
+    }
+
+    private class DisplayAdapter(val display: VirtualDisplay) : SurfaceDisplay<ReaderAdapter> {
+        override fun resize(width: Int, height: Int, densityDpi: Int) = display.resize(width, height, densityDpi)
+        override fun setSurface(reader: ReaderAdapter) = display.setSurface(reader.reader.surface)
+        override fun release() = display.release()
     }
 
     /** Only trackers that depend on frame geometry are reset; settings and the translation session are untouched. */
@@ -524,6 +528,11 @@ class ScreenCaptureService : Service() {
         deduplicator.reset()
         blockDynamicsTracker.reset()
         appliedRegionKey = null
+    }
+
+    private fun geoLog(message: String) {
+        Log.i(TAG, message)
+        com.gamelingo.mobile.core.diagnostics.GeometryDiagnostics.record(message)
     }
 
     private fun describeGeometry(g: DisplayGeometry): String {
@@ -552,12 +561,9 @@ class ScreenCaptureService : Service() {
      */
     private fun geometryProvesMapping(g: DisplayGeometry): Boolean {
         if (g.width <= 0 || g.height <= 0 || g.displayWidth <= 0 || g.displayHeight <= 0) return false
-        if (g.hasReportedContent &&
-            !com.gamelingo.mobile.core.region.DisplayToCaptureTransform.sameAspect(
-                g.displayWidth, g.displayHeight, g.contentWidth, g.contentHeight,
-            )
-        ) return false
-        return true
+        return CaptureGeometryValidator.provesFullDisplay(
+            g.displayWidth, g.displayHeight, g.width, g.height, g.contentWidth, g.contentHeight,
+        )
     }
 
     private suspend fun captureLoop() {
@@ -693,7 +699,7 @@ class ScreenCaptureService : Service() {
                 val key = "mismatch:${geometry.generation}"
                 if (appliedRegionKey != key) {
                     appliedRegionKey = key
-                    Log.w(TAG, "geometry mismatch, OCR paused: ${describeGeometry(geometry)}")
+                    geoLog("geometry mismatch, OCR paused: ${describeGeometry(geometry)}")
                     CaptureHealth.onError("capture geometry mismatch: ${describeGeometry(geometry)}")
                 }
                 return
@@ -744,7 +750,7 @@ class ScreenCaptureService : Service() {
             val regionPx = customRegion?.let { transform.toCapturePixels(it) }
             if (settings.customRegionEnabled && regionPx == null) {
                 // A conversion failure is a geometry error, not permission to scan the screen.
-                Log.w(TAG, "region could not be mapped to capture pixels; OCR paused: ${describeGeometry(geometry)}")
+                geoLog("region could not be mapped to capture pixels; OCR paused: ${describeGeometry(geometry)}")
                 return
             }
 
