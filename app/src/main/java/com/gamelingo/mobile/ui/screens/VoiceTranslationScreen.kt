@@ -34,7 +34,34 @@ fun VoiceTranslationScreen(viewModel: AudioViewModel = hiltViewModel()) {
     val model by viewModel.model.collectAsStateWithLifecycle()
     val status by viewModel.status.collectAsStateWithLifecycle()
     val micPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
-    val sizeMb = viewModel.modelSizeBytes / 1_000_000
+    VoiceTranslationContent(
+        settings = settings, model = model, status = status,
+        modelSizeBytes = viewModel.modelSizeBytes, modelLicense = modelLicense,
+        onDownload = onDownload, onCancel = onCancel, onDelete = onDelete,
+        onWifiOnly = onWifiOnly, onTts = onTts,
+        onSpeech = { on ->
+            viewModel.setSpeech(on)
+            if (on) micPermission.launch(Manifest.permission.RECORD_AUDIO)
+        },
+    )
+}
+
+/** Stateless body, so the screen can be rendered and tested without Hilt. */
+@Composable
+fun VoiceTranslationContent(
+    settings: com.gamelingo.mobile.audio.AudioSettings,
+    model: AsrModelState,
+    status: AudioTranslationController.Status,
+    modelSizeBytes: Long,
+    modelLicense: String,
+    onDownload: () -> Unit,
+    onCancel: () -> Unit,
+    onDelete: () -> Unit,
+    onWifiOnly: (Boolean) -> Unit,
+    onTts: (Boolean) -> Unit,
+    onSpeech: (Boolean) -> Unit,
+) {
+    val sizeMb = modelSizeBytes / 1_000_000
 
     SettingsColumn {
         GlCard {
@@ -64,29 +91,29 @@ fun VoiceTranslationScreen(viewModel: AudioViewModel = hiltViewModel()) {
                 style = MaterialTheme.typography.titleMedium,
                 color = GlColors.TextPrimary,
             )
-            HintText(stringResource(R.string.voice_model_info, sizeMb, viewModel.modelLicense))
+            HintText(stringResource(R.string.voice_model_info, sizeMb, modelLicense))
             when (val m = model) {
                 is AsrModelState.NotInstalled, is AsrModelState.Failed -> {
                     if (m is AsrModelState.Failed) HintText(stringResource(R.string.voice_model_failed, m.reason))
-                    TextButton(onClick = viewModel::downloadModel, modifier = Modifier.padding(top = GlSpacing.sm)) {
+                    TextButton(onClick = onDownload, modifier = Modifier.padding(top = GlSpacing.sm)) {
                         Text(stringResource(R.string.voice_model_download, sizeMb))
                     }
                 }
                 is AsrModelState.Downloading -> {
                     val pct = if (m.totalBytes > 0) (m.downloadedBytes * 100 / m.totalBytes).toInt() else 0
                     HintText(stringResource(R.string.voice_model_downloading, pct))
-                    TextButton(onClick = viewModel::cancelDownload) { Text(stringResource(R.string.voice_model_cancel)) }
+                    TextButton(onClick = onCancel) { Text(stringResource(R.string.voice_model_cancel)) }
                 }
                 is AsrModelState.Verifying -> HintText(stringResource(R.string.voice_model_verifying))
                 is AsrModelState.Installed -> {
                     HintText(stringResource(R.string.voice_model_installed, m.sizeBytes / 1_000_000))
-                    TextButton(onClick = viewModel::deleteModel) { Text(stringResource(R.string.voice_model_delete)) }
+                    TextButton(onClick = onDelete) { Text(stringResource(R.string.voice_model_delete)) }
                 }
             }
             SwitchCard(
                 title = stringResource(R.string.voice_wifi_only),
                 checked = settings.wifiOnlyDownload,
-                onCheckedChange = viewModel::setWifiOnly,
+                onCheckedChange = onWifiOnly,
             )
         }
 
@@ -94,16 +121,13 @@ fun VoiceTranslationScreen(viewModel: AudioViewModel = hiltViewModel()) {
             title = stringResource(R.string.voice_enable_title),
             subtitle = stringResource(R.string.voice_enable_sub),
             checked = settings.speechEnabled,
-            onCheckedChange = { on ->
-                viewModel.setSpeech(on)
-                if (on) micPermission.launch(Manifest.permission.RECORD_AUDIO)
-            },
+            onCheckedChange = onSpeech,
         )
         SwitchCard(
             title = stringResource(R.string.voice_tts_title),
             subtitle = stringResource(R.string.voice_tts_sub),
             checked = settings.ttsEnabled,
-            onCheckedChange = viewModel::setTts,
+            onCheckedChange = onTts,
         )
         GlCard {
             HintText(stringResource(R.string.voice_limits))
