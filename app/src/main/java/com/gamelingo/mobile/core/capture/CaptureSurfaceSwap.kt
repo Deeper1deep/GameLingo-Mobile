@@ -74,6 +74,35 @@ object CaptureSurfaceSwap {
     }
 }
 
+/**
+ * Where the captured pixels come from, as far as the platform lets us prove it.
+ * Sources: MediaProjectionManager.createScreenCaptureIntent(MediaProjectionConfig)
+ * and MediaProjectionConfig.createConfigForDefaultDisplay() (API 34): the consent
+ * UI is limited to the default display, so a single-app capture cannot be chosen.
+ */
+enum class CaptureProvenance {
+    /** Before API 34 the only capture the system offers is the whole display. */
+    PRE_34_FULL_DISPLAY,
+
+    /** API 34+, consent requested with createConfigForDefaultDisplay(): the whole default display. */
+    API34_DEFAULT_DISPLAY_REQUESTED,
+
+    /** API 34+ with the user-choice picker: the user may have picked one app window. Never proven. */
+    API34_USER_CHOICE_UNPROVEN,
+    ;
+
+    companion object {
+        /** The launcher and the service share this so they cannot drift apart. */
+        const val DEFAULT_DISPLAY_REQUESTED = true
+
+        fun forSdk(sdkInt: Int, defaultDisplayRequested: Boolean = DEFAULT_DISPLAY_REQUESTED): CaptureProvenance = when {
+            sdkInt < 34 -> PRE_34_FULL_DISPLAY
+            defaultDisplayRequested -> API34_DEFAULT_DISPLAY_REQUESTED
+            else -> API34_USER_CHOICE_UNPROVEN
+        }
+    }
+}
+
 /** Decides whether the captured content provably is the whole display. */
 object CaptureGeometryValidator {
     /** Size agreement needed to call a reported content size "the display": 1% per axis. */
@@ -83,16 +112,20 @@ object CaptureGeometryValidator {
         a > 0 && b > 0 && kotlin.math.abs(a - b).toFloat() / maxOf(a, b) <= SIZE_TOLERANCE
 
     /**
-     * True when the frame mirrors the whole display. With no reported content
-     * (older Android, or no callback yet) the frame is the display we built it
-     * from. With a reported content size it must equal the display size (or
-     * the frame size we scaled it to) on BOTH axes: a single window of the
-     * same aspect but another size is not accepted as the full display.
+     * True only when BOTH hold:
+     * 1. provenance says the capture is the whole display (requested or pre-34), and
+     * 2. a reported content size, when present, equals the display size or the
+     *    frame size on both axes (so a resize we have not caught up with pauses).
+     * The user-choice picker on API 34+ is never proven, whatever sizes arrive.
+     * No report yet is accepted only under a proven provenance: the system
+     * has been asked for the whole display, not guessed from the size.
      */
     fun provesFullDisplay(
         displayW: Int, displayH: Int, frameW: Int, frameH: Int,
         contentW: Int, contentH: Int,
+        provenance: CaptureProvenance = CaptureProvenance.PRE_34_FULL_DISPLAY,
     ): Boolean {
+        if (provenance == CaptureProvenance.API34_USER_CHOICE_UNPROVEN) return false
         if (displayW <= 0 || displayH <= 0 || frameW <= 0 || frameH <= 0) return false
         if (contentW <= 0 || contentH <= 0) return true
         val matchesDisplay = near(contentW, displayW) && near(contentH, displayH)

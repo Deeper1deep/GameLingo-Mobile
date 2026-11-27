@@ -1,5 +1,6 @@
 package com.gamelingo.mobile.core.capture
 
+import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -40,5 +41,31 @@ class CaptureGeometryValidatorTest {
     @Test fun `invalid dimensions never prove anything`() {
         assertFalse(CaptureGeometryValidator.provesFullDisplay(0, 2400, 1080, 2400, 0, 0))
         assertFalse(CaptureGeometryValidator.provesFullDisplay(1080, 2400, 0, 0, 1080, 2400))
+    }
+
+    private fun with(p: CaptureProvenance, cw: Int, ch: Int) =
+        CaptureGeometryValidator.provesFullDisplay(1080, 2400, 1080, 2400, cw, ch, p)
+
+    @Test fun `api 34 default display request proves the display when no content size has arrived yet`() {
+        assertTrue(with(CaptureProvenance.API34_DEFAULT_DISPLAY_REQUESTED, 0, 0))
+    }
+
+    @Test fun `api 34 default display request still pauses on a reported size that matches nothing`() {
+        assertFalse(with(CaptureProvenance.API34_DEFAULT_DISPLAY_REQUESTED, 720, 1600))
+        assertFalse(with(CaptureProvenance.API34_DEFAULT_DISPLAY_REQUESTED, 1080, 1700))
+    }
+
+    @Test fun `api 34 user choice is never proven even when sizes match or are missing`() {
+        assertFalse(with(CaptureProvenance.API34_USER_CHOICE_UNPROVEN, 0, 0))
+        assertFalse(with(CaptureProvenance.API34_USER_CHOICE_UNPROVEN, 1080, 2400))
+    }
+
+    @Test fun `provenance follows the sdk level and the request`() {
+        assertEquals(CaptureProvenance.PRE_34_FULL_DISPLAY, CaptureProvenance.forSdk(33))
+        assertEquals(CaptureProvenance.API34_DEFAULT_DISPLAY_REQUESTED, CaptureProvenance.forSdk(34))
+        assertEquals(CaptureProvenance.API34_DEFAULT_DISPLAY_REQUESTED, CaptureProvenance.forSdk(36))
+        assertEquals(CaptureProvenance.API34_USER_CHOICE_UNPROVEN, CaptureProvenance.forSdk(34, defaultDisplayRequested = false))
+        assertEquals(CaptureProvenance.PRE_34_FULL_DISPLAY, CaptureProvenance.forSdk(30, defaultDisplayRequested = false))
+        assertTrue(CaptureProvenance.DEFAULT_DISPLAY_REQUESTED)
     }
 }

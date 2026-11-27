@@ -143,7 +143,18 @@ fun rememberSessionController(): SessionController {
                 } else {
                     val projectionManager =
                         context.getSystemService(MediaProjectionManager::class.java)
-                    projectionLauncher.launch(projectionManager.createScreenCaptureIntent())
+                    // API 34+: ask for the whole default display so the OCR region mapping is
+                    // provably against the full screen (no single-app window can be picked).
+                    val intent = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE &&
+                        com.gamelingo.mobile.core.capture.CaptureProvenance.DEFAULT_DISPLAY_REQUESTED
+                    ) {
+                        projectionManager.createScreenCaptureIntent(
+                            android.media.projection.MediaProjectionConfig.createConfigForDefaultDisplay(),
+                        )
+                    } else {
+                        projectionManager.createScreenCaptureIntent()
+                    }
+                    projectionLauncher.launch(intent)
                 }
             },
             stop = { context.startService(ScreenCaptureService.stopIntent(context)) },

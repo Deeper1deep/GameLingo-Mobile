@@ -246,6 +246,14 @@ object TranslationSessionBus {
         }
     }
 
+    /**
+     * The capture geometry changed (rotation, display or captured-content
+     * resize, failed surface swap). Everything shown or in flight was read
+     * against the old geometry, so every pending translation and the visible
+     * line (with its source box) are dropped. The session keeps running.
+     */
+    fun onGeometryChanged() = onRegionChanged()
+
     fun onSessionError(reason: SessionError) {
         _error.value = reason
         _state.value = SessionState.ERROR
