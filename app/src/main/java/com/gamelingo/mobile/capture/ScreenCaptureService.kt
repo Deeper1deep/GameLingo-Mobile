@@ -247,6 +247,7 @@ class ScreenCaptureService : Service() {
         }
 
         com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.clear()
+        com.gamelingo.mobile.core.capture.AppWindowRegionStore.clear()
         if (CaptureMode.appWindowActive(this)) {
             // The documented first callback gives the window size. Without it we
             // do not guess: OCR stays paused and the reason is recorded.
@@ -782,10 +783,28 @@ class ScreenCaptureService : Service() {
             // never fall through to scanning the whole screen. A missing
             // orientation inherits the linked region; nothing saved at all
             // uses the safe default band.
-            val resolved = if (settings.customRegionEnabled) {
-                settings.resolveCustomRegion(geometry.width, geometry.height)
-            } else {
-                null
+            // App-window capture reads the area only from its own session pick
+            // (frame fractions); the saved whole-display region is a different
+            // coordinate space and is never reinterpreted here.
+            val decision = com.gamelingo.mobile.core.capture.AppWindowRegionPolicy.decide(
+                CaptureMode.appWindowActive(this), settings.customRegionEnabled, reportedContentSize,
+            )
+            if (decision is com.gamelingo.mobile.core.capture.AppWindowRegionPolicy.Decision.NeedsRepick) {
+                val key = "repick:${geometry.generation}"
+                if (appliedRegionKey != key) {
+                    appliedRegionKey = key
+                    geoLog("app-window: no translation area picked for this window; OCR paused until the user picks one")
+                    android.widget.Toast.makeText(this, R.string.appwin_repick_needed, android.widget.Toast.LENGTH_LONG).show()
+                }
+                return
+            }
+            val resolved = when {
+                decision is com.gamelingo.mobile.core.capture.AppWindowRegionPolicy.Decision.UseSession ->
+                    com.gamelingo.mobile.core.region.ResolvedRegion(
+                        decision.region, com.gamelingo.mobile.core.region.RegionSource.APP_WINDOW_SESSION,
+                    )
+                settings.customRegionEnabled -> settings.resolveCustomRegion(geometry.width, geometry.height)
+                else -> null
             }
             val customRegion = resolved?.region
             var regionChanged = false
@@ -808,7 +827,7 @@ class ScreenCaptureService : Service() {
                 }
             }
             val regionPx = customRegion?.let { transform.toCapturePixels(it) }
-            if (settings.customRegionEnabled && regionPx == null) {
+            if (resolved != null && regionPx == null) {
                 // A conversion failure is a geometry error, not permission to scan the screen.
                 geoLog("region could not be mapped to capture pixels; OCR paused: ${describeGeometry(geometry)}")
                 return
@@ -1016,6 +1035,7 @@ class ScreenCaptureService : Service() {
 
     private fun stopCapture(reason: String) {
         com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.clear()
+        com.gamelingo.mobile.core.capture.AppWindowRegionStore.clear()
         // Re-entry is expected: the stop button, the projection callback, an
         // OCR failure and onDestroy can all arrive together. Only the first
         // caller runs teardown, so the first caller's reason is the one kept.

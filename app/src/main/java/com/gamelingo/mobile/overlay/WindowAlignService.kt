@@ -105,7 +105,7 @@ object AlignOutline {
         val density = context.resources.displayMetrics.density
         val frame = FrameLayout(context).apply {
             background = GradientDrawable().apply {
-                setColor(Color.argb(40, 124, 77, 255))
+                setColor(Color.TRANSPARENT) // the game must stay fully visible inside the outline
                 setStroke((3 * density).toInt(), Color.rgb(124, 77, 255))
             }
         }

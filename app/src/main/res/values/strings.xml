@@ -579,6 +579,7 @@
     <string name="notif_align_action">اظبط إطار النافذة</string>
     <string name="nav_appwindow">تصوير نافذة تطبيق</string>
     <string name="settings_appwindow_sub">اختياري: صوّر نافذة اللعبة بس بدل الشاشة كاملة</string>
+    <string name="appwin_repick_needed">وضع نافذة التطبيق: حدّد منطقة الترجمة على النافذة دي الأول. الترجمة واقفة لحد ما تحدد.</string>
     <string name="region_need_frame">وضع نافذة التطبيق: ابدأ الترجمة وانتظر ثانية عشان نعرض صورة النافذة، وبعدين افتح محدد المنطقة تاني.</string>
     <string name="region_preview_needs_session">شغّل الترجمة أولًا لعرض معاينة النص داخل المنطقة</string>
     <string name="region_saved">تم حفظ المنطقة</string>

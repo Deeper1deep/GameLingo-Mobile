@@ -230,6 +230,9 @@ enum class RegionSource {
 
     /** Nothing valid saved: the safe default band. */
     DEFAULT,
+
+    /** App-window capture: the area picked on the captured window frame this session. */
+    APP_WINDOW_SESSION,
 }
 
 data class ResolvedRegion(val region: NormalizedRegion, val source: RegionSource)

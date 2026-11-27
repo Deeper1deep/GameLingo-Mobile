@@ -90,7 +90,13 @@ class RegionSelectorService : Service() {
         // The same resolver the capture pipeline uses: what the selector shows
         // is exactly what OCR will scan (linked region, or this orientation's
         // override in independent mode).
-        val initial = settings.resolveCustomRegion(sw, sh).region
+        val appWindowMode = com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this)
+        // App-window mode starts from this session's pick or the default band, never the display-space region.
+        val initial = if (appWindowMode) {
+            com.gamelingo.mobile.core.capture.AppWindowRegionStore
+                .validFor(com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.contentSize)
+                ?: RegionEditor.DEFAULT_START
+        } else settings.resolveCustomRegion(sw, sh).region
 
         val density = resources.displayMetrics.density
         val view = RegionSelectorView(this).apply {
@@ -155,7 +161,7 @@ class RegionSelectorService : Service() {
             setPadding(pad, pad, pad, pad)
             addView(button(R.string.region_save, "#7C4DFF") { confirm() })
             addView(button(R.string.region_cancel, "#3A3350") { stopSelf() })
-            addView(button(R.string.region_use_full_screen, "#3A3350") { useFullScreen() })
+            if (!appWindowMode) addView(button(R.string.region_use_full_screen, "#3A3350") { useFullScreen() })
         }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -243,6 +249,19 @@ class RegionSelectorService : Service() {
         logSelector("selector: saved normalized=${saved?.encode()} linked=${!settings.independentRegions}")
         if (saved == null) {
             Toast.makeText(this, R.string.region_invalid, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (snapshotMode) {
+            val size = com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.contentSize
+            if (size == null) {
+                Toast.makeText(this, R.string.region_need_frame, Toast.LENGTH_SHORT).show()
+                return
+            }
+            com.gamelingo.mobile.core.capture.AppWindowRegionStore.entry =
+                com.gamelingo.mobile.core.capture.AppWindowRegionStore.Entry(saved, size.first, size.second)
+            // Saved settings are untouched: this pick lives for the session only.
+            Toast.makeText(this, R.string.region_saved, Toast.LENGTH_SHORT).show()
+            stopSelf()
             return
         }
         scope.launch {

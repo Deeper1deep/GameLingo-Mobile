@@ -190,8 +190,13 @@ class OverlayService : Service() {
 
     /** The scanned area as a box, read-only: placement never writes the region. */
     private fun regionBox(settings: AppSettings, sw: Int, sh: Int): NormalizedBox? {
-        if (!settings.customRegionEnabled) return null
-        val r = settings.resolveCustomRegion(sw, sh).region
+        val appWindow = com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this)
+        if (!settings.customRegionEnabled && !appWindow) return null
+        val r = if (appWindow) {
+            // Frame fractions from this session's pick; none valid means no region to draw.
+            com.gamelingo.mobile.core.capture.AppWindowRegionStore
+                .validFor(com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.contentSize) ?: return null
+        } else settings.resolveCustomRegion(sw, sh).region
         return toDisplay(NormalizedBox(r.left, r.top, r.right, r.bottom))
     }
 
