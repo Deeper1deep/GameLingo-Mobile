@@ -718,6 +718,10 @@ class ScreenCaptureService : Service() {
         val fullBitmap = PipelineTiming.timed("frame_decode") {
             image.toBitmap(geometry.width, geometry.height)
         }
+        if (FrameSnapshotBus.wanted) {
+            runCatching { FrameSnapshotBus.publish(fullBitmap) }
+            FrameSnapshotBus.wanted = false
+        }
         // Every bitmap this frame creates is released exactly once, whatever
         // happens below: the finally owns recycling, never the success path.
         var ocrBitmap: Bitmap? = null
