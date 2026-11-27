@@ -47,6 +47,11 @@
             android:name=".overlay.OverlayService"
             android:exported="false" />
 
+        <!-- Lets the user align the app-window outline (app-window capture only). -->
+        <service
+            android:name=".overlay.WindowAlignService"
+            android:exported="false" />
+
         <!-- Custom translation area selector, shown over the game on demand. -->
         <service
             android:name=".overlay.RegionSelectorService"

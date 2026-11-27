@@ -192,8 +192,21 @@ class OverlayService : Service() {
     private fun regionBox(settings: AppSettings, sw: Int, sh: Int): NormalizedBox? {
         if (!settings.customRegionEnabled) return null
         val r = settings.resolveCustomRegion(sw, sh).region
-        return NormalizedBox(r.left, r.top, r.right, r.bottom)
+        return toDisplay(NormalizedBox(r.left, r.top, r.right, r.bottom))
     }
+
+    /** The user's confirmed window alignment for this session, only while it still matches. */
+    private fun calibration() =
+        if (com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this)) {
+            val (dw, dh) = ScreenGeometryProvider.realDisplaySize(this)
+            com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.validFor(dw, dh)
+        } else null
+
+    /** Frame fractions to display fractions; unchanged outside app-window capture. */
+    private fun toDisplay(b: NormalizedBox): NormalizedBox =
+        if (com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this)) {
+            calibration()?.frameBoxToDisplay(b) ?: b
+        } else b
 
     /**
      * In app-window capture the original subtitle's position on the display is
@@ -202,7 +215,9 @@ class OverlayService : Service() {
      */
     private fun effectiveForCapture(p: com.gamelingo.mobile.core.overlay.TranslationPlacement) =
         com.gamelingo.mobile.core.capture.AppWindowCapture
-            .effectivePlacement(p.mode, com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this))
+            .effectivePlacement(
+                p.mode, com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this), calibrated = calibration() != null,
+            )
             .let { if (it.degraded) p.copy(mode = it.mode) else p }
 
     private fun marginPx() = (EDGE_MARGIN_DP * resources.displayMetrics.density).toInt()
@@ -230,7 +245,7 @@ class OverlayService : Service() {
             placement = effectiveForCapture(placement),
             screenWidth = sw, screenHeight = sh,
             overlayWidth = ow, overlayHeight = oh,
-            source = sourceBox,
+            source = sourceBox?.let(::toDisplay),
             ocrRegion = regionBox(settings, sw, sh),
             defaultAnchorTop = OverlayLayout.anchorsTop(settings.overlayPosition),
             marginPx = marginPx(),
@@ -261,7 +276,7 @@ class OverlayService : Service() {
         val base = PlacementResolver.resolve(
             placement = effectiveForCapture(placement), screenWidth = sw, screenHeight = sh,
             overlayWidth = view.width, overlayHeight = view.height,
-            source = sourceBox, ocrRegion = regionBox(settings, sw, sh),
+            source = sourceBox?.let(::toDisplay), ocrRegion = regionBox(settings, sw, sh),
             defaultAnchorTop = OverlayLayout.anchorsTop(settings.overlayPosition),
             marginPx = marginPx(), applyOffsets = false,
         )

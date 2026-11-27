@@ -563,6 +563,9 @@
     <string name="region_cancel">إلغاء</string>
     <string name="region_selector_hint">اسحب الزوايا لتغيير الحجم، واسحب الداخل لتحريك المنطقة</string>
     <string name="app_window_no_size">وضع نافذة التطبيق: النظام ما بعتش مقاس النافذة، فالترجمة واقفة. جرّب تختار النافذة تاني أو ارجع لوضع الشاشة كاملة.</string>
+    <string name="align_need_session">ابدأ الترجمة في وضع نافذة التطبيق الأول، لحد ما النظام يبعت مقاس النافذة.</string>
+    <string name="align_hint">اسحب الإطار من هنا فوق نافذة اللعبة بالظبط، وبعدين اضغط تأكيد.</string>
+    <string name="align_confirm">تأكيد</string>
     <string name="region_need_frame">وضع نافذة التطبيق: ابدأ الترجمة وانتظر ثانية عشان نعرض صورة النافذة، وبعدين افتح محدد المنطقة تاني.</string>
     <string name="region_preview_needs_session">شغّل الترجمة أولًا لعرض معاينة النص داخل المنطقة</string>
     <string name="region_saved">تم حفظ المنطقة</string>

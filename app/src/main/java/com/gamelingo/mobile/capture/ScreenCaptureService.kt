@@ -246,6 +246,7 @@ class ScreenCaptureService : Service() {
             return
         }
 
+        com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.clear()
         if (CaptureMode.appWindowActive(this)) {
             // The documented first callback gives the window size. Without it we
             // do not guess: OCR stays paused and the reason is recorded.
@@ -269,6 +270,7 @@ class ScreenCaptureService : Service() {
                     if (width <= 0 || height <= 0) return
                     val previous = reportedContentSize
                     reportedContentSize = width to height
+                    com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.contentSize = width to height
                     geoLog("geometry: onCapturedContentResize ${width}x$height (was $previous)")
                     if (previous != width to height && captureJob?.isActive == true) {
                         serviceScope.launch {
@@ -1013,6 +1015,7 @@ class ScreenCaptureService : Service() {
     }
 
     private fun stopCapture(reason: String) {
+        com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.clear()
         // Re-entry is expected: the stop button, the projection callback, an
         // OCR failure and onDestroy can all arrive together. Only the first
         // caller runs teardown, so the first caller's reason is the one kept.
