@@ -26,6 +26,9 @@ class UtteranceSegmenter(
         data class Finished(val utteranceId: Long, val pcm: ShortArray, val startMillis: Long, val endMillis: Long) : Event
     }
 
+    /** True while an utterance is being collected. */
+    val isActive: Boolean get() = activeId != 0L
+
     val frameSamples: Int get() = sampleRate * frameMillis / 1000
 
     private var nextId = 1L
