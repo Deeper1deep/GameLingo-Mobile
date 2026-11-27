@@ -154,7 +154,7 @@
     <string name="about_developer_cd">فتح حساب المطور على تيليجرام</string>
     <string name="about_contact_developer">تواصل مع المطور</string>
 
-    <string name="voice_experimental">تجريبي: الكود مكتوب بس لسه ما اتجربش على جهازك. جودة التعرف على الكلام في أصوات الألعاب غير معروفة.</string>
+    <string name="voice_experimental">تجريبي: لسه ما اتجرّبش على جهاز حقيقي. جودة التعرف على أصوات الألعاب غير معروفة.</string>
     <string name="voice_state_off">مقفول</string>
     <string name="voice_state_no_model">محتاج تنزّل نموذج الكلام الأول</string>
     <string name="voice_state_no_permission">محتاج إذن التسجيل (بيسجل صوت اللعبة مش المايك)</string>
@@ -162,7 +162,7 @@
     <string name="voice_state_listening">بيسمع صوت اللعبة</string>
     <string name="voice_state_failed">فشل التشغيل. الصوت ممكن يكون ممنوع التسجيل من اللعبة دي.</string>
     <string name="voice_model_title">نموذج التعرف على الكلام (إنجليزي)</string>
-    <string name="voice_model_info">حجم التنزيل %1$d ميجا تقريبًا. شغال بدون إنترنت بعد التنزيل. الرخصة: %2$s.</string>
+    <string name="voice_model_info">حجم التنزيل %1$d ميجا تقريبًا. شغال بدون إنترنت بعد التنزيل.\nالرخصة: \u2068%2$s\u2069</string>
     <string name="voice_model_download">نزّل النموذج (%1$d ميجا)</string>
     <string name="voice_model_cancel">إلغاء التنزيل</string>
     <string name="voice_model_downloading">بينزّل… %1$d%%</string>

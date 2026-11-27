@@ -1,5 +1,7 @@
 package com.gamelingo.mobile.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -33,12 +35,14 @@ class VoiceScreenRenderTest {
     fun `the voice translation screen renders opt-in and off by default`() {
         rule.setContent {
             GameLingoTheme {
+              androidx.compose.foundation.layout.Box(androidx.compose.ui.Modifier.fillMaxSize().background(androidx.compose.material3.MaterialTheme.colorScheme.background)) {
                 VoiceTranslationContent(
                     settings = com.gamelingo.mobile.audio.AudioSettings(), model = com.gamelingo.mobile.audio.AsrModelState.NotInstalled,
                     status = com.gamelingo.mobile.audio.AudioTranslationController.Status.OFF,
                     modelSizeBytes = 41_205_931L, modelLicense = "Apache 2.0",
                     onDownload = {}, onCancel = {}, onDelete = {}, onWifiOnly = {}, onTts = {}, onSpeech = {},
                 )
+              }
             }
         }
         // Status pills pulse forever, so Compose never reports idle. Freeze the test clock

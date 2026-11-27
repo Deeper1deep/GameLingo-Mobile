@@ -23,6 +23,17 @@ object SubtitleBlockScorer {
 
     const val MIN_SCORE = 0.25f
 
+    /**
+     * A block whose recogniser confidence is below this is treated as obviously
+     * corrupted and never becomes (or joins) a subtitle. Deliberately low: only
+     * clear garbage is rejected. A missing confidence (null) is never rejected.
+     * The raw OCR output is untouched, so diagnostics still see it.
+     */
+    const val MIN_CONFIDENCE = 0.3f
+
+    fun isReadable(block: RecognizedBlock): Boolean =
+        block.confidence == null || block.confidence >= MIN_CONFIDENCE
+
     /** Weight of the temporal signal: static blocks keep [STATIC_KEEP] of their score. */
     private const val STATIC_KEEP = 0.35f
 
@@ -75,6 +86,7 @@ object SubtitleBlockScorer {
         dynamics: BlockDynamicsTracker,
     ): RecognizedBlock? =
         blocks
+            .filter(::isReadable)
             .map { it to score(it, frameWidth, frameHeight, dynamics) }
             .filter { (_, score) -> score >= MIN_SCORE }
             .maxWithOrNull(
@@ -103,7 +115,7 @@ object SubtitleBlockScorer {
         while (grew) {
             grew = false
             for (block in blocks) {
-                if (block in group || block.text.isBlank()) continue
+                if (block in group || block.text.isBlank() || !isReadable(block)) continue
                 if (group.any { continuesSameSubtitle(block, it) }) {
                     group.add(block)
                     grew = true
