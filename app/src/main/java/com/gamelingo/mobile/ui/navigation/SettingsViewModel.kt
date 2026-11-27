@@ -93,14 +93,20 @@ class SettingsViewModel @Inject constructor(
         viewModelScope.launch { repository.setArabicTranslationMode(mode) }
 
     /** Pin a term the user wants rendered their way (wins over the bundled dictionary). */
-    fun addUserGlossaryTerm(en: String, ar: String) = viewModelScope.launch {
+    fun addUserGlossaryTerm(
+        en: String,
+        ar: String,
+        game: String = "",
+        pronunciation: String = "",
+        note: String = "",
+    ) = viewModelScope.launch {
         val source = en.trim()
         val rendering = ar.trim()
         if (source.isEmpty() || rendering.isEmpty()) return@launch
         val current = repository.settings.first().userGlossaryTerms
             .filterNot { it.en.equals(source, ignoreCase = true) }
         repository.setUserGlossaryTerms(
-            current + com.gamelingo.mobile.data.settings.UserGlossaryTerm(source, rendering),
+            current + com.gamelingo.mobile.data.settings.UserGlossaryTerm(source, rendering, game.trim(), pronunciation.trim(), note.trim()),
         )
     }
 

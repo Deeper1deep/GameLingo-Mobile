@@ -109,9 +109,9 @@ fun OverlayContent(
         com.gamelingo.mobile.core.overlay.PlacementAlign.RIGHT -> Alignment.End
     }
 
-    // Stop gesture lives on the subtitle bar itself. It needs a long press,
-    // not one tap: stray gameplay touches reach this bar, and one tap ending
-    // the session is exactly how accidental stops happen.
+    // A tap on the bar only shows how to move and lock it. Nothing on the bar
+    // stops the session (the long-press stop was removed on the user's
+    // request); stopping uses the explicit stop control.
     val stoppable = state.sessionRunning && onStopSession != null
     var showStopHint by remember { mutableStateOf(false) }
     if (showStopHint) {
@@ -126,9 +126,8 @@ fun OverlayContent(
         modifier = Modifier
             .then(
                 if (stoppable) {
-                    // A tap only explains the stop gesture. The hold-to-stop
-                    // itself is handled by the window root (DragFrameLayout),
-                    // so it can never fire in the middle of a drag.
+                    // A tap only explains the drag and double-tap-lock
+                    // gestures, which the window root (DragFrameLayout) owns.
                     Modifier.clickable(
                         onClickLabel = stopClickLabel,
                         onClick = { showStopHint = true },
@@ -160,7 +159,7 @@ fun OverlayContent(
             androidx.compose.foundation.layout.Arrangement.Top
         },
     ) {
-        // A tap on the bar only explains the stop gesture, briefly and only
+        // A tap on the bar only explains the drag/lock gestures, briefly and only
         // on demand: no permanent label sits next to the subtitle.
         if (showStopHint) {
             Text(

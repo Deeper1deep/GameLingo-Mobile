@@ -117,6 +117,18 @@ fun SettingsHubScreen(
             subtitle = stringResource(R.string.settings_voice_sub),
             onClick = { onNavigate(GameLingoRoutes.VOICE) },
         )
+        GlNavRow(
+            icon = Icons.Filled.PlayArrow,
+            title = stringResource(R.string.nav_appwindow),
+            subtitle = stringResource(R.string.settings_appwindow_sub),
+            onClick = { onNavigate(GameLingoRoutes.APP_WINDOW) },
+        )
+        GlNavRow(
+            icon = Icons.Filled.PlayArrow,
+            title = stringResource(R.string.nav_engine_status),
+            subtitle = stringResource(R.string.settings_engine_status_sub),
+            onClick = { onNavigate(GameLingoRoutes.ENGINE_STATUS) },
+        )
 
         SectionHeader(stringResource(R.string.settings_section_app))
         GlCard {

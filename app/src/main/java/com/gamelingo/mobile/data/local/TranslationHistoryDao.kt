@@ -27,6 +27,19 @@ interface TranslationHistoryDao {
     @Query("SELECT COUNT(*) FROM translation_history")
     fun observeCount(): Flow<Int>
 
+    @Query(
+        "UPDATE translation_history SET source_text = :source, translated_text = :translated, " +
+            "engine = :engine, was_cached = :cached, created_at = :createdAt WHERE id = :id",
+    )
+    suspend fun updateEntry(id: Long, source: String, translated: String, engine: String, cached: Boolean, createdAt: Long)
+
+    /** Id of a row with exactly this pair written at or after [since], or null. */
+    @Query(
+        "SELECT id FROM translation_history WHERE source_text = :source " +
+            "AND translated_text = :translated AND created_at >= :since LIMIT 1",
+    )
+    suspend fun findRecentDuplicate(source: String, translated: String, since: Long): Long?
+
     @Query("DELETE FROM translation_history WHERE id = :id")
     suspend fun deleteById(id: Long)
 

@@ -157,4 +157,42 @@ class SubtitleBlockScorerTest {
         )
         assertTrue(subtitleScore > watermarkScore * 4)
     }
+
+    @Test
+    fun `an obviously corrupted low confidence block is rejected`() {
+        val bad = subtitle("#\$%^& *~ #@!").copy(confidence = 0.1f)
+        val out = SubtitleBlockScorer.selectSubtitle(listOf(bad), frameWidth, frameHeight, BlockDynamicsTracker())
+        assertNull(out)
+    }
+
+    @Test
+    fun `a missing or normal confidence is never rejected`() {
+        val none = subtitle("Hello there my friend")
+        val good = subtitle("Hello there my friend").copy(confidence = 0.8f)
+        assertTrue(SubtitleBlockScorer.selectSubtitle(listOf(none), frameWidth, frameHeight, BlockDynamicsTracker()) != null)
+        assertTrue(SubtitleBlockScorer.selectSubtitle(listOf(good), frameWidth, frameHeight, BlockDynamicsTracker()) != null)
+    }
+
+    @Test
+    fun `a corrupted line does not join a good subtitle and three lines keep reading order`() {
+        val l1 = RecognizedBlock("First line of speech", PixelRect(880, 900, 1520, 955))
+        val l2 = RecognizedBlock("second line goes here", PixelRect(880, 960, 1520, 1015))
+        val l3 = RecognizedBlock("and a third one", PixelRect(880, 1020, 1520, 1075))
+        val junk = RecognizedBlock("#$%^&*", PixelRect(880, 840, 1520, 895), confidence = 0.05f)
+        val out = SubtitleBlockScorer.selectSubtitle(listOf(l3, junk, l1, l2), frameWidth, frameHeight, BlockDynamicsTracker())
+        assertEquals("First line of speech second line goes here and a third one", out)
+    }
+
+    @Test
+    fun `readable text is kept even when confidence is low`() {
+        val stylised = subtitle("I told you not to touch it").copy(confidence = 0.05f)
+        assertEquals("I told you not to touch it",
+            SubtitleBlockScorer.selectSubtitle(listOf(stylised), frameWidth, frameHeight, BlockDynamicsTracker()))
+    }
+
+    @Test
+    fun `garbled looking text with unknown confidence is not rejected by the gate`() {
+        val unknown = subtitle("#\$%^& *~ #@!")
+        assertTrue(SubtitleBlockScorer.isReadable(unknown))
+    }
 }

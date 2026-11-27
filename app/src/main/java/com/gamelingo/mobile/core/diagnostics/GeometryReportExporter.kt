@@ -16,7 +16,7 @@ object GeometryReportExporter {
         val file = File(dir, FILE_NAME)
         val header = "app=${context.packageName} sdk=${android.os.Build.VERSION.SDK_INT} " +
             "device=${android.os.Build.MANUFACTURER} ${android.os.Build.MODEL} " +
-            "provenance=${com.gamelingo.mobile.core.capture.CaptureProvenance.forSdk(android.os.Build.VERSION.SDK_INT)}"
+            "provenance=${com.gamelingo.mobile.core.capture.CaptureProvenance.forSdk(android.os.Build.VERSION.SDK_INT, !com.gamelingo.mobile.capture.CaptureMode.appWindowActive(context))} picker=${com.gamelingo.mobile.capture.CaptureMode.appWindowActive(context)}"
         file.writeText(GeometryDiagnostics.export(header))
         return file
     }

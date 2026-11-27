@@ -125,7 +125,14 @@ data class AppSettings(
 
 /** One user-pinned term: [en] must be rendered [ar], in both Arabic modes. */
 @kotlinx.serialization.Serializable
-data class UserGlossaryTerm(val en: String, val ar: String)
+data class UserGlossaryTerm(
+    val en: String,
+    val ar: String,
+    /** Optional metadata the user keeps with the term. Not sent to the model. */
+    val game: String = "",
+    val pronunciation: String = "",
+    val note: String = "",
+)
 
 interface SettingsRepository {
     val settings: Flow<AppSettings>

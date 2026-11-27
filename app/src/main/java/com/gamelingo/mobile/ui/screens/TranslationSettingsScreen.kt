@@ -1,5 +1,6 @@
 package com.gamelingo.mobile.ui.screens
 
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -31,6 +32,31 @@ fun TranslationSettingsScreen(
     viewModel: SettingsViewModel = hiltViewModel(),
 ) {
     val settings by viewModel.settings.collectAsStateWithLifecycle()
+    TranslationSettingsContent(
+        settings = settings,
+        onArabicMode = viewModel::setArabicTranslationMode,
+        onRemoveTerm = viewModel::removeUserGlossaryTerm,
+        onAddTerm = viewModel::addUserGlossaryTerm,
+        onContextLines = viewModel::setContextLines,
+        onShowOriginal = viewModel::setShowOriginalText,
+        suggestions = com.gamelingo.mobile.core.context.SuggestionPool
+            .suggestions(settings.userGlossaryTerms.map { it.en }),
+        onDismissSuggestion = com.gamelingo.mobile.core.context.SuggestionPool::dismiss,
+    )
+}
+
+/** Stateless body so the screen can be rendered and tested without Hilt. */
+@Composable
+fun TranslationSettingsContent(
+    settings: com.gamelingo.mobile.data.settings.AppSettings,
+    onArabicMode: (com.gamelingo.mobile.data.settings.ArabicTranslationMode) -> Unit,
+    onRemoveTerm: (String) -> Unit,
+    onAddTerm: (String, String, String, String, String) -> Unit,
+    onContextLines: (Int) -> Unit,
+    onShowOriginal: (Boolean) -> Unit,
+    suggestions: List<String> = emptyList(),
+    onDismissSuggestion: (String) -> Unit = {},
+) {
     SettingsColumn {
         SectionHeader(stringResource(R.string.tr_languages_title))
         GlCard {
@@ -62,7 +88,7 @@ fun TranslationSettingsScreen(
                         },
                     )
                 },
-                onSelect = viewModel::setArabicTranslationMode,
+                onSelect = onArabicMode,
             )
             HintText(
                 text = stringResource(
@@ -91,6 +117,7 @@ fun TranslationSettingsScreen(
         // wins over the bundled dictionary, in both Arabic modes.
         SectionHeader(stringResource(R.string.user_glossary_title))
         GlCard {
+            var editing by remember { mutableStateOf<com.gamelingo.mobile.data.settings.UserGlossaryTerm?>(null) }
             if (settings.userGlossaryTerms.isEmpty()) {
                 HintText(stringResource(R.string.user_glossary_empty))
             } else {
@@ -103,7 +130,10 @@ fun TranslationSettingsScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f),
                         )
-                        TextButton(onClick = { viewModel.removeUserGlossaryTerm(term.en) }) {
+                        TextButton(onClick = { editing = term }) {
+                            Text(stringResource(R.string.user_glossary_edit))
+                        }
+                        TextButton(onClick = { onRemoveTerm(term.en) }) {
                             Text(stringResource(R.string.user_glossary_remove))
                         }
                     }
@@ -111,6 +141,26 @@ fun TranslationSettingsScreen(
             }
             var newEn by remember { mutableStateOf("") }
             var newAr by remember { mutableStateOf("") }
+            var newGame by remember { mutableStateOf("") }
+            var newPron by remember { mutableStateOf("") }
+            var newNote by remember { mutableStateOf("") }
+            editing?.let { t ->
+                newEn = t.en; newAr = t.ar; newGame = t.game; newPron = t.pronunciation; newNote = t.note
+                editing = null
+            }
+            if (suggestions.isNotEmpty()) {
+                HintText(stringResource(R.string.user_glossary_suggest_hint), modifier = Modifier.padding(top = GlSpacing.md))
+                suggestions.forEach { term ->
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Text(text = term, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { newEn = term }) { Text(stringResource(R.string.user_glossary_suggest_use)) }
+                        TextButton(onClick = { onDismissSuggestion(term) }) { Text(stringResource(R.string.user_glossary_suggest_dismiss)) }
+                    }
+                }
+            }
             OutlinedTextField(
                 value = newEn,
                 onValueChange = { newEn = it },
@@ -125,11 +175,34 @@ fun TranslationSettingsScreen(
                 singleLine = true,
                 modifier = Modifier.padding(top = GlSpacing.sm),
             )
+            OutlinedTextField(
+                value = newGame,
+                onValueChange = { newGame = it },
+                label = { Text(stringResource(R.string.user_glossary_game_hint)) },
+                singleLine = true,
+                modifier = Modifier.padding(top = GlSpacing.sm),
+            )
+            OutlinedTextField(
+                value = newPron,
+                onValueChange = { newPron = it },
+                label = { Text(stringResource(R.string.user_glossary_pron_hint)) },
+                singleLine = true,
+                modifier = Modifier.padding(top = GlSpacing.sm),
+            )
+            OutlinedTextField(
+                value = newNote,
+                onValueChange = { newNote = it },
+                label = { Text(stringResource(R.string.user_glossary_note_hint)) },
+                modifier = Modifier.padding(top = GlSpacing.sm),
+            )
             TextButton(
                 onClick = {
-                    viewModel.addUserGlossaryTerm(newEn, newAr)
+                    onAddTerm(newEn, newAr, newGame, newPron, newNote)
                     newEn = ""
                     newAr = ""
+                    newGame = ""
+                    newPron = ""
+                    newNote = ""
                 },
                 enabled = newEn.isNotBlank() && newAr.isNotBlank(),
                 modifier = Modifier.padding(top = GlSpacing.sm),
@@ -143,7 +216,7 @@ fun TranslationSettingsScreen(
             subtitle = stringResource(R.string.tr_context_sub),
             checked = settings.contextLines > 0,
             onCheckedChange = { enabled ->
-                viewModel.setContextLines(
+                onContextLines(
                     if (enabled) SettingsConstraints.DEFAULT_CONTEXT_LINES else 0,
                 )
             },
@@ -154,15 +227,18 @@ fun TranslationSettingsScreen(
                 valueLabel = stringResource(R.string.ai_context_lines_value, settings.contextLines),
                 value = settings.contextLines.toFloat(),
                 valueRange = 1f..SettingsConstraints.MAX_CONTEXT_LINES.toFloat(),
-                onValueChange = { viewModel.setContextLines(it.toInt()) },
+                onValueChange = { onContextLines(it.toInt()) },
                 subtitle = stringResource(R.string.ai_context_hint),
             )
+            TextButton(onClick = { com.gamelingo.mobile.core.session.TranslationSessionBus.requestContextReset() }) {
+                Text(stringResource(R.string.tr_context_reset))
+            }
         }
 
         SwitchCard(
             title = stringResource(R.string.translation_show_original),
             checked = settings.showOriginalText,
-            onCheckedChange = viewModel::setShowOriginalText,
+            onCheckedChange = onShowOriginal,
         )
     }
 }

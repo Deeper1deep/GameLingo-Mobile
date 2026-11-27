@@ -52,6 +52,16 @@ class RegionSelectorService : Service() {
     private var selector: RegionSelectorView? = null
     private var hint: TextView? = null
     private var settings = AppSettings()
+    private var snapshotMode = false
+
+    private suspend fun awaitSnapshot(): android.graphics.Bitmap? {
+        com.gamelingo.mobile.capture.FrameSnapshotBus.wanted = true
+        repeat(30) {
+            com.gamelingo.mobile.capture.FrameSnapshotBus.take()?.let { return it }
+            kotlinx.coroutines.delay(100)
+        }
+        return null
+    }
 
     override fun onBind(intent: Intent?): IBinder? = null
 
@@ -80,7 +90,13 @@ class RegionSelectorService : Service() {
         // The same resolver the capture pipeline uses: what the selector shows
         // is exactly what OCR will scan (linked region, or this orientation's
         // override in independent mode).
-        val initial = settings.resolveCustomRegion(sw, sh).region
+        val appWindowMode = com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this)
+        // App-window mode starts from this session's pick or the default band, never the display-space region.
+        val initial = if (appWindowMode) {
+            com.gamelingo.mobile.core.capture.AppWindowRegionStore
+                .validFor(com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.contentSize)
+                ?: RegionEditor.DEFAULT_START
+        } else settings.resolveCustomRegion(sw, sh).region
 
         val density = resources.displayMetrics.density
         val view = RegionSelectorView(this).apply {
@@ -90,7 +106,35 @@ class RegionSelectorService : Service() {
         selector = view
         val container = FrameLayout(this).apply {
             layoutDirection = View.LAYOUT_DIRECTION_RTL
-            addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+        }
+        // App-window mode: the rectangle is drawn on a snapshot of the captured
+        // window and saved as fractions of that frame. Without a snapshot we do
+        // not guess from the display: we ask the user to start the session.
+        val appWindow = com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this)
+        if (appWindow) {
+            val frame = awaitSnapshot()
+            if (frame == null) {
+                Toast.makeText(this, R.string.region_need_frame, Toast.LENGTH_LONG).show()
+                stopSelf()
+                return
+            }
+            val stage = FrameLayout(this)
+            stage.addView(
+                android.widget.ImageView(this).apply {
+                    setImageBitmap(frame)
+                    scaleType = android.widget.ImageView.ScaleType.FIT_XY
+                },
+                ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT),
+            )
+            stage.addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
+            val fit = minOf(sw.toFloat() / frame.width, sh.toFloat() / frame.height)
+            container.addView(
+                stage,
+                FrameLayout.LayoutParams((frame.width * fit).toInt(), (frame.height * fit).toInt(), Gravity.CENTER),
+            )
+            snapshotMode = true
+        } else {
+            container.addView(view, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         }
 
         val hintView = TextView(this).apply {
@@ -117,7 +161,7 @@ class RegionSelectorService : Service() {
             setPadding(pad, pad, pad, pad)
             addView(button(R.string.region_save, "#7C4DFF") { confirm() })
             addView(button(R.string.region_cancel, "#3A3350") { stopSelf() })
-            addView(button(R.string.region_use_full_screen, "#3A3350") { useFullScreen() })
+            if (!appWindowMode) addView(button(R.string.region_use_full_screen, "#3A3350") { useFullScreen() })
         }
         val column = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -195,13 +239,29 @@ class RegionSelectorService : Service() {
                 "coversDisplay=${loc[0] <= 1 && loc[1] <= 1 && view.width >= sw - 1 && view.height >= sh - 1}",
         )
         // Window pixels -> display fractions, the window origin added once.
-        val saved = geometry.selectorToNormalized(
+        val saved = if (snapshotMode) {
+            // Already fractions of the captured frame; no display mapping applies.
+            r.takeIf { it.right > it.left && it.bottom > it.top }
+        } else geometry.selectorToNormalized(
             r.left * w, r.top * h, r.right * w, r.bottom * h,
             loc[0].toFloat(), loc[1].toFloat(),
         )
         logSelector("selector: saved normalized=${saved?.encode()} linked=${!settings.independentRegions}")
         if (saved == null) {
             Toast.makeText(this, R.string.region_invalid, Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (snapshotMode) {
+            val size = com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.contentSize
+            if (size == null) {
+                Toast.makeText(this, R.string.region_need_frame, Toast.LENGTH_SHORT).show()
+                return
+            }
+            com.gamelingo.mobile.core.capture.AppWindowRegionStore.entry =
+                com.gamelingo.mobile.core.capture.AppWindowRegionStore.Entry(saved, size.first, size.second)
+            // Saved settings are untouched: this pick lives for the session only.
+            Toast.makeText(this, R.string.region_saved, Toast.LENGTH_SHORT).show()
+            stopSelf()
             return
         }
         scope.launch {
@@ -259,6 +319,7 @@ class RegionSelectorService : Service() {
     }
 
     override fun onDestroy() {
+        com.gamelingo.mobile.capture.FrameSnapshotBus.clear()
         RegionPreviewBus.setCandidate(null)
         runCatching { root?.let { windowManager?.removeView(it) } }
         root = null

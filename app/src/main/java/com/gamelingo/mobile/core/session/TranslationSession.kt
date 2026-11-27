@@ -177,6 +177,13 @@ object TranslationSessionBus {
     /** The generation of the currently running (or just-stopped) session. */
     fun currentGeneration(): Long = generationCounter.get()
 
+    private val _contextResetToken = MutableStateFlow(0L)
+
+    /** Bumps each time the user asks to forget the remembered dialogue context. */
+    val contextResetToken: StateFlow<Long> = _contextResetToken.asStateFlow()
+
+    fun requestContextReset() { _contextResetToken.value = _contextResetToken.value + 1 }
+
     private val _translatedLine = MutableStateFlow<TranslatedLine?>(null)
     val translatedLine: StateFlow<TranslatedLine?> = _translatedLine.asStateFlow()
 
@@ -307,7 +314,30 @@ object TranslationSessionBus {
 
     /** True while [subtitleId] is the live appearance (always true for the untracked id 0). */
     fun isSubtitleActive(subtitleId: Long): Boolean =
-        subtitleId == NO_ID || presence.isActive(subtitleId)
+        subtitleId == NO_ID || isAudioId(subtitleId) || presence.isActive(subtitleId)
+
+    /**
+     * A finished speech utterance, to be translated like a subtitle line. It
+     * has its own negative id (never the screen-text presence tracker), so it
+     * can neither replace the tracked on-screen line nor be hidden by the
+     * on-screen-text heartbeat. The audio controller hides it after its display time.
+     */
+    fun onAudioLine(text: String, capturedAtMillis: Long, utteranceId: Long): Long {
+        val id = AUDIO_ID_BASE - utteranceId
+        synchronized(lifecycleLock) {
+            _ocrLines.tryEmit(
+                OcrLine(text = text, capturedAtMillis = capturedAtMillis, subtitleId = id, generation = generationCounter.get()),
+            )
+        }
+        return id
+    }
+
+    /** Hides the audio line [subtitleId] if it is still the one shown. */
+    fun clearAudioLine(subtitleId: Long) {
+        synchronized(lifecycleLock) {
+            if (_translatedLine.value?.subtitleId == subtitleId) _translatedLine.value = null
+        }
+    }
 
     /**
      * Shows a finished translation - unless its source is gone, was replaced
@@ -328,7 +358,9 @@ object TranslationSessionBus {
         generation: Long = NO_ID,
     ): Boolean = synchronized(lifecycleLock) {
         if (generation != NO_ID && generation != generationCounter.get()) return false
-        val accepted = if (subtitleId != NO_ID) {
+        val accepted = if (isAudioId(subtitleId)) {
+            true
+        } else if (subtitleId != NO_ID) {
             presence.acceptSubtitle(subtitleId)
         } else {
             presence.acceptTranslation(original)
@@ -430,4 +462,9 @@ object TranslationSessionBus {
 
     /** "No subtitle id / generation": legacy callers that do not track appearances. */
     const val NO_ID = 0L
+
+    /** Ids at or below this belong to speech utterances. */
+    const val AUDIO_ID_BASE = -1000L
+
+    fun isAudioId(id: Long): Boolean = id <= AUDIO_ID_BASE
 }

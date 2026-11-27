@@ -171,6 +171,8 @@ dependencies {
 
     implementation(libs.mlkit.text.recognition)
     implementation(libs.mlkit.translate)
+    // Offline speech recognition (Apache 2.0). The model is NOT bundled: the user downloads it.
+    implementation(libs.vosk.android)
     implementation(libs.onnxruntime.mobile)
     implementation(libs.litertlm.android)
 

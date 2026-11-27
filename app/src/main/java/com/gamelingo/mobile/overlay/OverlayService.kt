@@ -161,14 +161,13 @@ class OverlayService : Service() {
             windowPosition = { PlacementPoint(params.x, params.y) }
             screenSize = { this@OverlayService.screenSize() }
             isLocked = { settingsState.value.overlayStyle.positionLocked }
-            stopEnabled = { uiState.value.sessionRunning }
             onDragMove = { point ->
                 params.x = point.left
                 params.y = point.top
                 runCatching { windowManager?.updateViewLayout(this, params) }
             }
             onDragEnd = { saveDroppedPosition(this, params) }
-            onHoldStop = { stopSessionFromOverlay() }
+            onDoubleTap = { toggleLock() }
         }
 
         return try {
@@ -191,10 +190,40 @@ class OverlayService : Service() {
 
     /** The scanned area as a box, read-only: placement never writes the region. */
     private fun regionBox(settings: AppSettings, sw: Int, sh: Int): NormalizedBox? {
-        if (!settings.customRegionEnabled) return null
-        val r = settings.resolveCustomRegion(sw, sh).region
-        return NormalizedBox(r.left, r.top, r.right, r.bottom)
+        val appWindow = com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this)
+        if (!settings.customRegionEnabled && !appWindow) return null
+        val r = if (appWindow) {
+            // Frame fractions from this session's pick; none valid means no region to draw.
+            com.gamelingo.mobile.core.capture.AppWindowRegionStore
+                .validFor(com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.contentSize) ?: return null
+        } else settings.resolveCustomRegion(sw, sh).region
+        return toDisplay(NormalizedBox(r.left, r.top, r.right, r.bottom))
     }
+
+    /** The user's confirmed window alignment for this session, only while it still matches. */
+    private fun calibration() =
+        if (com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this)) {
+            val (dw, dh) = ScreenGeometryProvider.realDisplaySize(this)
+            com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.validFor(dw, dh)
+        } else null
+
+    /** Frame fractions to display fractions; unchanged outside app-window capture. */
+    private fun toDisplay(b: NormalizedBox): NormalizedBox =
+        if (com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this)) {
+            calibration()?.frameBoxToDisplay(b) ?: b
+        } else b
+
+    /**
+     * In app-window capture the original subtitle's position on the display is
+     * unknown, so follow/below/smart place as fixed there. The saved mode is
+     * untouched and applies again in whole-screen capture.
+     */
+    private fun effectiveForCapture(p: com.gamelingo.mobile.core.overlay.TranslationPlacement) =
+        com.gamelingo.mobile.core.capture.AppWindowCapture
+            .effectivePlacement(
+                p.mode, com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this), calibrated = calibration() != null,
+            )
+            .let { if (it.degraded) p.copy(mode = it.mode) else p }
 
     private fun marginPx() = (EDGE_MARGIN_DP * resources.displayMetrics.density).toInt()
 
@@ -218,10 +247,10 @@ class OverlayService : Service() {
         val ow = if (params.width > 0) params.width else view.width
         val oh = if (params.height > 0) params.height else view.height
         val point = PlacementResolver.resolve(
-            placement = placement,
+            placement = effectiveForCapture(placement),
             screenWidth = sw, screenHeight = sh,
             overlayWidth = ow, overlayHeight = oh,
-            source = sourceBox,
+            source = sourceBox?.let(::toDisplay),
             ocrRegion = regionBox(settings, sw, sh),
             defaultAnchorTop = OverlayLayout.anchorsTop(settings.overlayPosition),
             marginPx = marginPx(),
@@ -232,15 +261,27 @@ class OverlayService : Service() {
         runCatching { windowManager?.updateViewLayout(view, params) }
     }
 
+    /**
+     * Double tap on the window flips the position lock. Only the style flag is
+     * written: the OCR region and the placement are never touched.
+     */
+    private fun toggleLock() {
+        val settings = settingsState.value
+        val style = settings.overlayStyle
+        val updated = style.copy(positionLocked = !style.positionLocked)
+        settingsState.value = settings.copy(overlayStyle = updated)
+        serviceScope.launch { settingsRepository.setOverlayStyle(updated) }
+    }
+
     /** Persists where a drag ended; only the placement is written, never the OCR region. */
     private fun saveDroppedPosition(view: View, params: WindowManager.LayoutParams) {
         val (sw, sh) = screenSize()
         val settings = settingsState.value
         val placement = settings.translationPlacement
         val base = PlacementResolver.resolve(
-            placement = placement, screenWidth = sw, screenHeight = sh,
+            placement = effectiveForCapture(placement), screenWidth = sw, screenHeight = sh,
             overlayWidth = view.width, overlayHeight = view.height,
-            source = sourceBox, ocrRegion = regionBox(settings, sw, sh),
+            source = sourceBox?.let(::toDisplay), ocrRegion = regionBox(settings, sw, sh),
             defaultAnchorTop = OverlayLayout.anchorsTop(settings.overlayPosition),
             marginPx = marginPx(), applyOffsets = false,
         )

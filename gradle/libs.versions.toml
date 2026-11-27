@@ -17,6 +17,7 @@ kotlinxSerialization = "1.12.0"
 coroutines = "1.11.0"
 mlkitTextRecognition = "16.0.1"
 mlkitTranslate = "17.0.3"
+vosk = "0.3.75"
 onnxruntimeMobile = "1.18.0"
 litertlm = "0.19.1"
 junit = "4.13.2"
@@ -54,6 +55,7 @@ kotlinx-serialization-json = { group = "org.jetbrains.kotlinx", name = "kotlinx-
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 kotlinx-coroutines-test = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-test", version.ref = "coroutines" }
 mlkit-text-recognition = { group = "com.google.mlkit", name = "text-recognition", version.ref = "mlkitTextRecognition" }
+vosk-android = { group = "com.alphacephei", name = "vosk-android", version.ref = "vosk" }
 mlkit-translate = { group = "com.google.mlkit", name = "translate", version.ref = "mlkitTranslate" }
 onnxruntime-mobile = { group = "com.microsoft.onnxruntime", name = "onnxruntime-mobile", version.ref = "onnxruntimeMobile" }
 litertlm-android = { group = "com.google.ai.edge.litertlm", name = "litertlm-android", version.ref = "litertlm" }

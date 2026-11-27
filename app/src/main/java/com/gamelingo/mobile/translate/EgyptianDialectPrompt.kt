@@ -11,9 +11,11 @@ object EgyptianDialectPrompt {
      * translation cache keys on it so entries from an older prompt style are
      * never served after an upgrade.
      */
+    // 4: explicit Egyptian-only rules (no MSA, no word swapping, authentic
+    // vocabulary and structure) added; older entries are dropped.
     // 2: faithful-translation mandate added (profanity preserved, never
     // censored); entries cached under version 1 predate it and are dropped.
-    const val PROMPT_VERSION = 3
+    const val PROMPT_VERSION = 4
 
     // The faithful-translation mandate is fixed wording requested by the
     // user verbatim; do not soften it.
@@ -32,6 +34,12 @@ object EgyptianDialectPrompt {
             "- Keep character names unchanged (transliterate into Arabic letters).\n" +
             "- Use established gaming terms from the provided glossary when present.\n" +
             "- Use the dialogue context only to resolve meaning; never repeat it.\n" +
+            "- Use authentic Egyptian vocabulary, expressions, sentence structure and " +
+            "conversational phrasing, as spoken by people in Egypt.\n" +
+            "- Do not translate into Modern Standard Arabic and do not use formal Arabic " +
+            "vocabulary or grammar unless the source dialogue is itself formal.\n" +
+            "- Do not merely replace a few words with Egyptian equivalents: the whole sentence " +
+            "must sound Egyptian, but do not force slang where it would sound unnatural.\n" +
             "- Output ONLY the Egyptian Arabic translation of the current line, with no " +
             "explanations, no quotes and no transliteration."
 

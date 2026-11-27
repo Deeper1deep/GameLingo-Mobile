@@ -344,6 +344,7 @@ class TranslationWorker(
         is com.gamelingo.mobile.translate.local.TranslateGemmaEngine.EngineInitException,
         -> RequestState.ENGINE_INIT_FAILED
         is com.gamelingo.mobile.translate.local.LocalAiTranslationEngine.EmptyModelOutputException,
+        is RejectedOutputException,
         -> RequestState.EMPTY_RESULT
         else -> RequestState.UNKNOWN
     }

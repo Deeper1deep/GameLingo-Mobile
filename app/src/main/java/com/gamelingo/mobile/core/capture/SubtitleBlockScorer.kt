@@ -23,6 +23,28 @@ object SubtitleBlockScorer {
 
     const val MIN_SCORE = 0.25f
 
+    /**
+     * "Obviously corrupted" needs two independent signals, never confidence alone
+     * (stylised but readable subtitles can score low): the recogniser's own
+     * confidence is known AND below [LOW_CONFIDENCE], AND the text itself looks
+     * like garbage ([looksGarbled]). ML Kit documents 0 as "unavailable", so
+     * unknown confidence is null and never counts. Raw OCR output is untouched.
+     */
+    const val LOW_CONFIDENCE = 0.5f
+
+    fun isReadable(block: RecognizedBlock): Boolean {
+        val c = block.confidence ?: return true
+        return !(c < LOW_CONFIDENCE && looksGarbled(block.text))
+    }
+
+    /** Mostly symbols, or hardly any letters/digits: not words in any language. */
+    fun looksGarbled(text: String): Boolean {
+        val chars = text.filter { !it.isWhitespace() }
+        if (chars.isEmpty()) return true
+        val wordChars = chars.count { it.isLetterOrDigit() }
+        return wordChars.toFloat() / chars.length < 0.6f
+    }
+
     /** Weight of the temporal signal: static blocks keep [STATIC_KEEP] of their score. */
     private const val STATIC_KEEP = 0.35f
 
@@ -75,6 +97,7 @@ object SubtitleBlockScorer {
         dynamics: BlockDynamicsTracker,
     ): RecognizedBlock? =
         blocks
+            .filter(::isReadable)
             .map { it to score(it, frameWidth, frameHeight, dynamics) }
             .filter { (_, score) -> score >= MIN_SCORE }
             .maxWithOrNull(
@@ -103,7 +126,7 @@ object SubtitleBlockScorer {
         while (grew) {
             grew = false
             for (block in blocks) {
-                if (block in group || block.text.isBlank()) continue
+                if (block in group || block.text.isBlank() || !isReadable(block)) continue
                 if (group.any { continuesSameSubtitle(block, it) }) {
                     group.add(block)
                     grew = true

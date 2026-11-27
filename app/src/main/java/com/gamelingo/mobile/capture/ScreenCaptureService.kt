@@ -88,6 +88,8 @@ class ScreenCaptureService : Service() {
 
     @Inject lateinit var settingsRepository: SettingsRepository
     @Inject lateinit var recognizerEngine: TextRecognizerEngine
+    @Inject lateinit var audioController: com.gamelingo.mobile.audio.AudioTranslationController
+    @Inject lateinit var localAiRouter: com.gamelingo.mobile.translate.local.LocalAiRouter
 
     // A stray async exception must never reach the default uncaught handler:
     // that kills the whole app. The capture loop handles its own failures and
@@ -245,6 +247,22 @@ class ScreenCaptureService : Service() {
             return
         }
 
+        com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.clear()
+        com.gamelingo.mobile.core.capture.AppWindowRegionStore.clear()
+        if (CaptureMode.appWindowActive(this)) {
+            // The documented first callback gives the window size. Without it we
+            // do not guess: OCR stays paused and the reason is recorded.
+            serviceScope.launch {
+                delay(com.gamelingo.mobile.core.capture.AppWindowCapture.STARTUP_TIMEOUT_MILLIS)
+                val state = com.gamelingo.mobile.core.capture.AppWindowCapture.startup(
+                    reportedContentSize, com.gamelingo.mobile.core.capture.AppWindowCapture.STARTUP_TIMEOUT_MILLIS,
+                )
+                if (state is com.gamelingo.mobile.core.capture.AppWindowCapture.Startup.TimedOut) {
+                    geoLog("app-window: no onCapturedContentResize within ${com.gamelingo.mobile.core.capture.AppWindowCapture.STARTUP_TIMEOUT_MILLIS} ms; OCR stays paused")
+                    android.widget.Toast.makeText(this@ScreenCaptureService, R.string.app_window_no_size, android.widget.Toast.LENGTH_LONG).show()
+                }
+            }
+        }
         projection.registerCallback(
             object : MediaProjection.Callback() {
                 // API 34+: the system tells us the size of the captured
@@ -254,6 +272,7 @@ class ScreenCaptureService : Service() {
                     if (width <= 0 || height <= 0) return
                     val previous = reportedContentSize
                     reportedContentSize = width to height
+                    com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.contentSize = width to height
                     geoLog("geometry: onCapturedContentResize ${width}x$height (was $previous)")
                     if (previous != width to height && captureJob?.isActive == true) {
                         serviceScope.launch {
@@ -281,6 +300,8 @@ class ScreenCaptureService : Service() {
             null,
         )
         mediaProjection = projection
+        runCatching { audioController.start(projection, serviceScope) }
+            .onFailure { Log.w(TAG, "audio translation did not start", it) }
 
         getSystemService(DisplayManager::class.java)
             ?.registerDisplayListener(displayListener, null)
@@ -376,6 +397,21 @@ class ScreenCaptureService : Service() {
             ?.rotation
             ?: Surface.ROTATION_0
         val content = reportedContentSize
+        if (CaptureMode.appWindowActive(this) && content != null) {
+            // One app window: the frame is the captured content (scaled to the
+            // display's long edge). The OCR region is read as fractions of this
+            // frame, so the display plays no part in the mapping.
+            val frame = com.gamelingo.mobile.core.capture.AppWindowCapture
+                .frameFor(content.first, content.second, maxOf(w, h))
+            if (frame != null) {
+                return DisplayGeometry(
+                    width = frame.first, height = frame.second, rotation = rotation,
+                    displayWidth = frame.first, displayHeight = frame.second,
+                    contentWidth = content.first, contentHeight = content.second,
+                    generation = currentGeometry?.generation ?: 0L,
+                )
+            }
+        }
         return DisplayGeometry(
             width = w,
             height = h,
@@ -574,6 +610,14 @@ class ScreenCaptureService : Service() {
      */
     private fun geometryProvesMapping(g: DisplayGeometry): Boolean {
         if (g.width <= 0 || g.height <= 0 || g.displayWidth <= 0 || g.displayHeight <= 0) return false
+        if (CaptureMode.appWindowActive(this)) {
+            // App-window mode: valid only once the system reported the content
+            // size and the frame is that content's shape. Before the first
+            // report OCR waits; it never reads on a guess.
+            return g.hasReportedContent && g.displayWidth == g.width && g.displayHeight == g.height &&
+                com.gamelingo.mobile.core.capture.AppWindowCapture
+                    .frameFor(g.contentWidth, g.contentHeight, maxOf(g.width, g.height)) == (g.width to g.height)
+        }
         return CaptureGeometryValidator.provesFullDisplay(
             g.displayWidth, g.displayHeight, g.width, g.height, g.contentWidth, g.contentHeight,
             com.gamelingo.mobile.core.capture.CaptureProvenance.forSdk(Build.VERSION.SDK_INT),
@@ -645,7 +689,15 @@ class ScreenCaptureService : Service() {
             // of stacked on top. A floor keeps the loop from spinning when
             // OCR takes longer than the interval.
             val elapsed = SystemClock.elapsedRealtime() - tickStart
-            val waitMs = (settings.captureIntervalMs - elapsed)
+            val pacedIntervalMs = com.gamelingo.mobile.core.audio.AdaptiveScheduling.captureIntervalMs(
+                settings.captureIntervalMs,
+                com.gamelingo.mobile.core.audio.SourceActivity.smartAuto,
+                System.currentTimeMillis(),
+                com.gamelingo.mobile.core.audio.SourceActivity.lastAudioAtMillis,
+                TranslationSessionBus.latestLine.value?.capturedAtMillis ?: 0L,
+                TranslationSessionBus.workerStatus.value.queueDepth,
+            )
+            val waitMs = (pacedIntervalMs - elapsed)
                 .coerceAtLeast(MIN_TICK_DELAY_MS)
             delay(waitMs)
         }
@@ -692,6 +744,10 @@ class ScreenCaptureService : Service() {
         val fullBitmap = PipelineTiming.timed("frame_decode") {
             image.toBitmap(geometry.width, geometry.height)
         }
+        if (FrameSnapshotBus.wanted) {
+            runCatching { FrameSnapshotBus.publish(fullBitmap) }
+            FrameSnapshotBus.wanted = false
+        }
         // Every bitmap this frame creates is released exactly once, whatever
         // happens below: the finally owns recycling, never the success path.
         var ocrBitmap: Bitmap? = null
@@ -736,10 +792,28 @@ class ScreenCaptureService : Service() {
             // never fall through to scanning the whole screen. A missing
             // orientation inherits the linked region; nothing saved at all
             // uses the safe default band.
-            val resolved = if (settings.customRegionEnabled) {
-                settings.resolveCustomRegion(geometry.width, geometry.height)
-            } else {
-                null
+            // App-window capture reads the area only from its own session pick
+            // (frame fractions); the saved whole-display region is a different
+            // coordinate space and is never reinterpreted here.
+            val decision = com.gamelingo.mobile.core.capture.AppWindowRegionPolicy.decide(
+                CaptureMode.appWindowActive(this), settings.customRegionEnabled, reportedContentSize,
+            )
+            if (decision is com.gamelingo.mobile.core.capture.AppWindowRegionPolicy.Decision.NeedsRepick) {
+                val key = "repick:${geometry.generation}"
+                if (appliedRegionKey != key) {
+                    appliedRegionKey = key
+                    geoLog("app-window: no translation area picked for this window; OCR paused until the user picks one")
+                    android.widget.Toast.makeText(this, R.string.appwin_repick_needed, android.widget.Toast.LENGTH_LONG).show()
+                }
+                return
+            }
+            val resolved = when {
+                decision is com.gamelingo.mobile.core.capture.AppWindowRegionPolicy.Decision.UseSession ->
+                    com.gamelingo.mobile.core.region.ResolvedRegion(
+                        decision.region, com.gamelingo.mobile.core.region.RegionSource.APP_WINDOW_SESSION,
+                    )
+                settings.customRegionEnabled -> settings.resolveCustomRegion(geometry.width, geometry.height)
+                else -> null
             }
             val customRegion = resolved?.region
             var regionChanged = false
@@ -762,7 +836,7 @@ class ScreenCaptureService : Service() {
                 }
             }
             val regionPx = customRegion?.let { transform.toCapturePixels(it) }
-            if (settings.customRegionEnabled && regionPx == null) {
+            if (resolved != null && regionPx == null) {
                 // A conversion failure is a geometry error, not permission to scan the screen.
                 geoLog("region could not be mapped to capture pixels; OCR paused: ${describeGeometry(geometry)}")
                 return
@@ -818,10 +892,13 @@ class ScreenCaptureService : Service() {
 
             val ocrStartNanos = System.nanoTime()
             var shiftedBlocks: List<com.gamelingo.mobile.core.capture.RecognizedBlock> = emptyList()
+            // Experimental, user-chosen, OFF by default: with OFF this is the same bitmap as before.
+            val ocrMode = com.gamelingo.mobile.capture.OcrExperiment.get(this@ScreenCaptureService)
+            val ocrInput = com.gamelingo.mobile.capture.OcrExperiment.prepare(workingBitmap, ocrMode)
             val rawText = if (settings.smartTextDetection || regionPx != null) {
                 // Block mode: read positioned blocks and shift them into
                 // full-frame coordinates.
-                val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(workingBitmap, 0))
+                val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(ocrInput, 0))
                 val shifted = blocks.map { block -> block.shifted(cropLeft, cropTop) }
                 if (regionPx != null) {
                     // Rejected text is dropped HERE: it never reaches the
@@ -846,8 +923,9 @@ class ScreenCaptureService : Service() {
                     subtitle.orEmpty()
                 }
             } else {
-                recognizerEngine.recognize(InputImage.fromBitmap(workingBitmap, 0))
+                recognizerEngine.recognize(InputImage.fromBitmap(ocrInput, 0))
             }
+            if (ocrInput !== workingBitmap) ocrInput.recycle()
             CaptureHealth.onOcrRun()
 
             PipelineTiming.mark(
@@ -856,6 +934,23 @@ class ScreenCaptureService : Service() {
                 "smart=${settings.smartTextDetection}",
             )
             val text = TextNormalizer.normalize(rawText)
+            runCatching {
+                com.gamelingo.mobile.core.diagnostics.PipelineTrace.recordOcr(
+                    com.gamelingo.mobile.core.diagnostics.PipelineTrace.OcrEvent(
+                        atMillis = System.currentTimeMillis(),
+                        frameW = geometry.width, frameH = geometry.height,
+                        cropW = workingBitmap.width, cropH = workingBitmap.height,
+                        regionPx = regionPx?.let { "${it.left},${it.top},${it.right},${it.bottom}" },
+                        blocks = shiftedBlocks.size,
+                        meanConfidence = com.gamelingo.mobile.core.capture.meanKnownConfidence(
+                            shiftedBlocks.mapNotNull { it.confidence },
+                        ),
+                        rawChars = rawText.length, normalizedChars = text.length,
+                        preprocess = ocrMode.name,
+                        ocrMillis = (System.nanoTime() - ocrStartNanos) / 1_000_000L,
+                    ),
+                )
+            }
             // Presence first, before any early return: an EMPTY read is the
             // signal that the subtitle left the screen, and the dedupe and
             // stability gates below must not hide it from the lifecycle.
@@ -969,12 +1064,15 @@ class ScreenCaptureService : Service() {
     }
 
     private fun stopCapture(reason: String) {
+        com.gamelingo.mobile.core.capture.AppWindowCalibrationStore.clear()
+        com.gamelingo.mobile.core.capture.AppWindowRegionStore.clear()
         // Re-entry is expected: the stop button, the projection callback, an
         // OCR failure and onDestroy can all arrive together. Only the first
         // caller runs teardown, so the first caller's reason is the one kept.
         if (!stopping.compareAndSet(false, true)) return
         CaptureHealth.onSessionStopped(reason)
         Log.i(TAG, "stopCapture: tearing down (reason=$reason)")
+        runCatching { audioController.stop() }
         captureJob?.cancel()
         captureJob = null
         heartbeatJob?.cancel()
@@ -1076,6 +1174,31 @@ class ScreenCaptureService : Service() {
             .setContentTitle(getString(R.string.notif_capture_title))
             .setContentText(getString(R.string.notif_capture_text))
             .setOngoing(true)
+            .apply {
+                if (CaptureMode.appWindowActive(this@ScreenCaptureService)) {
+                    // Aligned from here the user is looking at the game, not at our settings.
+                    addAction(
+                        0,
+                        getString(R.string.notif_align_action),
+                        android.app.PendingIntent.getService(
+                            this@ScreenCaptureService, ALIGN_REQUEST_CODE,
+                            com.gamelingo.mobile.overlay.WindowAlignService.startIntent(this@ScreenCaptureService),
+                            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_IMMUTABLE,
+                        ),
+                    )
+                }
+            }
+            .addAction(
+                0,
+                getString(R.string.notif_stop_action),
+                android.app.PendingIntent.getService(
+                    this,
+                    STOP_REQUEST_CODE,
+                    stopIntent(this),
+                    android.app.PendingIntent.FLAG_UPDATE_CURRENT or
+                        android.app.PendingIntent.FLAG_IMMUTABLE,
+                ),
+            )
             .build()
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -1088,6 +1211,19 @@ class ScreenCaptureService : Service() {
         }
     }
 
+    /**
+     * Critical memory pressure: release the on-device translation models. They reload
+     * lazily on the next line (slower, never switched off); a close during a running
+     * generation is deferred by the engines themselves.
+     */
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (com.gamelingo.mobile.core.engine.ModelLifecycle.shouldReleaseTranslationModels(level)) {
+            Log.w(TAG, "memory pressure level=$level: releasing local translation models")
+            runCatching { localAiRouter.close() }
+        }
+    }
+
     override fun onDestroy() {
         // System kill or normal shutdown without a prior stopCapture: record it
         // so diagnostics can tell "service destroyed" apart from a user stop.
@@ -1096,6 +1232,7 @@ class ScreenCaptureService : Service() {
         }
         // Same guarded teardown as stopCapture: either path can run after the
         // other, and none of these components tolerate a second release.
+        runCatching { audioController.stop() }
         runCatching { captureJob?.cancel() }
         runCatching { settingsJob?.cancel() }
         runCatching {
@@ -1111,6 +1248,7 @@ class ScreenCaptureService : Service() {
 
     companion object {
         const val ACTION_START = "com.gamelingo.mobile.action.START_CAPTURE"
+        private const val ALIGN_REQUEST_CODE = 7312
         const val ACTION_STOP = "com.gamelingo.mobile.action.STOP_CAPTURE"
         const val EXTRA_RESULT_CODE = "extra_result_code"
         const val EXTRA_RESULT_DATA = "extra_result_data"
@@ -1138,6 +1276,7 @@ class ScreenCaptureService : Service() {
 
         /** Floor for the capture tick delay when OCR outlasts the interval. */
         private const val MIN_TICK_DELAY_MS = 50L
+        private const val STOP_REQUEST_CODE = 7301
 
         fun startIntent(context: Context, resultCode: Int, data: Intent): Intent =
             Intent(context, ScreenCaptureService::class.java)

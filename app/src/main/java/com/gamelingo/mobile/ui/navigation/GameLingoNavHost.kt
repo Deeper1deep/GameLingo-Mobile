@@ -77,6 +77,8 @@ object GameLingoRoutes {
     const val UPDATES = "updates"
     const val ABOUT = "about"
     const val VOICE = "voice"
+    const val APP_WINDOW = "app_window"
+    const val ENGINE_STATUS = "engine_status"
     const val DIAGNOSTICS = "diagnostics"
 }
 
@@ -95,6 +97,8 @@ private val destinationMeta = listOf(
     DestinationMeta(GameLingoRoutes.UPDATES, R.string.nav_update_center),
     DestinationMeta(GameLingoRoutes.ABOUT, R.string.nav_about),
     DestinationMeta(GameLingoRoutes.VOICE, R.string.nav_voice),
+    DestinationMeta(GameLingoRoutes.APP_WINDOW, R.string.nav_appwindow),
+    DestinationMeta(GameLingoRoutes.ENGINE_STATUS, R.string.nav_engine_status),
     DestinationMeta(GameLingoRoutes.DIAGNOSTICS, R.string.nav_diagnostics),
 )
 
@@ -240,6 +244,8 @@ fun GameLingoAppRoot(
                         composable(GameLingoRoutes.UPDATES) { UpdateCenterScreen() }
                         composable(GameLingoRoutes.ABOUT) { AboutScreen() }
                         composable(GameLingoRoutes.VOICE) { VoiceTranslationScreen() }
+                        composable(GameLingoRoutes.APP_WINDOW) { com.gamelingo.mobile.ui.screens.AppWindowCaptureScreen() }
+                        composable(GameLingoRoutes.ENGINE_STATUS) { com.gamelingo.mobile.ui.screens.EngineStatusScreen() }
                         composable(GameLingoRoutes.DIAGNOSTICS) { DiagnosticsScreen() }
                     }
                 }
