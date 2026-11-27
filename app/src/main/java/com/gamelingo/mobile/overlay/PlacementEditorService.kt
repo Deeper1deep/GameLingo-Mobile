@@ -90,7 +90,7 @@ class PlacementEditorService : Service() {
             arabicSample = getString(R.string.overlay_preview_translated)
             latinSample = getString(R.string.overlay_preview_original)
             // Reference only: the scanned area, drawn but never editable here.
-            ocrRegion = if (settings.customRegionEnabled && !com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this)) {
+            ocrRegion = if (settings.customRegionEnabled && !com.gamelingo.mobile.capture.CaptureMode.appWindowActive(this@PlacementEditorService)) {
                 settings.resolveCustomRegion(sw, sh).region.let { NormalizedBox(it.left, it.top, it.right, it.bottom) }
             } else {
                 null
