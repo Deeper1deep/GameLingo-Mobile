@@ -45,6 +45,20 @@ object SubtitleBlockScorer {
         return wordChars.toFloat() / chars.length < 0.6f
     }
 
+    /** Weight of the temporal signal: static blocks keep [STATIC_KEEP] of their score. */
+    private const val STATIC_KEEP = 0.35f
+
+    /** Corner zone: block centers beyond these fractions count as corner-parked. */
+    private const val CORNER_X_LOW = 0.15f
+    private const val CORNER_X_HIGH = 0.85f
+    private const val CORNER_Y_LOW = 0.15f
+    private const val CORNER_Y_HIGH = 0.82f
+    private const val CORNER_KEEP = 0.2f
+
+    /** Plausible subtitle-line height as a fraction of frame height. */
+    private const val MIN_HEIGHT_FRACTION = 0.01f
+    private const val MAX_HEIGHT_FRACTION = 0.05f
+
     fun score(
         block: RecognizedBlock,
         frameWidth: Int,
