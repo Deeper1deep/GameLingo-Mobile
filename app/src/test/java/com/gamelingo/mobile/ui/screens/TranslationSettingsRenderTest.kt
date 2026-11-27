@@ -45,6 +45,7 @@ class TranslationSettingsRenderTest {
                         ),
                     ),
                     onArabicMode = {}, onRemoveTerm = {}, onAddTerm = { _, _, _, _, _ -> }, onContextLines = {}, onShowOriginal = {},
+                    suggestions = listOf("Tommy Miller", "Fireflies"),
                 )
               }
             }

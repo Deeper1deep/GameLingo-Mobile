@@ -30,6 +30,9 @@
     <string name="home_translation_failed">تعذّرت ترجمة آخر جملة — هتتعاد مع الجملة الجاية</string>
     <string name="home_latest_ocr">آخر نص مقروء: %1$s</string>
     <string name="notif_channel_capture">التقاط الشاشة</string>
+    <string name="user_glossary_suggest_hint">أسماء اتكررت في الحوار. مش هتتحفظ غير لما تكتب ترجمتها وتضغط إضافة.</string>
+    <string name="user_glossary_suggest_use">استخدم</string>
+    <string name="user_glossary_suggest_dismiss">تجاهل</string>
     <string name="user_glossary_edit">تعديل</string>
     <string name="user_glossary_game_hint">اللعبة (اختياري)</string>
     <string name="user_glossary_pron_hint">النطق (اختياري)</string>

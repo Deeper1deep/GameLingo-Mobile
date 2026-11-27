@@ -93,7 +93,7 @@ class TranslationCoordinator @Inject constructor(
         scope.launch {
             var seen = TranslationSessionBus.contextResetToken.value
             TranslationSessionBus.contextResetToken.collect { token ->
-                if (token != seen) { seen = token; contextMemory.clear() }
+                if (token != seen) { seen = token; contextMemory.clear(); com.gamelingo.mobile.core.context.SuggestionPool.clear() }
             }
         }
         // The worker follows the session: a stopped session stops it
@@ -180,6 +180,7 @@ class TranslationCoordinator @Inject constructor(
                     generation = generation,
                 )
                 contextMemory.add(request.text, request.capturedAtMillis)
+                com.gamelingo.mobile.core.context.SuggestionPool.record(request.text)
                 return ProcessorOutcome(
                     engineId = hit.engineId,
                     usedLocalFallback = isLocalFallback(settings.aiMode, hit.engineId),
@@ -299,6 +300,7 @@ class TranslationCoordinator @Inject constructor(
                     request.subtitleId, generation,
                 )
                 contextMemory.add(request.text, request.capturedAtMillis)
+                com.gamelingo.mobile.core.context.SuggestionPool.record(request.text)
                 publishEngineNotice(settings.aiMode, finalResult.engineId)
             }
             return ProcessorOutcome(

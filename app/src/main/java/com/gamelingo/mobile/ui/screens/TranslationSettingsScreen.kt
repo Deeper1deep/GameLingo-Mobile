@@ -1,5 +1,6 @@
 package com.gamelingo.mobile.ui.screens
 
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
@@ -38,6 +39,9 @@ fun TranslationSettingsScreen(
         onAddTerm = viewModel::addUserGlossaryTerm,
         onContextLines = viewModel::setContextLines,
         onShowOriginal = viewModel::setShowOriginalText,
+        suggestions = com.gamelingo.mobile.core.context.SuggestionPool
+            .suggestions(settings.userGlossaryTerms.map { it.en }),
+        onDismissSuggestion = com.gamelingo.mobile.core.context.SuggestionPool::dismiss,
     )
 }
 
@@ -50,6 +54,8 @@ fun TranslationSettingsContent(
     onAddTerm: (String, String, String, String, String) -> Unit,
     onContextLines: (Int) -> Unit,
     onShowOriginal: (Boolean) -> Unit,
+    suggestions: List<String> = emptyList(),
+    onDismissSuggestion: (String) -> Unit = {},
 ) {
     SettingsColumn {
         SectionHeader(stringResource(R.string.tr_languages_title))
@@ -141,6 +147,19 @@ fun TranslationSettingsContent(
             editing?.let { t ->
                 newEn = t.en; newAr = t.ar; newGame = t.game; newPron = t.pronunciation; newNote = t.note
                 editing = null
+            }
+            if (suggestions.isNotEmpty()) {
+                HintText(stringResource(R.string.user_glossary_suggest_hint), modifier = Modifier.padding(top = GlSpacing.md))
+                suggestions.forEach { term ->
+                    androidx.compose.foundation.layout.Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = androidx.compose.ui.Alignment.CenterVertically,
+                    ) {
+                        Text(text = term, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+                        TextButton(onClick = { newEn = term }) { Text(stringResource(R.string.user_glossary_suggest_use)) }
+                        TextButton(onClick = { onDismissSuggestion(term) }) { Text(stringResource(R.string.user_glossary_suggest_dismiss)) }
+                    }
+                }
             }
             OutlinedTextField(
                 value = newEn,
