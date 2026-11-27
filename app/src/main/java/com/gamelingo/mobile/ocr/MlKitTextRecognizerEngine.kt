@@ -33,6 +33,7 @@ class MlKitTextRecognizerEngine @Inject constructor() : TextRecognizerEngine {
                 RecognizedBlock(
                     text = block.text,
                     rect = PixelRect(box.left, box.top, box.right, box.bottom),
+                    confidence = block.lines.map { it.confidence }.takeIf { it.isNotEmpty() }?.average()?.toFloat(),
                     words = block.lines.flatMap { line ->
                         line.elements.mapNotNull { element ->
                             val wb = element.boundingBox ?: return@mapNotNull null

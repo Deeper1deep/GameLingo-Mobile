@@ -6,6 +6,8 @@ data class RecognizedBlock(
     val rect: PixelRect,
     /** Individual words with their own boxes; empty when the engine gave none. */
     val words: List<RecognizedWord> = emptyList(),
+    /** Mean line confidence (0..1) reported by the recogniser; null when it gave none. Informational: nothing is filtered on it yet. */
+    val confidence: Float? = null,
 )
 
 /** One recognized word and its box, for per-word colour sampling. */
