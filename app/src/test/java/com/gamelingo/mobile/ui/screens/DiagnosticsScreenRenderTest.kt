@@ -37,6 +37,10 @@ class DiagnosticsScreenRenderTest {
         rule.setContent { GameLingoTheme { DiagnosticsScreen(liveClock = false) } }
         rule.onNodeWithText(label).performScrollTo().assertIsDisplayed()
 
+        // Status pills pulse forever, so Compose never reports idle. Freeze the test clock
+        // on one frame before capture; the layout is already settled by the assertion above.
+        rule.mainClock.autoAdvance = false
+        rule.mainClock.advanceTimeByFrame()
         val image = rule.onRoot().captureToImage()
         val pixels = IntArray(image.width * image.height)
         image.readPixels(pixels)
