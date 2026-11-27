@@ -883,10 +883,13 @@ class ScreenCaptureService : Service() {
 
             val ocrStartNanos = System.nanoTime()
             var shiftedBlocks: List<com.gamelingo.mobile.core.capture.RecognizedBlock> = emptyList()
+            // Experimental, user-chosen, OFF by default: with OFF this is the same bitmap as before.
+            val ocrMode = com.gamelingo.mobile.capture.OcrExperiment.get(this@ScreenCaptureService)
+            val ocrInput = com.gamelingo.mobile.capture.OcrExperiment.prepare(workingBitmap, ocrMode)
             val rawText = if (settings.smartTextDetection || regionPx != null) {
                 // Block mode: read positioned blocks and shift them into
                 // full-frame coordinates.
-                val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(workingBitmap, 0))
+                val blocks = recognizerEngine.recognizeBlocks(InputImage.fromBitmap(ocrInput, 0))
                 val shifted = blocks.map { block -> block.shifted(cropLeft, cropTop) }
                 if (regionPx != null) {
                     // Rejected text is dropped HERE: it never reaches the
@@ -911,8 +914,9 @@ class ScreenCaptureService : Service() {
                     subtitle.orEmpty()
                 }
             } else {
-                recognizerEngine.recognize(InputImage.fromBitmap(workingBitmap, 0))
+                recognizerEngine.recognize(InputImage.fromBitmap(ocrInput, 0))
             }
+            if (ocrInput !== workingBitmap) ocrInput.recycle()
             CaptureHealth.onOcrRun()
 
             PipelineTiming.mark(

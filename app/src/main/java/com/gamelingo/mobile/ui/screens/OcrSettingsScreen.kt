@@ -221,6 +221,44 @@ fun OcrSettingsScreen(
             checked = settings.batterySaverEnabled,
             onCheckedChange = viewModel::setBatterySaverEnabled,
         )
+        val context = androidx.compose.ui.platform.LocalContext.current
+        var experiment by androidx.compose.runtime.remember {
+            androidx.compose.runtime.mutableStateOf(com.gamelingo.mobile.capture.OcrExperiment.get(context))
+        }
+        OcrExperimentCard(selected = experiment, onSelect = {
+            experiment = it
+            com.gamelingo.mobile.capture.OcrExperiment.set(context, it)
+        })
+    }
+}
+
+/** Experimental image preprocessing for OCR. Off by default; "off" is the reset. */
+@Composable
+fun OcrExperimentCard(
+    selected: com.gamelingo.mobile.capture.OcrExperiment.Mode,
+    onSelect: (com.gamelingo.mobile.capture.OcrExperiment.Mode) -> Unit,
+) {
+    SectionHeader(stringResource(R.string.ocr_experiment_title))
+    com.gamelingo.mobile.ui.components.GlCard {
+        com.gamelingo.mobile.ui.components.SegmentedSelector(
+            options = com.gamelingo.mobile.capture.OcrExperiment.Mode.entries,
+            selected = selected,
+            optionLabel = { m ->
+                stringResource(
+                    when (m) {
+                        com.gamelingo.mobile.capture.OcrExperiment.Mode.OFF -> R.string.ocr_experiment_off
+                        com.gamelingo.mobile.capture.OcrExperiment.Mode.CONTRAST -> R.string.ocr_experiment_contrast
+                        com.gamelingo.mobile.capture.OcrExperiment.Mode.SHARPEN -> R.string.ocr_experiment_sharpen
+                        com.gamelingo.mobile.capture.OcrExperiment.Mode.THRESHOLD -> R.string.ocr_experiment_threshold
+                    },
+                )
+            },
+            onSelect = onSelect,
+        )
+        com.gamelingo.mobile.ui.components.HintText(
+            text = stringResource(R.string.ocr_experiment_hint),
+            modifier = androidx.compose.ui.Modifier.padding(top = GlSpacing.md),
+        )
     }
 }
 
