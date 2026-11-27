@@ -1,3 +1,4 @@
+import java.util.zip.ZipFile
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -209,7 +210,7 @@ if (System.getenv("CI") == "true") {
                     .walkTopDown().filter { it.extension == "apk" }
                     .forEach { apk ->
                         println("RELEASE_APK ${apk.name} bytes=${apk.length()}")
-                        java.util.zip.ZipFile(apk).use { z ->
+                        ZipFile(apk).use { z ->
                             z.entries().asSequence().filter { it.size >= 500_000 }
                                 .forEach { e -> println("RELEASE_ENTRY ${e.name} size=${e.size} compressed=${e.compressedSize}") }
                         }
