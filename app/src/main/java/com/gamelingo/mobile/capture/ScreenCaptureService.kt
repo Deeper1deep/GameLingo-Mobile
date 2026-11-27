@@ -689,7 +689,15 @@ class ScreenCaptureService : Service() {
             // of stacked on top. A floor keeps the loop from spinning when
             // OCR takes longer than the interval.
             val elapsed = SystemClock.elapsedRealtime() - tickStart
-            val waitMs = (settings.captureIntervalMs - elapsed)
+            val pacedIntervalMs = com.gamelingo.mobile.core.audio.AdaptiveScheduling.captureIntervalMs(
+                settings.captureIntervalMs,
+                com.gamelingo.mobile.core.audio.SourceActivity.smartAuto,
+                System.currentTimeMillis(),
+                com.gamelingo.mobile.core.audio.SourceActivity.lastAudioAtMillis,
+                TranslationSessionBus.latestLine.value?.capturedAtMillis ?: 0L,
+                TranslationSessionBus.workerStatus.value.queueDepth,
+            )
+            val waitMs = (pacedIntervalMs - elapsed)
                 .coerceAtLeast(MIN_TICK_DELAY_MS)
             delay(waitMs)
         }

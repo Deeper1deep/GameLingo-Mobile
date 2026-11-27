@@ -60,6 +60,8 @@ class AudioTranslationController @Inject constructor(
             _status.value = Status.NO_PERMISSION; return
         }
         _status.value = Status.LOADING
+        com.gamelingo.mobile.core.audio.SourceActivity.smartAuto =
+            settings.profile == com.gamelingo.mobile.core.optimize.OptimizationProfile.SMART_AUTO
         jobs += scope.launch(Dispatchers.Default) {
             // Real device readings for Smart Auto; an explicit profile ignores them.
             val tuning = com.gamelingo.mobile.core.audio.AudioTuningPolicy.forRequest(settings.profile, optimizer.analyze())
@@ -79,6 +81,7 @@ class AudioTranslationController @Inject constructor(
                 ),
                 asr = adoptedAsr!!,
                 onUtterance = { u ->
+                    com.gamelingo.mobile.core.audio.SourceActivity.lastAudioAtMillis = System.currentTimeMillis()
                     val id = TranslationSessionBus.onAudioLine(u.text, System.currentTimeMillis(), u.utteranceId)
                     PipelineTrace.record(
                         PipelineTrace.Event(
@@ -127,6 +130,7 @@ class AudioTranslationController @Inject constructor(
         capture?.stop(); capture = null
         pipeline = null
         tts?.shutdown(); tts = null
+        com.gamelingo.mobile.core.audio.SourceActivity.reset()
         _status.value = Status.OFF
     }
 
