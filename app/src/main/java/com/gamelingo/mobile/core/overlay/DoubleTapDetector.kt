@@ -9,7 +9,7 @@ import kotlin.math.abs
  *
  * A tap is a press that ends quickly without leaving the touch slop and
  * without being cancelled. A second tap close in time and place is a double
- * tap. A drag, a long hold (the stop gesture) or a cancel never counts, and
+ * tap. A drag, a long hold or a cancel never counts, and
  * a recognized double tap clears the state so a third tap starts over.
  */
 class DoubleTapDetector(

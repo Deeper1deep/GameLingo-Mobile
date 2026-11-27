@@ -161,14 +161,12 @@ class OverlayService : Service() {
             windowPosition = { PlacementPoint(params.x, params.y) }
             screenSize = { this@OverlayService.screenSize() }
             isLocked = { settingsState.value.overlayStyle.positionLocked }
-            stopEnabled = { uiState.value.sessionRunning }
             onDragMove = { point ->
                 params.x = point.left
                 params.y = point.top
                 runCatching { windowManager?.updateViewLayout(this, params) }
             }
             onDragEnd = { saveDroppedPosition(this, params) }
-            onHoldStop = { stopSessionFromOverlay() }
             onDoubleTap = { toggleLock() }
         }
 

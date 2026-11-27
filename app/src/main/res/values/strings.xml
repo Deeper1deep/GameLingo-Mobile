@@ -476,8 +476,8 @@
     <string name="diag_ago_fmt">من %1$d ثانية</string>
     <string name="diag_none">لسه</string>
     <string name="overlay_stop_cd">إيقاف جلسة الترجمة</string>
-    <string name="overlay_stop_hint">اسحب لتحريك الترجمة · اضغط مع الثبات ثانيتين للإيقاف</string>
-    <string name="overlay_stop_hint_cd">إظهار تلميح الإيقاف المطوّل</string>
+    <string name="overlay_stop_hint">اسحب لتحريك الترجمة · اضغط مرتين لتثبيت مكانها أو فكّه</string>
+    <string name="overlay_stop_hint_cd">إظهار تلميح تحريك الترجمة</string>
     <string name="diag_last_stop">آخر إيقاف</string>
     <string name="notif_channel_alerts_name">تنبيهات الجلسة</string>
     <string name="notif_channel_alerts_desc">تنبيه عند توقف الترجمة فجأة</string>
