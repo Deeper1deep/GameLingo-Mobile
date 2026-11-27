@@ -10,10 +10,11 @@ class ResourceAdvisorTest {
         assertEquals(Level.COMFORTABLE, ResourceAdvisor.advise(6000, null, null, false).level)
     }
 
-    @Test fun `gemma plus speech on a small device is risky`() {
-        val a = ResourceAdvisor.advise(4000, 2100, 160, true)
+    @Test fun `gemma plus speech on a 3 GB device is risky, on 4 GB only tight`() {
+        val a = ResourceAdvisor.advise(3000, 2100, 160, true)
         assertEquals(2100 + 160 + 71L, a.estimatedModelMb)
         assertEquals(Level.RISKY, a.level)
+        assertEquals(Level.TIGHT, ResourceAdvisor.advise(4000, 2100, 160, true).level)
     }
 
     @Test fun `thresholds are exclusive boundaries`() {

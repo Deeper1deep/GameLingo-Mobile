@@ -926,6 +926,23 @@ class ScreenCaptureService : Service() {
                 "smart=${settings.smartTextDetection}",
             )
             val text = TextNormalizer.normalize(rawText)
+            runCatching {
+                com.gamelingo.mobile.core.diagnostics.PipelineTrace.recordOcr(
+                    com.gamelingo.mobile.core.diagnostics.PipelineTrace.OcrEvent(
+                        atMillis = System.currentTimeMillis(),
+                        frameW = geometry.width, frameH = geometry.height,
+                        cropW = workingBitmap.width, cropH = workingBitmap.height,
+                        regionPx = regionPx?.let { "${it.left},${it.top},${it.right},${it.bottom}" },
+                        blocks = shiftedBlocks.size,
+                        meanConfidence = com.gamelingo.mobile.core.capture.meanKnownConfidence(
+                            shiftedBlocks.mapNotNull { it.confidence },
+                        ),
+                        rawChars = rawText.length, normalizedChars = text.length,
+                        preprocess = ocrMode.name,
+                        ocrMillis = (System.nanoTime() - ocrStartNanos) / 1_000_000L,
+                    ),
+                )
+            }
             // Presence first, before any early return: an EMPTY read is the
             // signal that the subtitle left the screen, and the dedupe and
             // stability gates below must not hide it from the lifecycle.

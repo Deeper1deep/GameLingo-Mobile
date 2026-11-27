@@ -21,7 +21,37 @@ object PipelineTrace {
         val engineMillis: Long,
     )
 
+    /**
+     * OCR stage, METADATA ONLY: sizes, counts and timings, never text, token ids or pixels.
+     * [meanConfidence] is null when the recogniser reported none (shown as "unavailable", never as 0).
+     */
+    data class OcrEvent(
+        val atMillis: Long,
+        val frameW: Int,
+        val frameH: Int,
+        val cropW: Int,
+        val cropH: Int,
+        /** Active custom region in frame pixels as "l,t,r,b", or null when none. */
+        val regionPx: String?,
+        val blocks: Int,
+        val meanConfidence: Float?,
+        val rawChars: Int,
+        val normalizedChars: Int,
+        val preprocess: String,
+        val ocrMillis: Long,
+    )
+
     const val CAPACITY = 200
+    const val OCR_CAPACITY = 60
+
+    private val ocrEvents = ArrayDeque<OcrEvent>()
+
+    fun recordOcr(event: OcrEvent) = synchronized(ocrEvents) {
+        ocrEvents.addLast(event)
+        while (ocrEvents.size > OCR_CAPACITY) ocrEvents.removeFirst()
+    }
+
+    fun ocrSnapshot(): List<OcrEvent> = synchronized(ocrEvents) { ocrEvents.toList() }
 
     private val events = ArrayDeque<Event>()
 
@@ -32,11 +62,23 @@ object PipelineTrace {
 
     fun snapshot(): List<Event> = synchronized(events) { events.toList() }
 
-    fun clear() = synchronized(events) { events.clear() }
+    fun clear() {
+        synchronized(events) { events.clear() }
+        synchronized(ocrEvents) { ocrEvents.clear() }
+    }
 
     /** Plain-text summary for sharing. Contains no subtitle content. */
     fun export(): String = buildString {
         appendLine("GameLingo pipeline trace (metadata only, no subtitle text)")
+        appendLine("not recorded: token ids, attention masks, model-internal tensors, raw OCR text (opt-in not implemented)")
+        for (o in ocrSnapshot()) {
+            appendLine(
+                "t=${o.atMillis} ocr frame=${o.frameW}x${o.frameH} crop=${o.cropW}x${o.cropH} " +
+                    "region=${o.regionPx ?: "none"} blocks=${o.blocks} " +
+                    "conf=${o.meanConfidence?.let { "%.2f".format(java.util.Locale.ROOT, it) } ?: "unavailable"} " +
+                    "raw=${o.rawChars}c norm=${o.normalizedChars}c pre=${o.preprocess} ms=${o.ocrMillis}",
+            )
+        }
         for (e in snapshot()) {
             appendLine(
                 "t=${e.atMillis} id=${e.subtitleId} ${e.outcome} engine=${e.engineId} " +
