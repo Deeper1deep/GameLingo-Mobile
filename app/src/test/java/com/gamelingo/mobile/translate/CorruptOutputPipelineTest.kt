@@ -28,13 +28,19 @@ import org.robolectric.RobolectricTestRunner
 @org.robolectric.annotation.Config(sdk = [35], application = android.app.Application::class)
 class CorruptOutputPipelineTest {
 
-    private class ScriptedEngine(private val outputs: List<String>) : TranslationEngine {
+    /** Scripted per source line; the coordinator has no stop, so one rig serves the whole test. */
+    private class ScriptedEngine(private val loop: String, private val clean: String) : TranslationEngine {
         override val engineId = "mlkit-ondevice"
-        val calls = AtomicInteger(0)
+        val callsA = AtomicInteger(0)
+        val callsB = AtomicInteger(0)
         override suspend fun ensureReady() = Unit
         override suspend fun translate(request: TranslationRequest): TranslationResult {
-            val i = calls.getAndIncrement()
-            return TranslationResult(outputs[minOf(i, outputs.size - 1)], engineId)
+            val out = if (request.text.contains("truck")) {
+                callsA.incrementAndGet(); loop
+            } else {
+                if (callsB.getAndIncrement() == 0) loop else clean
+            }
+            return TranslationResult(out, engineId)
         }
         override fun close() = Unit
     }
@@ -57,11 +63,11 @@ class CorruptOutputPipelineTest {
 
     private val loop = "انزل انزل انزل انزل انزل انزل"
 
-    private class Rig(val engine: ScriptedEngine, val cache: TranslationCache, val inserts: AtomicInteger)
-
-    private fun start(outputs: List<String>): Rig {
+    @Test
+    fun `corrupt output is retried once and rejected, a clean retry is accepted`() {
         val context = ApplicationProvider.getApplicationContext<android.app.Application>()
-        val engine = ScriptedEngine(outputs)
+        val clean = "خد بالك ورا العربية"
+        val engine = ScriptedEngine(loop, clean)
         val hybrid = HybridTranslationEngine(
             onlineEngine = engine,
             localEngine = engine,
@@ -90,32 +96,24 @@ class CorruptOutputPipelineTest {
         TranslationSessionBus.onSessionStarted()
         coordinator.start()
         Thread.sleep(800)
-        return Rig(engine, cache, inserts)
-    }
 
-    @Test
-    fun `a line that stays corrupt after the one retry is not shown, cached or saved`() {
-        val rig = start(listOf(loop))
+        // Line A stays corrupt: exactly one retry, then nothing shown, cached or saved.
         TranslationSessionBus.onNewLine("Watch out behind the truck", System.currentTimeMillis())
-        assertTrue("engine was not called twice", waitUntil { rig.engine.calls.get() >= 2 })
-        Thread.sleep(600)
-        assertEquals("more than one retry", 2, rig.engine.calls.get())
+        assertTrue("engine was not called twice", waitUntil { engine.callsA.get() >= 2 })
+        Thread.sleep(700)
+        assertEquals("more than one retry", 2, engine.callsA.get())
         assertNull(TranslationSessionBus.translatedLine.value)
-        assertEquals(0, rig.cache.size())
-        assertEquals(0, rig.inserts.get())
-        TranslationSessionBus.onSessionStopped()
-    }
+        assertEquals(0, cache.size())
+        assertEquals(0, inserts.get())
 
-    @Test
-    fun `a clean retry after a corrupt first answer is shown, cached and saved once`() {
-        val rig = start(listOf(loop, "خد بالك ورا العربية"))
-        TranslationSessionBus.onNewLine("Watch out behind the truck", System.currentTimeMillis())
+        // Line B: corrupt first, clean retry: shown, cached and saved once.
+        TranslationSessionBus.onNewLine("Stay close to me", System.currentTimeMillis())
         assertTrue("clean retry was not shown", waitUntil { TranslationSessionBus.translatedLine.value != null })
         Thread.sleep(400)
-        assertEquals(2, rig.engine.calls.get())
-        assertEquals("خد بالك ورا العربية", TranslationSessionBus.translatedLine.value!!.translated)
-        assertEquals(1, rig.cache.size())
-        assertEquals(1, rig.inserts.get())
+        assertEquals(2, engine.callsB.get())
+        assertEquals(clean, TranslationSessionBus.translatedLine.value!!.translated)
+        assertEquals(1, cache.size())
+        assertEquals(1, inserts.get())
         TranslationSessionBus.onSessionStopped()
     }
 }

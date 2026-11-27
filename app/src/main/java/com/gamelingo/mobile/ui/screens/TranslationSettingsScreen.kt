@@ -91,6 +91,7 @@ fun TranslationSettingsScreen(
         // wins over the bundled dictionary, in both Arabic modes.
         SectionHeader(stringResource(R.string.user_glossary_title))
         GlCard {
+            var editing by remember { mutableStateOf<com.gamelingo.mobile.data.settings.UserGlossaryTerm?>(null) }
             if (settings.userGlossaryTerms.isEmpty()) {
                 HintText(stringResource(R.string.user_glossary_empty))
             } else {
@@ -103,6 +104,9 @@ fun TranslationSettingsScreen(
                             style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.weight(1f),
                         )
+                        TextButton(onClick = { editing = term }) {
+                            Text(stringResource(R.string.user_glossary_edit))
+                        }
                         TextButton(onClick = { viewModel.removeUserGlossaryTerm(term.en) }) {
                             Text(stringResource(R.string.user_glossary_remove))
                         }
@@ -111,6 +115,13 @@ fun TranslationSettingsScreen(
             }
             var newEn by remember { mutableStateOf("") }
             var newAr by remember { mutableStateOf("") }
+            var newGame by remember { mutableStateOf("") }
+            var newPron by remember { mutableStateOf("") }
+            var newNote by remember { mutableStateOf("") }
+            editing?.let { t ->
+                newEn = t.en; newAr = t.ar; newGame = t.game; newPron = t.pronunciation; newNote = t.note
+                editing = null
+            }
             OutlinedTextField(
                 value = newEn,
                 onValueChange = { newEn = it },
@@ -125,11 +136,34 @@ fun TranslationSettingsScreen(
                 singleLine = true,
                 modifier = Modifier.padding(top = GlSpacing.sm),
             )
+            OutlinedTextField(
+                value = newGame,
+                onValueChange = { newGame = it },
+                label = { Text(stringResource(R.string.user_glossary_game_hint)) },
+                singleLine = true,
+                modifier = Modifier.padding(top = GlSpacing.sm),
+            )
+            OutlinedTextField(
+                value = newPron,
+                onValueChange = { newPron = it },
+                label = { Text(stringResource(R.string.user_glossary_pron_hint)) },
+                singleLine = true,
+                modifier = Modifier.padding(top = GlSpacing.sm),
+            )
+            OutlinedTextField(
+                value = newNote,
+                onValueChange = { newNote = it },
+                label = { Text(stringResource(R.string.user_glossary_note_hint)) },
+                modifier = Modifier.padding(top = GlSpacing.sm),
+            )
             TextButton(
                 onClick = {
-                    viewModel.addUserGlossaryTerm(newEn, newAr)
+                    viewModel.addUserGlossaryTerm(newEn, newAr, newGame, newPron, newNote)
                     newEn = ""
                     newAr = ""
+                    newGame = ""
+                    newPron = ""
+                    newNote = ""
                 },
                 enabled = newEn.isNotBlank() && newAr.isNotBlank(),
                 modifier = Modifier.padding(top = GlSpacing.sm),
