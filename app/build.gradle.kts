@@ -202,9 +202,10 @@ configurations.all {
 if (System.getenv("CI") == "true") {
     afterEvaluate {
         tasks.named("assembleDebug") { finalizedBy("assembleRelease") }
+        val releaseApkDir = layout.buildDirectory.dir("outputs/apk/release")
         tasks.named("assembleRelease") {
             doLast {
-                layout.buildDirectory.dir("outputs/apk/release").get().asFile
+                releaseApkDir.get().asFile
                     .walkTopDown().filter { it.extension == "apk" }
                     .forEach { println("RELEASE_APK ${it.name} bytes=${it.length()}") }
             }
