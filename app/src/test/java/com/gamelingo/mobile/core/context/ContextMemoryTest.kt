@@ -72,4 +72,16 @@ class ContextMemorySceneTest {
         memory.add("second") // legacy add: no timestamp
         assertEquals(2, memory.size())
     }
+
+    @Test
+    fun `each line keeps its OCR or audio origin and untracked lines stay unknown`() {
+        val memory = ContextMemory(maxLines = 5)
+        memory.add("on screen", 1_000L, ContextMemory.Source.OCR)
+        memory.add("spoken", 2_000L, ContextMemory.Source.AUDIO)
+        memory.add("legacy")
+        assertEquals(
+            listOf(ContextMemory.Source.OCR, ContextMemory.Source.AUDIO, ContextMemory.Source.UNKNOWN),
+            memory.sources(),
+        )
+    }
 }

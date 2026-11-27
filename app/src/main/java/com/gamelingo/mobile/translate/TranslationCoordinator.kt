@@ -179,7 +179,12 @@ class TranslationCoordinator @Inject constructor(
                     subtitleId = request.subtitleId,
                     generation = generation,
                 )
-                contextMemory.add(request.text, request.capturedAtMillis)
+                contextMemory.add(
+                    request.text, request.capturedAtMillis,
+                    if (request.subtitleId == 0L) com.gamelingo.mobile.core.context.ContextMemory.Source.UNKNOWN
+                    else if (com.gamelingo.mobile.core.session.TranslationSessionBus.isAudioId(request.subtitleId)) com.gamelingo.mobile.core.context.ContextMemory.Source.AUDIO
+                    else com.gamelingo.mobile.core.context.ContextMemory.Source.OCR,
+                )
                 com.gamelingo.mobile.core.context.SuggestionPool.record(request.text)
                 return ProcessorOutcome(
                     engineId = hit.engineId,
@@ -299,7 +304,12 @@ class TranslationCoordinator @Inject constructor(
                     request.text, finalResult, request.capturedAtMillis,
                     request.subtitleId, generation,
                 )
-                contextMemory.add(request.text, request.capturedAtMillis)
+                contextMemory.add(
+                    request.text, request.capturedAtMillis,
+                    if (request.subtitleId == 0L) com.gamelingo.mobile.core.context.ContextMemory.Source.UNKNOWN
+                    else if (com.gamelingo.mobile.core.session.TranslationSessionBus.isAudioId(request.subtitleId)) com.gamelingo.mobile.core.context.ContextMemory.Source.AUDIO
+                    else com.gamelingo.mobile.core.context.ContextMemory.Source.OCR,
+                )
                 com.gamelingo.mobile.core.context.SuggestionPool.record(request.text)
                 publishEngineNotice(settings.aiMode, finalResult.engineId)
             }

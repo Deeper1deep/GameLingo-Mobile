@@ -1,20 +1,20 @@
 package com.gamelingo.mobile.core.engine
 
 /**
- * Compares RAM that is available RIGHT NOW (a runtime reading from ActivityManager) with the
- * on-disk size of the models the user has enabled. File size is only a LOWER BOUND of what
- * loading a model needs; it is not the model's resident memory (mapped files, runtime buffers
- * and KV caches differ and are not measured here). So the verdict is conservative and labelled
- * an estimate. It never disables a feature.
+ * Reads memory PRESSURE right now from runtime readings only: ActivityManager's available RAM and
+ * low-memory flag, plus this app's own PSS. It does NOT derive a capacity verdict from model file
+ * sizes: on-disk bytes are not resident RAM (mapped files, paging, quantisation and runtime
+ * workspaces all differ), and no supported runtime estimate of a model's resident size exists
+ * here. File sizes are reported separately as STORAGE only. The "tight" cut-off is a heuristic
+ * (unmeasured). It never disables a feature.
  */
 object ResourceAdvisor {
     enum class Level { COMFORTABLE, TIGHT, RISKY }
 
     data class Advice(
         val level: Level,
-        /** Sum of the on-disk sizes of the enabled models (lower bound of their load cost). */
-        val modelFilesMb: Long,
-        /** Reported by ActivityManager now. */
+        /** Sum of on-disk sizes of enabled models. Storage only, not RAM. */
+        val modelStorageMb: Long,
         val availableMb: Long,
         val totalMb: Long,
         /** This app's current proportional set size (real reading), or null when unavailable. */
@@ -24,8 +24,8 @@ object ResourceAdvisor {
 
     const val ASR_UNPACKED_MB_FILES = 71L
 
-    /** Available RAM below this multiple of the model files is "tight". */
-    const val TIGHT_MULTIPLE = 2.0
+    /** Heuristic, unmeasured: available RAM under this share of total counts as tight. */
+    const val TIGHT_AVAILABLE_SHARE = 0.15
 
     fun advise(
         availableMb: Long,
@@ -36,13 +36,12 @@ object ResourceAdvisor {
         marianFilesMb: Long?,
         speechOn: Boolean,
     ): Advice {
-        val files = (gemmaFilesMb ?: 0L) + (marianFilesMb ?: 0L) + if (speechOn) ASR_UNPACKED_MB_FILES else 0L
+        val storage = (gemmaFilesMb ?: 0L) + (marianFilesMb ?: 0L) + if (speechOn) ASR_UNPACKED_MB_FILES else 0L
         val level = when {
             systemLowMemory -> Level.RISKY
-            files > 0 && availableMb < files -> Level.RISKY
-            files > 0 && availableMb < files * TIGHT_MULTIPLE -> Level.TIGHT
+            totalMb > 0 && availableMb < totalMb * TIGHT_AVAILABLE_SHARE -> Level.TIGHT
             else -> Level.COMFORTABLE
         }
-        return Advice(level, files, availableMb, totalMb, appPssMb, systemLowMemory)
+        return Advice(level, storage, availableMb, totalMb, appPssMb, systemLowMemory)
     }
 }

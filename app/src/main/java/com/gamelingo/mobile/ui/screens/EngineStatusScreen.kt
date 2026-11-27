@@ -63,7 +63,7 @@ fun EngineStatusContent(status: EngineStatus) {
                 )
                 InfoRow(label = stringResource(R.string.engine_mem_available), value = "\u2066${adv.availableMb} MB\u2069")
                 adv.appPssMb?.let { InfoRow(label = stringResource(R.string.engine_mem_app), value = "\u2066$it MB\u2069") }
-                InfoRow(label = stringResource(R.string.engine_mem_files), value = "\u2066${adv.modelFilesMb} MB\u2069")
+                InfoRow(label = stringResource(R.string.engine_mem_files), value = "\u2066${adv.modelStorageMb} MB\u2069")
                 HintText(stringResource(R.string.engine_memory_hint))
             }
         }

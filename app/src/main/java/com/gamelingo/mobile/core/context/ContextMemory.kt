@@ -17,14 +17,17 @@ class ContextMemory(
     private val sceneGapMillis: Long = DEFAULT_SCENE_GAP_MILLIS,
 ) {
 
-    private data class Entry(val line: String, val atMillis: Long?)
+    /** Where a remembered line came from. Known at ingress; no speaker recogniser is involved. */
+    enum class Source { OCR, AUDIO, UNKNOWN }
+
+    private data class Entry(val line: String, val atMillis: Long?, val source: Source)
 
     private val entries = ArrayDeque<Entry>()
 
     /** Timestamp-less add (legacy callers): never triggers a scene break. */
     @Synchronized
     fun add(line: String) {
-        add(line, null)
+        add(line, null, Source.UNKNOWN)
     }
 
     /**
@@ -33,10 +36,11 @@ class ContextMemory(
      * first. Returns true when a new scene started.
      */
     @Synchronized
-    fun add(line: String, atMillis: Long): Boolean = add(line, atMillis as Long?)
+    fun add(line: String, atMillis: Long, source: Source = Source.UNKNOWN): Boolean =
+        add(line, atMillis as Long?, source)
 
     @Synchronized
-    private fun add(line: String, atMillis: Long?): Boolean {
+    private fun add(line: String, atMillis: Long?, source: Source): Boolean {
         if (maxLines <= 0 || line.isBlank()) return false
         var newScene = false
         val previous = entries.lastOrNull()
@@ -47,12 +51,16 @@ class ContextMemory(
             newScene = true
         }
         if (entries.lastOrNull()?.line == line) return newScene
-        entries.addLast(Entry(line, atMillis))
+        entries.addLast(Entry(line, atMillis, source))
         while (entries.size > maxLines) {
             entries.removeFirst()
         }
         return newScene
     }
+
+    /** Origin of each remembered line, oldest first (same order as [snapshot]). */
+    @Synchronized
+    fun sources(): List<Source> = entries.map { it.source }
 
     /** Oldest first. */
     @Synchronized
