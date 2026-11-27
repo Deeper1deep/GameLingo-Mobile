@@ -44,32 +44,57 @@ class WindowAlignService : Service() {
         return START_NOT_STICKY
     }
 
+    private var controls: FrameLayout? = null
+
     private fun show(contentW: Int, contentH: Int) {
         val manager = getSystemService(Context.WINDOW_SERVICE) as WindowManager
         wm = manager
         val (dw, dh) = ScreenGeometryProvider.realDisplaySize(this)
-        val (frame, label) = AlignOutline.build(this, onConfirm = { confirm(contentW, contentH, dw, dh) }, onCancel = { stopSelf() })
+        if (com.gamelingo.mobile.core.capture.AlignGeometry.check(contentW, contentH, dw, dh) !=
+            com.gamelingo.mobile.core.capture.AlignGeometry.Check.Ok
+        ) {
+            // Never shrink the outline: a calibration must be for the true reported size.
+            com.gamelingo.mobile.core.diagnostics.GeometryDiagnostics.record(
+                "app-window: align refused, content=${contentW}x$contentH display=${dw}x$dh",
+            )
+            Toast.makeText(this, R.string.align_unsupported, Toast.LENGTH_LONG).show()
+            stopSelf()
+            return
+        }
+        // Two windows: the outline is EXACTLY the reported size and carries nothing,
+        // the controls live in their own bar at the top of the display, so they stay
+        // reachable whatever size the window is.
+        val frame = AlignOutline.buildOutline(this)
+        val bar = AlignOutline.buildControls(this, onConfirm = { confirm(contentW, contentH, dw, dh) }, onCancel = { stopSelf() })
+        val flags = WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
+            WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
         val lp = WindowManager.LayoutParams(
-            contentW, contentH, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY,
-            WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS or
-                WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE,
-            PixelFormat.TRANSLUCENT,
+            contentW, contentH, WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flags, PixelFormat.TRANSLUCENT,
         ).apply { gravity = Gravity.TOP or Gravity.START; x = 0; y = 0 }
         params = lp
         var downX = 0f; var downY = 0f; var startX = 0; var startY = 0
-        label.setOnTouchListener { _, e ->
+        frame.setOnTouchListener { _, e ->
             when (e.actionMasked) {
                 MotionEvent.ACTION_DOWN -> { downX = e.rawX; downY = e.rawY; startX = lp.x; startY = lp.y }
                 MotionEvent.ACTION_MOVE -> {
-                    lp.x = (startX + (e.rawX - downX)).toInt().coerceIn(0, (dw - contentW).coerceAtLeast(0))
-                    lp.y = (startY + (e.rawY - downY)).toInt().coerceIn(0, (dh - contentH).coerceAtLeast(0))
+                    lp.x = (startX + (e.rawX - downX)).toInt().coerceIn(0, dw - contentW)
+                    lp.y = (startY + (e.rawY - downY)).toInt().coerceIn(0, dh - contentH)
                     runCatching { manager.updateViewLayout(frame, lp) }
                 }
             }
             true
         }
-        try { manager.addView(frame, lp) } catch (e: Exception) { stopSelf(); return }
+        val barLp = WindowManager.LayoutParams(
+            WindowManager.LayoutParams.WRAP_CONTENT, WindowManager.LayoutParams.WRAP_CONTENT,
+            WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY, flags or WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS,
+            PixelFormat.TRANSLUCENT,
+        ).apply { gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL; y = (48 * resources.displayMetrics.density).toInt() }
+        try {
+            manager.addView(frame, lp)
+            manager.addView(bar, barLp)
+        } catch (e: Exception) { stopSelf(); return }
         outline = frame
+        controls = bar
     }
 
     private fun confirm(contentW: Int, contentH: Int, dw: Int, dh: Int) {
@@ -88,7 +113,9 @@ class WindowAlignService : Service() {
 
     override fun onDestroy() {
         runCatching { outline?.let { wm?.removeView(it) } }
+        runCatching { controls?.let { wm?.removeView(it) } }
         outline = null
+        controls = null
         super.onDestroy()
     }
 
@@ -99,30 +126,38 @@ class WindowAlignService : Service() {
     }
 }
 
-/** The outline, hint and Confirm/Cancel row. Separate so it can be rendered and tested. */
+/** The outline (stroke only, empty inside) and the separate hint/Confirm/Cancel bar. Separate so they can be rendered and tested. */
 object AlignOutline {
-    fun build(context: Context, onConfirm: () -> Unit, onCancel: () -> Unit): Pair<FrameLayout, TextView> {
+    fun buildOutline(context: Context): FrameLayout {
         val density = context.resources.displayMetrics.density
-        val frame = FrameLayout(context).apply {
+        return FrameLayout(context).apply {
             background = GradientDrawable().apply {
                 setColor(Color.TRANSPARENT) // the game must stay fully visible inside the outline
                 setStroke((3 * density).toInt(), Color.rgb(124, 77, 255))
             }
         }
-        val label = TextView(context).apply {
+    }
+
+    fun buildControls(context: Context, onConfirm: () -> Unit, onCancel: () -> Unit): FrameLayout {
+        val density = context.resources.displayMetrics.density
+        val box = FrameLayout(context).apply { setBackgroundColor(Color.argb(210, 20, 16, 32)) }
+        val column = android.widget.LinearLayout(context).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            val p = (8 * density).toInt()
+            setPadding(p, p, p, p)
+        }
+        column.addView(TextView(context).apply {
             setText(R.string.align_hint)
             setTextColor(Color.WHITE)
             textSize = 13f
             gravity = Gravity.CENTER
-            setBackgroundColor(Color.argb(190, 20, 16, 32))
-            val p = (8 * density).toInt()
-            setPadding(p, p, p, p)
-        }
-        frame.addView(label, FrameLayout.LayoutParams(-1, -2, Gravity.TOP))
+        })
         val row = android.widget.LinearLayout(context).apply { gravity = Gravity.CENTER }
         row.addView(Button(context).apply { setText(R.string.align_confirm); setOnClickListener { onConfirm() } })
         row.addView(Button(context).apply { setText(R.string.region_cancel); setOnClickListener { onCancel() } })
-        frame.addView(row, FrameLayout.LayoutParams(-2, -2, Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL))
-        return frame to label
+        column.addView(row)
+        box.addView(column)
+        return box
     }
 }

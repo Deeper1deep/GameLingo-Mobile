@@ -564,7 +564,8 @@
     <string name="region_selector_hint">اسحب الزوايا لتغيير الحجم، واسحب الداخل لتحريك المنطقة</string>
     <string name="app_window_no_size">وضع نافذة التطبيق: النظام ما بعتش مقاس النافذة، فالترجمة واقفة. جرّب تختار النافذة تاني أو ارجع لوضع الشاشة كاملة.</string>
     <string name="align_need_session">ابدأ الترجمة في وضع نافذة التطبيق الأول، لحد ما النظام يبعت مقاس النافذة.</string>
-    <string name="align_hint">اسحب الإطار من هنا فوق نافذة اللعبة بالظبط، وبعدين اضغط تأكيد.</string>
+    <string name="align_hint">اسحب الإطار البنفسجي فوق نافذة اللعبة بالظبط، وبعدين اضغط تأكيد.</string>
+    <string name="align_unsupported">مقاس النافذة أكبر من الشاشة، فمقدرش أضبط الإطار. الترجمة هتفضل في مكان ثابت.</string>
     <string name="align_confirm">تأكيد</string>
     <string name="appwin_title">تصوير نافذة تطبيق واحدة</string>
     <string name="appwin_sub">بدل الشاشة كاملة، بتختار نافذة اللعبة بس (أندرويد 14 وفوق).</string>

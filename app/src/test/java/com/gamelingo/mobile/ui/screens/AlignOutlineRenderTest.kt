@@ -28,9 +28,11 @@ class AlignOutlineRenderTest {
             addView(android.view.View(activity).apply { setBackgroundColor(android.graphics.Color.WHITE) },
                 android.widget.FrameLayout.LayoutParams(600, 70).apply { leftMargin = 300; topMargin = 1550 })
         }
-        val (frame, _) = AlignOutline.build(activity, onConfirm = { confirmed = true }, onCancel = {})
+        val frame = AlignOutline.buildOutline(activity)
+        val bar = AlignOutline.buildControls(activity, onConfirm = { confirmed = true }, onCancel = {})
         // a window of 2/3 the display height, offset from the top, as the user would drag it
         host.addView(frame, android.widget.FrameLayout.LayoutParams(900, 1500).apply { topMargin = 300; leftMargin = 150 })
+        host.addView(bar, android.widget.FrameLayout.LayoutParams(-2, -2, android.view.Gravity.TOP or android.view.Gravity.CENTER_HORIZONTAL).apply { topMargin = 120 })
         activity.setContentView(host)
         rule.waitForIdle()
         val view = activity.window.decorView
