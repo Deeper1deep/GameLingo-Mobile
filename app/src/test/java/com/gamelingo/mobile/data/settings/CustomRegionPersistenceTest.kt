@@ -187,7 +187,7 @@ class CustomRegionPersistenceTest {
         val KP = androidx.datastore.preferences.core.stringPreferencesKey("custom_region_portrait")
         val KL = androidx.datastore.preferences.core.stringPreferencesKey("custom_region_landscape")
         val KK = androidx.datastore.preferences.core.stringPreferencesKey("custom_region_linked")
-        val corrupt = listOf("garbage", "0.1,0.2,0.3", "NaN,0,1,1", "0.9,0.9,0.1,0.1", "-1,0,2,2", "0.1,0.2,0.3,0.4,0.5", "")
+        val corrupt = listOf("garbage", "0.1,0.2,0.3", "NaN,0,1,1", "Infinity,0,1,1", "0.5,0.5,0.5,0.5", "0.1,0.2,0.3,0.4,0.5", "")
         for (bad in corrupt) {
             repo.clearCustomRegions()
             store.edit {
@@ -200,6 +200,13 @@ class CustomRegionPersistenceTest {
             assertNull("corrupt '$bad' must not become a region", after.linkedRegion)
             assertNull(after.customRegions.portrait)
         }
+        // Out-of-range or inverted (but finite) values are repaired by design into an in-bounds region.
+        repo.clearCustomRegions()
+        store.edit { it[KP] = "0.9,0.9,0.1,0.1" }
+        repo.migrateLinkedRegion(preferLandscape = false)
+        val repaired = repo.settings.first().linkedRegion
+        assertNotNull(repaired)
+        assertTrue(repaired!!.left >= 0f && repaired.right <= 1f && repaired.left < repaired.right)
         // A corrupt linked value does not block migrating a valid legacy one.
         repo.clearCustomRegions()
         store.edit {
