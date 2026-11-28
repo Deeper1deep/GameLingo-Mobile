@@ -159,8 +159,8 @@ class TranslationCoordinatorRateLimitTest {
         assertTrue("translation never resumed", waitUntil(12_000) {
             TranslationSessionBus.translatedLine.value?.original == "Newest line"
         })
-        assertTrue(api.texts.last().contains("Newest line"))
-        assertFalse("a superseded line was sent after recovery", api.texts.drop(1).any { it.contains("Second line") && !it.contains("Newest line") })
+        assertTrue("sent prompts: ${api.texts.map { it.replace("\n", " / ") }}", api.texts.last().contains("Newest line"))
+        assertFalse("a superseded line was sent after recovery: ${api.texts.map { it.replace("\n", " / ") }}", api.texts.drop(1).any { it.contains("Second line") && !it.contains("Newest line") })
         assertEquals(RequestState.SUCCESS, TranslationSessionBus.workerStatus.value.state)
     }
 
@@ -193,6 +193,6 @@ class TranslationCoordinatorRateLimitTest {
         collector.interrupt()
         collector.join()
         assertEquals("New subtitle", TranslationSessionBus.translatedLine.value?.original)
-        assertFalse("the old response was shown: $shownOriginals", shownOriginals.contains("Old subtitle"))
+        assertFalse("the old response was shown: $shownOriginals prompts=${api.texts.map { it.replace("\n", " / ") }}", shownOriginals.contains("Old subtitle"))
     }
 }
