@@ -259,7 +259,7 @@ class ScreenCaptureService : Service() {
                 )
                 if (state is com.gamelingo.mobile.core.capture.AppWindowCapture.Startup.TimedOut) {
                     geoLog("app-window: no onCapturedContentResize within ${com.gamelingo.mobile.core.capture.AppWindowCapture.STARTUP_TIMEOUT_MILLIS} ms; OCR stays paused")
-                    android.widget.Toast.makeText(this@ScreenCaptureService, R.string.app_window_no_size, android.widget.Toast.LENGTH_LONG).show()
+                    com.gamelingo.mobile.core.ui.MainThreadNotice.toast(this@ScreenCaptureService, R.string.app_window_no_size)
                 }
             }
         }
@@ -803,7 +803,7 @@ class ScreenCaptureService : Service() {
                 if (appliedRegionKey != key) {
                     appliedRegionKey = key
                     geoLog("app-window: no translation area picked for this window; OCR paused until the user picks one")
-                    android.widget.Toast.makeText(this, R.string.appwin_repick_needed, android.widget.Toast.LENGTH_LONG).show()
+                    com.gamelingo.mobile.core.ui.MainThreadNotice.toast(this, R.string.appwin_repick_needed)
                 }
                 return
             }

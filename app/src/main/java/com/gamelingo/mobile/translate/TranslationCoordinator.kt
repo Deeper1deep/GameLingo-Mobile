@@ -70,7 +70,16 @@ class TranslationCoordinator @Inject constructor(
     /** Idempotent: safe to call from every service start and app launch. */
     fun start() {
         if (!started.compareAndSet(false, true)) return
-        val translationWorker = TranslationWorker(processor = ::processRequest)
+        val translationWorker = TranslationWorker(
+            processor = ::processRequest,
+            cooldownRemainingMs = { OnlineRequestGate.shared.remainingMs() },
+            isRelevant = { r ->
+                TranslationSessionBus.state.value == SessionState.RUNNING &&
+                    (r.generation == TranslationSessionBus.NO_ID ||
+                        r.generation == TranslationSessionBus.currentGeneration()) &&
+                    TranslationSessionBus.isSubtitleActive(r.subtitleId)
+            },
+        )
         worker = translationWorker
         translationWorker.start()
         scope.launch {

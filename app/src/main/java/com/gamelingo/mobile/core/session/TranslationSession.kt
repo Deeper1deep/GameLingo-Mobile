@@ -113,6 +113,8 @@ data class WorkerStatus(
     val lastSuccessAtMillis: Long = -1,
     val lastError: String? = null,
     val recoveryCount: Int = 0,
+    /** Epoch millis the online rate-limit cooldown ends at; -1 when none is active. */
+    val cooldownUntilMillis: Long = -1,
 )
 
 /** One accepted OCR line, ready for the translation engine (Phase 4). */
