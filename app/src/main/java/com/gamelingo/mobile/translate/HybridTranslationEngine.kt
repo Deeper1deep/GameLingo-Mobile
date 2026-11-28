@@ -110,7 +110,7 @@ class HybridTranslationEngine @Inject constructor(
      * model, no key or consent, or an active cooldown): the caller then translates
      * line by line through the normal path. No retry here: every attempt is a request.
      */
-    override suspend fun translateBatch(requests: List<TranslationRequest>): List<String>? {
+    override suspend fun translateBatch(requests: List<TranslationRequest>): List<String?>? {
         val settings = settingsRepository.settings.first()
         val cloudAllowed = settings.cloudTranslationOptIn && settings.onlineApiKey.isNotBlank()
         val online = when (settings.aiMode) {

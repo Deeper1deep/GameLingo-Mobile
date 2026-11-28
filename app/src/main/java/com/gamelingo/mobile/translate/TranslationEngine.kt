@@ -55,7 +55,7 @@ interface TranslationEngine {
      * then translate line by line). Throws [BatchMisalignedException] when the
      * answer does not map exactly onto the inputs.
      */
-    suspend fun translateBatch(requests: List<TranslationRequest>): List<String>? = null
+    suspend fun translateBatch(requests: List<TranslationRequest>): List<String?>? = null
 
     fun close()
 }

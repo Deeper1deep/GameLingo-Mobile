@@ -114,7 +114,12 @@
     <string name="overlay_waiting">بيسمع اللعبة… الترجمة هتظهر هنا</string>
     <string name="overlay_error">حصلت مشكلة في قراءة الشاشة. افتح GameLingo وابدأ الجلسة من جديد.</string>
     <string name="overlay_notice_online_not_configured">وضع أونلاين مش جاهز: دخّل مفتاح API ووافق على الترجمة السحابية من الإعدادات</string>
-    <string name="overlay_notice_lines_lost">في جمل ما اتترجمتش (زحمة أو انتظار طويل). التفاصيل في صفحة التشخيص</string>
+    <string name="history_untranslated_overflow">ما اتترجمتش: الزحمة كانت أكبر من الطابور (الأصل محفوظ)</string>
+    <string name="history_untranslated_expired">ما اتترجمتش: استنت أكتر من اللازم (الأصل محفوظ)</string>
+    <string name="history_untranslated_retries">ما اتترجمتش: الخدمة رفضت أكتر من مرة (الأصل محفوظ)</string>
+    <string name="history_untranslated_stopped">ما اتترجمتش: الجلسة اتوقفت (الأصل محفوظ)</string>
+    <string name="history_untranslated_failed">ما اتترجمتش: حصلت مشكلة (الأصل محفوظ)</string>
+    <string name="overlay_notice_lines_lost">في جمل ما اتترجمتش (زحمة أو انتظار طويل). الأصل محفوظ في السجل</string>
     <string name="diag_batch_fmt">طلبات جمّعت جمل: %1$d (إجمالي الجمل فيها: %2$d)</string>
     <string name="diag_requests_minute_fmt">طلبات للخدمة في آخر دقيقة: %1$d</string>
     <string name="diag_lost_lines_fmt">جمل ما اتترجمتش: %1$d</string>

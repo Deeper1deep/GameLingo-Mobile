@@ -69,6 +69,7 @@ class TranslationCoordinator @Inject constructor(
     private val contextMemory = ContextMemory(maxLines = MAX_CONTEXT_LINES)
     @Volatile private var lastContextMode: com.gamelingo.mobile.data.settings.ArabicTranslationMode? = null
     private val historyRecorder = HistoryRecorder.over(historyDao)
+    private val historyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Visible for tests: the worker driving every translation request. */
     var worker: TranslationWorker? = null
@@ -82,6 +83,7 @@ class TranslationCoordinator @Inject constructor(
             // translation goes to the history instead of being skipped.
             processor = { processRequest(it, includeOffscreen = true) },
             batchProcessor = ::processBatch,
+            onLost = ::keepOriginal,
             recentOnlineRequests = { OnlineRequestGate.shared.startsInLast(RECENT_WINDOW_MS) },
             // A bounded backlog: while the provider's wait is active lines queue instead of being skipped.
             queueCapacity = BACKLOG_CAPACITY,
@@ -424,7 +426,7 @@ class TranslationCoordinator @Inject constructor(
         if (pending.isEmpty()) return BatchResult(lastOutcome ?: ProcessorOutcome("skipped-stale", false))
 
         val retry = ArrayList<QueuedRequest>()
-        var lost = 0
+        val lost = ArrayList<QueuedRequest>()
         var firstError: Exception? = null
 
         /** One line through the normal path; classifies its failure for the batch result. */
@@ -432,19 +434,19 @@ class TranslationCoordinator @Inject constructor(
             try {
                 lastOutcome = processRequest(item.queued, includeOffscreen = true)
             } catch (timeout: TimeoutCancellationException) {
-                lost++
+                lost.add(item.queued)
                 if (firstError == null) firstError = timeout
             } catch (cancelled: CancellationException) {
                 throw cancelled
             } catch (error: Exception) {
-                if (error is QuotaExceededException) retry.add(item.queued) else lost++
+                if (error is QuotaExceededException) retry.add(item.queued) else lost.add(item.queued)
                 if (firstError == null || error is QuotaExceededException) firstError = error
             }
         }
 
         if (pending.size == 1) {
             single(pending.first())
-            return BatchResult(lastOutcome, retry, lost, firstError)
+            return BatchResult(lastOutcome, retry, lost.toList(), firstError)
         }
 
         val requests = pending.map { item ->
@@ -460,7 +462,7 @@ class TranslationCoordinator @Inject constructor(
             withTimeout(settings.requestTimeoutSec * BATCH_TIMEOUT_FACTOR_MS) { hybridEngine.translateBatch(requests) }
         } catch (timeout: TimeoutCancellationException) {
             pending.forEach { failVisibly(it) }
-            return BatchResult(lastOutcome, emptyList(), pending.size, timeout)
+            return BatchResult(lastOutcome, emptyList(), pending.map { it.queued }, timeout)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } catch (misaligned: BatchMisalignedException) {
@@ -474,18 +476,23 @@ class TranslationCoordinator @Inject constructor(
                 TranslationSessionBus.onNotice(SessionNotice.ONLINE_NOT_CONFIGURED)
             }
             return if (error is QuotaExceededException) {
-                BatchResult(lastOutcome, pending.map { it.queued }, 0, error)
+                BatchResult(lastOutcome, pending.map { it.queued }, emptyList(), error)
             } else {
-                BatchResult(lastOutcome, emptyList(), pending.size, error)
+                BatchResult(lastOutcome, emptyList(), pending.map { it.queued }, error)
             }
         }
         if (answers == null) {
             // No batch path (local mode, active cooldown) or a misaligned answer: one line at a time.
             pending.forEach { single(it) }
-            return BatchResult(lastOutcome, retry, lost, firstError)
+            return BatchResult(lastOutcome, retry, lost.toList(), firstError)
         }
         for ((index, item) in pending.withIndex()) {
-            val translated = answers[index]
+            val translated = answers.getOrNull(index)
+            if (translated.isNullOrBlank()) {
+                // Missing, duplicate, mislabeled or echo-mismatched entry: this line alone, never a guess.
+                single(item)
+                continue
+            }
             val inspection = com.gamelingo.mobile.core.quality.TranslationQualityGate
                 .inspect(item.request.text, translated, arabicMode)
             if (inspection.issues.isNotEmpty() || inspection.corrected) {
@@ -504,7 +511,21 @@ class TranslationCoordinator @Inject constructor(
             }
             lastOutcome = ProcessorOutcome(result.engineId, false)
         }
-        return BatchResult(lastOutcome, retry, lost, firstError)
+        return BatchResult(lastOutcome, retry, lost.toList(), firstError)
+    }
+
+    /**
+     * A captured line that ended without a translation keeps its ORIGINAL in the history, with the
+     * reason as status. Runs outside the session scope so a session stop cannot cancel the save.
+     */
+    private fun keepOriginal(queued: QueuedRequest, reason: String) {
+        historyScope.launch {
+            runCatching {
+                historyRecorder.recordUntranslated(
+                    queued.subtitleId, TranslationSessionBus.NO_ID, queued.text, reason, queued.capturedAtMillis,
+                )
+            }
+        }
     }
 
     private fun failVisibly(item: Prepared) {

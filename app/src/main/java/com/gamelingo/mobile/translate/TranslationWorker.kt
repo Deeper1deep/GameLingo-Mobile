@@ -43,7 +43,7 @@ data class BatchResult(
     /** Lines the provider's rate limit deferred, oldest first: the worker queues them again. */
     val retry: List<QueuedRequest> = emptyList(),
     /** Lines that ended without a translation (already shown as a visible failure). */
-    val lost: Int = 0,
+    val lost: List<QueuedRequest> = emptyList(),
     /** The failure that decided the worker state, or null when everything was translated. */
     val error: Exception? = null,
 )
@@ -106,7 +106,14 @@ class TranslationWorker(
     private val coalesceWindowMs: Long = DEFAULT_COALESCE_WINDOW_MS,
     private val maxBatchLines: Int = BatchFormat.MAX_LINES,
     private val maxBatchChars: Int = BatchFormat.MAX_CHARS,
+    /**
+     * A line that ends without a translation: its ORIGINAL goes to the history with this reason
+     * (overflow, expired, failed, retries, stopped), so no captured sentence is silently discarded.
+     */
+    private val onLost: (QueuedRequest, String) -> Unit = { _, _ -> },
 ) {
+    @Volatile private var inFlight: List<QueuedRequest> = emptyList()
+
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
@@ -173,12 +180,18 @@ class TranslationWorker(
      */
     fun stop() {
         if (!running.compareAndSet(true, false)) return
+        val inFlightAtStop = inFlight
         workerJob?.cancel()
         watchdogJob?.cancel()
         workerJob = null
         watchdogJob = null
         activeRequest = null
-        synchronized(queueLock) { queue.clear() }
+        // Stopping is deliberate: waiting and in-flight lines are kept in the history as untranslated
+        // originals (no loss notice, the user stopped the session).
+        val leftovers = ArrayList<QueuedRequest>(inFlightAtStop)
+        inFlight = emptyList()
+        synchronized(queueLock) { leftovers.addAll(queue); queue.clear() }
+        leftovers.forEach { runCatching { onLost(it, REASON_STOPPED) } }
         lastEnqueuedText = null
         lastEnqueuedSubtitleId = 0L
         updateStatus(RequestState.IDLE, activeRequestId = null)
@@ -220,7 +233,7 @@ class TranslationWorker(
                 // in the diagnostics and announced once as a notice.
                 val dropped = queue.pollFirst()
                 log("queue full: dropped #${dropped?.id}, enqueued #${request.id}")
-                if (dropped != null) markLost(1)
+                if (dropped != null) markLost(listOf(dropped), REASON_OVERFLOW)
             }
             queue.addLast(request)
         }
@@ -242,7 +255,7 @@ class TranslationWorker(
                     // Max Queue Age: a line this old waited too long for the
                     // provider. It is counted and announced, never silent.
                     log("dropped #${request.id}: older than maxQueueAgeMs=$maxQueueAgeMs")
-                    markLost(1)
+                    markLost(listOf(request), REASON_EXPIRED)
                     continue
                 }
                 if (request == null) {
@@ -282,6 +295,7 @@ class TranslationWorker(
                     }
                 }
                 activeRequest = request
+                inFlight = listOf(request)
                 lastProgressAtMillis = now()
                 updateStatus(RequestState.TRANSLATING, activeRequestId = request.id)
                 log(
@@ -314,7 +328,7 @@ class TranslationWorker(
                         activeRequestId = null,
                         error = TranslationErrorCode.of(timeout),
                     )
-                    markLost(1)
+                    markLost(listOf(request), REASON_FAILED)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
@@ -353,10 +367,11 @@ class TranslationWorker(
                     if (error is QuotaExceededException && !RetryAfter.isIndefinite(waitMs)) {
                         if (batchProcessor != null) requeueFront(listOf(request)) else scheduleResume(request, waitMs)
                     } else {
-                        markLost(1)
+                        markLost(listOf(request), REASON_FAILED)
                     }
                 } finally {
                     activeRequest = null
+                    inFlight = emptyList()
                 }
             }
         } catch (cancelled: CancellationException) {
@@ -379,7 +394,7 @@ class TranslationWorker(
                 if (chars + next.text.length > maxBatchChars) break
                 queue.pollFirst()
                 if (now() - next.capturedAtMillis > maxQueueAgeMs) {
-                    markLost(1)
+                    markLost(listOf(next), REASON_EXPIRED)
                     continue
                 }
                 batch.add(next)
@@ -392,6 +407,7 @@ class TranslationWorker(
     private suspend fun runBatch(batch: List<QueuedRequest>) {
         val lead = batch.first()
         activeRequest = lead
+        inFlight = batch
         lastProgressAtMillis = now()
         updateStatus(RequestState.TRANSLATING, activeRequestId = lead.id)
         log("started batch #${lead.id} size=${batch.size} depth=${queueSize()}")
@@ -426,14 +442,15 @@ class TranslationWorker(
                         else -> now() + waitMs
                     },
                 )
-                if (result.retry.isNotEmpty() && RetryAfter.isIndefinite(waitMs)) markLost(result.retry.size)
+                if (result.retry.isNotEmpty() && RetryAfter.isIndefinite(waitMs)) markLost(result.retry, REASON_FAILED)
                 else if (result.retry.isNotEmpty()) requeueFront(result.retry)
             }
-            if (result.lost > 0) markLost(result.lost)
+            if (result.lost.isNotEmpty()) markLost(result.lost, REASON_FAILED)
         } catch (cancelled: CancellationException) {
             throw cancelled
         } finally {
             activeRequest = null
+            inFlight = emptyList()
         }
     }
 
@@ -441,16 +458,17 @@ class TranslationWorker(
     private fun requeueFront(lines: List<QueuedRequest>) {
         val keep = ArrayList<QueuedRequest>()
         for (line in lines) {
-            if (line.attempts + 1 >= MAX_LINE_ATTEMPTS) markLost(1) else keep.add(line.copy(attempts = line.attempts + 1))
+            if (line.attempts + 1 >= MAX_LINE_ATTEMPTS) markLost(listOf(line), REASON_RETRIES) else keep.add(line.copy(attempts = line.attempts + 1))
         }
         synchronized(queueLock) { keep.asReversed().forEach { queue.addFirst(it) } }
         wakeup.trySend(Unit)
     }
 
     /** Lines that ended without a translation: counted in the diagnostics and announced once as a notice. */
-    private fun markLost(count: Int) {
-        if (count <= 0) return
-        status = status.copy(lostLines = status.lostLines + count)
+    private fun markLost(lines: List<QueuedRequest>, reason: String) {
+        if (lines.isEmpty()) return
+        lines.forEach { runCatching { onLost(it, reason) } }
+        status = status.copy(lostLines = status.lostLines + lines.size)
         TranslationSessionBus.onNotice(com.gamelingo.mobile.core.session.SessionNotice.TRANSLATION_LINES_LOST)
         TranslationSessionBus.onWorkerStatus(status)
     }
@@ -632,6 +650,11 @@ class TranslationWorker(
         const val RESUME_SLACK_MS = 250L
 
         /** A queued line is sent back after a rate limit at most this many times before it counts as lost. */
+        const val REASON_OVERFLOW = "overflow"
+        const val REASON_EXPIRED = "expired"
+        const val REASON_FAILED = "failed"
+        const val REASON_RETRIES = "retries"
+        const val REASON_STOPPED = "stopped"
         const val MAX_LINE_ATTEMPTS = 6
         const val WAIT_SLICE_MS = 1_000L
 

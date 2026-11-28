@@ -3,6 +3,7 @@ package com.gamelingo.mobile.translate
 import java.io.IOException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 
 /**
@@ -38,9 +39,10 @@ object BatchFormat {
     const val SYSTEM_SUFFIX: String =
         "\nBATCH MODE for this request: the user message holds several numbered subtitle lines. " +
             "Translate EACH line on its own, with every rule above applied to every line. " +
-            "Output ONLY a JSON array of strings: exactly one string per numbered line, in the same " +
-            "order. Never merge, split, skip, reorder or repeat lines. Do not add numbers or " +
-            "comments inside the strings."
+            "Output ONLY a JSON array with one object per numbered line: " +
+            "{\"n\": the line number, \"src\": the first 3 words of that source line copied exactly, " +
+            "\"t\": the translation of that line only}. Use every number exactly once. " +
+            "Never merge, split, skip or repeat lines. Do not add numbers or comments inside \"t\"."
 
     fun userPrompt(
         lines: List<String>,
@@ -70,27 +72,52 @@ object BatchFormat {
         return builder.toString().trimEnd()
     }
 
+    /** Words of the source line the model must copy back, so every answer can be matched to its line. */
+    const val ECHO_WORDS = 3
+
+    private fun tokens(text: String): List<String> =
+        text.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+
     /**
-     * The translations in input order, or null unless the answer is a JSON array
-     * of exactly [expected] non-blank strings. Surrounding code fences or prose
-     * are tolerated; anything that makes the count or the alignment doubtful is not.
+     * Per input line: its translation, or null when that entry cannot be trusted and the line must be
+     * translated on its own. The answer is a JSON array of objects {"n": line number, "src": first words
+     * of the source line copied back, "t": translation}. An entry is used only when
+     * - "n" is an integer between 1 and the number of lines,
+     * - that "n" appears exactly once (duplicates reject every copy),
+     * - "src" is the start of THAT line's source text (same words, case and punctuation ignored),
+     * - "t" is a non-blank string.
+     * Entries are placed by their number, so a different order is harmless. A missing number leaves that line
+     * null. Returns null when the answer is not a JSON array at all.
+     *
+     * Limit: this catches shifted, duplicated, dropped and mislabeled entries. It cannot prove that the
+     * translation text inside a correctly labeled entry belongs to that line: a model that copies the right
+     * echo but writes another line's translation would pass (the quality gate catches only some of those).
      */
-    fun parse(raw: String, expected: Int): List<String>? {
-        if (expected <= 0) return null
+    fun parseEntries(raw: String, sources: List<String>): List<String?>? {
+        if (sources.isEmpty()) return null
         val start = raw.indexOf('[')
         val end = raw.lastIndexOf(']')
         if (start < 0 || end <= start) return null
-        val element = runCatching { Json.parseToJsonElement(raw.substring(start, end + 1)) }.getOrNull()
-        val array = element as? JsonArray ?: return null
-        if (array.size != expected) return null
-        val out = ArrayList<String>(expected)
+        val array = runCatching { Json.parseToJsonElement(raw.substring(start, end + 1)) }.getOrNull() as? JsonArray
+            ?: return null
+        val byNumber = HashMap<Int, MutableList<JsonObject>>()
         for (item in array) {
-            val primitive = item as? JsonPrimitive ?: return null
-            if (!primitive.isString) return null
-            val text = primitive.content.trim()
-            if (text.isEmpty()) return null
-            out.add(text)
+            val obj = item as? JsonObject ?: continue
+            val n = (obj["n"] as? JsonPrimitive)?.takeIf { !it.isString }?.content?.toIntOrNull() ?: continue
+            if (n < 1 || n > sources.size) continue
+            byNumber.getOrPut(n) { ArrayList() }.add(obj)
         }
-        return out
+        return sources.mapIndexed { index, source ->
+            val entries = byNumber[index + 1] ?: return@mapIndexed null
+            if (entries.size != 1) return@mapIndexed null
+            val obj = entries.first()
+            val echo = tokens((obj["src"] as? JsonPrimitive)?.takeIf { it.isString }?.content ?: return@mapIndexed null)
+            val sourceTokens = tokens(source)
+            if (echo.isEmpty() || echo.size > sourceTokens.size) return@mapIndexed null
+            if (echo != sourceTokens.take(echo.size)) return@mapIndexed null
+            if (echo.size < minOf(ECHO_WORDS, sourceTokens.size)) return@mapIndexed null
+            val t = (obj["t"] as? JsonPrimitive)?.takeIf { it.isString }?.content?.trim() ?: return@mapIndexed null
+            t.ifEmpty { null }
+        }
     }
 }

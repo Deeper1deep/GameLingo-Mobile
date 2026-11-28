@@ -24,4 +24,19 @@ data class TranslationHistoryEntity(
     val engine: String,
     @ColumnInfo(name = "created_at")
     val createdAt: Long,
-)
+    /**
+     * [STATUS_TRANSLATED] for a normal row. Anything else marks an ORIGINAL that was captured but
+     * never translated (translated_text is empty); the status says why. Never served from the cache.
+     */
+    @ColumnInfo(name = "status", defaultValue = "translated")
+    val status: String = STATUS_TRANSLATED,
+) {
+    val isUntranslated: Boolean get() = status != STATUS_TRANSLATED
+
+    companion object {
+        const val STATUS_TRANSLATED = "translated"
+        const val STATUS_PREFIX_UNTRANSLATED = "untranslated_"
+
+        fun untranslatedStatus(reason: String) = STATUS_PREFIX_UNTRANSLATED + reason
+    }
+}

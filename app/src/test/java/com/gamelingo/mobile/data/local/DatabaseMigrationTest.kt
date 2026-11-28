@@ -3,6 +3,7 @@ package com.gamelingo.mobile.data.local
 import androidx.room.testing.MigrationTestHelper
 import androidx.sqlite.db.framework.FrameworkSQLiteOpenHelperFactory
 import androidx.test.platform.app.InstrumentationRegistry
+import kotlinx.coroutines.flow.first
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -60,6 +61,76 @@ class DatabaseMigrationTest {
             "expected index_translation_history_created_at in $indexNames",
             indexNames.contains("index_translation_history_created_at"),
         )
+    }
+
+    @Test
+    fun `migrate 2 to 3 keeps every row as translated and adds the status column`() {
+        helper.createDatabase(TEST_DB, 2).apply {
+            execSQL(
+                "INSERT INTO translation_history " +
+                    "(source_text, translated_text, character_name, was_cached, engine, created_at) " +
+                    "VALUES ('hello', 'أهلاً', NULL, 0, 'mlkit-ondevice', 1234)",
+            )
+            close()
+        }
+        val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, Migrations.MIGRATION_2_3)
+        db.query("SELECT source_text, translated_text, status FROM translation_history").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("hello", c.getString(0))
+            assertEquals("أهلاً", c.getString(1))
+            assertEquals("translated", c.getString(2))
+        }
+    }
+
+    @Test
+    fun `the full 1 to 3 path works on old data`() {
+        helper.createDatabase(TEST_DB, 1).apply {
+            execSQL(
+                "INSERT INTO translation_history " +
+                    "(source_text, translated_text, character_name, was_cached, engine, created_at) " +
+                    "VALUES ('a', 'ب', NULL, 0, 'e', 1)",
+            )
+            close()
+        }
+        val db = helper.runMigrationsAndValidate(TEST_DB, 3, true, *Migrations.ALL)
+        db.query("SELECT status FROM translation_history").use { c ->
+            assertTrue(c.moveToFirst())
+            assertEquals("translated", c.getString(0))
+        }
+        val schema = java.io.File("schemas").walkTopDown().firstOrNull { it.name == "3.json" }
+        println("SCHEMA3_BEGIN")
+        println(schema?.readText() ?: "no 3.json found")
+        println("SCHEMA3_END")
+    }
+
+    @Test
+    fun `saved originals survive closing and reopening the database and stay out of the translated set`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
+        fun open() = androidx.room.Room.databaseBuilder(context, GameLingoDatabase::class.java, "reopen-test.db")
+            .allowMainThreadQueries().addMigrations(*Migrations.ALL).build()
+        context.deleteDatabase("reopen-test.db")
+        val first = open()
+        kotlinx.coroutines.runBlocking {
+            first.translationHistoryDao().insert(
+                TranslationHistoryEntity(sourceText = "Watch out", translatedText = "", engine = "none", createdAt = 5L,
+                    status = TranslationHistoryEntity.untranslatedStatus("expired")),
+            )
+            first.translationHistoryDao().insert(
+                TranslationHistoryEntity(sourceText = "Get down", translatedText = "انزل", engine = "e", createdAt = 6L),
+            )
+        }
+        first.close()
+        val second = open()
+        val rows = kotlinx.coroutines.runBlocking {
+            second.translationHistoryDao().observeRecent().let { it.first() }
+        }
+        second.close()
+        assertEquals(2, rows.size)
+        val saved = rows.single { it.sourceText == "Watch out" }
+        assertEquals("untranslated_expired", saved.status)
+        assertEquals("", saved.translatedText)
+        assertTrue(saved.isUntranslated)
+        assertEquals("translated", rows.single { it.sourceText == "Get down" }.status)
     }
 
     private companion object {

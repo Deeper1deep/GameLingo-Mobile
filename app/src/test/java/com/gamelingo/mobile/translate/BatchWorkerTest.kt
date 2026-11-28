@@ -23,8 +23,10 @@ class BatchWorkerTest {
         recent: () -> Int = { 0 },
         capacity: Int = 40,
         maxAge: Long = 180_000L,
+        lost: ConcurrentLinkedQueue<Pair<String, String>> = ConcurrentLinkedQueue(),
         batch: suspend (List<QueuedRequest>) -> BatchResult = { BatchResult(ok) },
     ) = TranslationWorker(
+        onLost = { r, reason -> lost.add(r.text to reason) },
         processor = { singles.add(it.text); ok },
         batchProcessor = { batches.add(it.map { r -> r.text }); batch(it) },
         queueCapacity = capacity,
@@ -98,7 +100,8 @@ class BatchWorkerTest {
     @Test fun `retries are bounded and the lines given up on are counted`() = runTest {
         val singles = ConcurrentLinkedQueue<String>()
         val batches = ConcurrentLinkedQueue<List<String>>()
-        val w = worker(singles, batches) { lines ->
+        val lost = ConcurrentLinkedQueue<Pair<String, String>>()
+        val w = worker(singles, batches, lost = lost) { lines ->
             BatchResult(null, retry = lines, error = QuotaExceededException("429", retryAfterMs = 5_000L))
         }
         w.start()
@@ -106,16 +109,21 @@ class BatchWorkerTest {
         repeat(20) { advanceTimeBy(6_000L); runCurrent() }
         assertTrue("bounded: ${batches.size}", batches.size <= 6)
         assertEquals(2, w.currentStatus().lostLines)
+        assertEquals(setOf("a" to "retries", "b" to "retries"), lost.toSet())
         w.stop()
     }
 
     @Test fun `overflow beyond capacity drops the oldest and counts it`() = runTest {
         val singles = ConcurrentLinkedQueue<String>()
         val batches = ConcurrentLinkedQueue<List<String>>()
-        val w = worker(singles, batches, capacity = 3, cooldown = { 100_000L })
+        val lost = ConcurrentLinkedQueue<Pair<String, String>>()
+        val w = worker(singles, batches, capacity = 3, cooldown = { 100_000L }, lost = lost)
         w.start()
         (1..6).forEach { w.enqueue("l$it", it.toLong(), subtitleId = it.toLong(), generation = 1) }
         runCurrent()
+        // The originals of the dropped lines are handed over, with the reason, in drop order.
+        assertTrue(lost.toList().take(3).all { it.second == "overflow" })
+        assertEquals(listOf("l1", "l2", "l3").take(lost.size.coerceAtMost(3)), lost.toList().take(3).map { it.first })
         assertTrue("lost=${w.currentStatus().lostLines}", w.currentStatus().lostLines >= 3)
         w.stop()
     }
@@ -124,7 +132,8 @@ class BatchWorkerTest {
         val singles = ConcurrentLinkedQueue<String>()
         val batches = ConcurrentLinkedQueue<List<String>>()
         var until = 100_000L
-        val w = worker(singles, batches, maxAge = 30_000L, cooldown = { (until - testScheduler.currentTime).coerceAtLeast(0L) })
+        val lost = ConcurrentLinkedQueue<Pair<String, String>>()
+        val w = worker(singles, batches, maxAge = 30_000L, lost = lost, cooldown = { (until - testScheduler.currentTime).coerceAtLeast(0L) })
         w.start()
         w.enqueue("old", 0, subtitleId = 1, generation = 1)
         runCurrent()
@@ -132,7 +141,21 @@ class BatchWorkerTest {
         runCurrent()
         assertTrue(singles.isEmpty() && batches.isEmpty())
         assertEquals(1, w.currentStatus().lostLines)
+        assertEquals(listOf("old" to "expired"), lost.toList())
         w.stop()
+    }
+
+    @Test fun `waiting lines are handed over as originals when the session stops`() = runTest {
+        val singles = ConcurrentLinkedQueue<String>()
+        val batches = ConcurrentLinkedQueue<List<String>>()
+        val lost = ConcurrentLinkedQueue<Pair<String, String>>()
+        val w = worker(singles, batches, cooldown = { 100_000L }, lost = lost)
+        w.start()
+        listOf("a", "b").forEachIndexed { i, t -> w.enqueue(t, i.toLong(), subtitleId = i + 1L, generation = 1) }
+        runCurrent()
+        w.stop()
+        assertEquals(setOf("a" to "stopped", "b" to "stopped"), lost.toSet())
+        assertEquals("a stop is deliberate: no loss counter", 0, w.currentStatus().lostLines)
     }
 
     @Test fun `close to the request budget lines are gathered first, only a delay`() = runTest {

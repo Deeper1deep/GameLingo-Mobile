@@ -49,6 +49,28 @@ class HistoryRecorder(private val store: Store) {
         if (subtitleId != noId && id > 0) synchronized(rowBySubtitle) { rowBySubtitle[subtitleId] = id }
     }
 
+    /**
+     * Keeps the ORIGINAL of a captured line that was never translated, with the reason in its status.
+     * It never overwrites a row this subtitle already has (a translated row stays, a saved original is
+     * not duplicated), and it is never a translation: the text is empty and nothing reads it as one.
+     * A later real translation of the same subtitle upgrades the row through [record].
+     */
+    suspend fun recordUntranslated(subtitleId: Long, noId: Long, original: String, reason: String, capturedAt: Long) {
+        if (original.isBlank()) return
+        if (subtitleId != noId && synchronized(rowBySubtitle) { rowBySubtitle.containsKey(subtitleId) }) return
+        val id = store.insert(
+            TranslationHistoryEntity(
+                sourceText = original,
+                translatedText = "",
+                engine = "none",
+                wasCached = false,
+                createdAt = capturedAt,
+                status = TranslationHistoryEntity.untranslatedStatus(reason),
+            ),
+        )
+        if (subtitleId != noId && id > 0) synchronized(rowBySubtitle) { rowBySubtitle[subtitleId] = id }
+    }
+
     companion object {
         const val DUPLICATE_WINDOW_MILLIS = 20_000L
         const val MAX_TRACKED = 64
@@ -57,7 +79,7 @@ class HistoryRecorder(private val store: Store) {
             object : Store {
                 override suspend fun insert(entry: TranslationHistoryEntity) = dao.insert(entry)
                 override suspend fun update(id: Long, entry: TranslationHistoryEntity) =
-                    dao.updateEntry(id, entry.sourceText, entry.translatedText, entry.engine, entry.wasCached, entry.createdAt)
+                    dao.updateEntry(id, entry.sourceText, entry.translatedText, entry.engine, entry.wasCached, entry.createdAt, entry.status)
                 override suspend fun findRecentDuplicate(source: String, translated: String, since: Long) =
                     dao.findRecentDuplicate(source, translated, since)
             },

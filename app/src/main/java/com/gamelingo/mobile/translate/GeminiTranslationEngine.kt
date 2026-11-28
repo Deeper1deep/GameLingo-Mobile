@@ -108,10 +108,10 @@ class GeminiTranslationEngine @Inject constructor(
     /**
      * One request for several lines. Same model, same style/profanity mandate,
      * same gate (so it counts as ONE request against the provider limit).
-     * Throws [BatchMisalignedException] unless the answer holds exactly one
-     * translation per input.
+     * Entries that fail the number or source-echo check come back null (translate those
+     * lines alone). Throws [BatchMisalignedException] when no entry is usable.
      */
-    override suspend fun translateBatch(requests: List<TranslationRequest>): List<String>? {
+    override suspend fun translateBatch(requests: List<TranslationRequest>): List<String?>? {
         if (requests.size < 2) return null
         val apiKey = settingsRepository.settings.first().onlineApiKey.trim()
         if (apiKey.isEmpty()) throw OnlineNotConfiguredException()
@@ -155,8 +155,11 @@ class GeminiTranslationEngine @Inject constructor(
             throw ProviderRefusedException("Gemini refused the batch ($finishReason)")
         }
         val raw = candidate?.content?.parts?.firstOrNull()?.text.orEmpty()
-        return BatchFormat.parse(raw, requests.size)
-            ?: throw BatchMisalignedException("Gemini batch answer did not match ${requests.size} lines")
+        val entries = BatchFormat.parseEntries(raw, requests.map { it.text })
+        if (entries == null || entries.all { it == null }) {
+            throw BatchMisalignedException("Gemini batch answer had no usable entry for ${requests.size} lines")
+        }
+        return entries
     }
 
     override fun close() = Unit

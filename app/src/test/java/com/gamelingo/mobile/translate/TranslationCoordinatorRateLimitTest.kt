@@ -41,6 +41,7 @@ class TranslationCoordinatorRateLimitTest {
         val calls = AtomicInteger(0)
         val texts = CopyOnWriteArrayList<String>()
         @Volatile var limitedUntilCall = 0
+        @Volatile var shiftEchoes = false
         @Volatile var latencyFor: (String) -> Long = { 0L }
 
         override suspend fun generateContent(model: String, apiKey: String, request: GeminiRequest): GeminiResponse {
@@ -59,7 +60,12 @@ class TranslationCoordinatorRateLimitTest {
             if (Regex("Translate these (\\d+) lines").containsMatchIn(prompt)) {
                 // Batch request: answer one string per numbered line, echoing the line so the test can check alignment.
                 val numbered = prompt.lines().mapNotNull { Regex("^(\\d+)\\. (.*)$").find(it)?.groupValues?.get(2) }
-                val array = numbered.joinToString(",", "[", "]") { "\"ترجمة: ${it}\"" }
+                val array = numbered.mapIndexed { i, line ->
+                    // "shift" mode: the model labels every answer with the NEXT line's words (misaligned).
+                    val echoFrom = if (shiftEchoes) numbered[(i + 1) % numbered.size] else line
+                    val echo = echoFrom.split(" ").take(3).joinToString(" ")
+                    "{\"n\":${i + 1},\"src\":\"$echo\",\"t\":\"ترجمة: $line\"}"
+                }.joinToString(",", "[", "]")
                 return GeminiResponse(
                     candidates = listOf(GeminiCandidate(content = GeminiContent(parts = listOf(GeminiPart(array))))),
                 )
@@ -168,6 +174,28 @@ class TranslationCoordinatorRateLimitTest {
         assertEquals(0, TranslationSessionBus.workerStatus.value.lostLines)
         assertEquals(1, TranslationSessionBus.workerStatus.value.batchesSent)
         assertEquals(RequestState.SUCCESS, TranslationSessionBus.workerStatus.value.state)
+    }
+
+    @Test
+    fun `a misaligned batch answer is never shown, every line is translated on its own`() {
+        val api = ScriptedApi().also { it.limitedUntilCall = 1; it.shiftEchoes = true }
+        start(api)
+        TranslationSessionBus.onNewLine("First line", System.currentTimeMillis())
+        assertTrue(waitUntil { TranslationSessionBus.workerStatus.value.state == RequestState.RATE_LIMITED })
+        val t0 = System.currentTimeMillis()
+        listOf("Second line", "Third line", "Newest line").forEachIndexed { i, text ->
+            TranslationSessionBus.onNewLine(text, t0 + i)
+            Thread.sleep(100)
+        }
+        assertTrue("never resumed", waitUntil(25_000) { api.calls.get() >= 6 })
+        assertTrue("single answer expected for the newest line", waitUntil(10_000) {
+            TranslationSessionBus.translatedLine.value?.original == "Newest line"
+        })
+        val shown = TranslationSessionBus.translatedLine.value!!
+        println("COORD3 prompts=${api.texts.map { it.replace("\n", " / ") }}")
+        // Not the batch text ("ترجمة: Newest line"): it came from the one-line request.
+        assertEquals("ترجمة", shown.translated)
+        assertEquals(0, TranslationSessionBus.workerStatus.value.lostLines)
     }
 
     @Test
