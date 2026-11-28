@@ -17,7 +17,7 @@ class BatchFormatTest {
     }
 
     @Test fun `a fenced answer and loose echo case and punctuation are accepted`() {
-        val raw = "```json\n" + answer(entry(1, "get DOWN", "انزل"), entry(2, "They are coming!", "جايين"), entry(3, "go", "يلا")) + "\n```"
+        val raw = "```json\n" + answer(entry(1, "get DOWN now", "انزل"), entry(2, "They are coming!", "جايين"), entry(3, "go", "يلا")) + "\n```"
         assertEquals(listOf("انزل", "جايين", "يلا"), BatchFormat.parseEntries(raw, sources))
     }
 
