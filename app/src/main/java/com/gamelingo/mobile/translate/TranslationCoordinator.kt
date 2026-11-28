@@ -69,6 +69,7 @@ class TranslationCoordinator @Inject constructor(
     private val contextMemory = ContextMemory(maxLines = MAX_CONTEXT_LINES)
     @Volatile private var lastContextMode: com.gamelingo.mobile.data.settings.ArabicTranslationMode? = null
     private val historyRecorder = HistoryRecorder.over(historyDao)
+    private val historyScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
 
     /** Visible for tests: the worker driving every translation request. */
     var worker: TranslationWorker? = null
@@ -78,7 +79,15 @@ class TranslationCoordinator @Inject constructor(
     fun start() {
         if (!started.compareAndSet(false, true)) return
         val translationWorker = TranslationWorker(
-            processor = ::processRequest,
+            // Every captured line is translated even when it has left the screen by now: a late
+            // translation goes to the history instead of being skipped.
+            processor = { processRequest(it, includeOffscreen = true) },
+            batchProcessor = ::processBatch,
+            onLost = ::keepOriginal,
+            recentOnlineRequests = { OnlineRequestGate.shared.startsInLast(RECENT_WINDOW_MS) },
+            // A bounded backlog: while the provider's wait is active lines queue instead of being skipped.
+            queueCapacity = BACKLOG_CAPACITY,
+            maxQueueAgeMs = BACKLOG_MAX_AGE_MS,
             cooldownRemainingMs = { OnlineRequestGate.shared.remainingMs() },
             isRelevant = { r ->
                 TranslationSessionBus.state.value == SessionState.RUNNING &&
@@ -146,7 +155,7 @@ class TranslationCoordinator @Inject constructor(
      * then rethrown so the worker can classify them into a [RequestState];
      * a cancellation (session stop or worker recovery) always propagates.
      */
-    private suspend fun processRequest(queued: QueuedRequest): ProcessorOutcome {
+    private suspend fun processRequest(queued: QueuedRequest, includeOffscreen: Boolean = false): ProcessorOutcome {
         // OCR clean-up is its own step, before translation and before the
         // cache key: only safe fixes (whitespace, doubled capture, "|" for
         // "I"); anything uncertain stays exactly as read.
@@ -162,7 +171,7 @@ class TranslationCoordinator @Inject constructor(
         }
         // The subtitle may have left the screen while the request waited in
         // the queue: translating a gone line only burns tokens and battery.
-        if (isStale(generation) || !TranslationSessionBus.isSubtitleActive(request.subtitleId)) {
+        if (isStale(generation) || (!includeOffscreen && !TranslationSessionBus.isSubtitleActive(request.subtitleId))) {
             return ProcessorOutcome("skipped-stale", false)
         }
         val settings = settingsRepository.settings.first()
@@ -358,6 +367,192 @@ class TranslationCoordinator @Inject constructor(
         }
     }
 
+    private class Prepared(
+        val queued: QueuedRequest,
+        val request: QueuedRequest,
+        val generation: Long,
+        val contextLines: List<String>,
+        val cacheContext: CacheContext,
+    )
+
+    /**
+     * Translates several waiting lines with ONE provider request.
+     *
+     * Rules that keep sentences safe:
+     * - cached lines are answered from the cache first, in order;
+     * - the answer must be exactly one non-blank translation per line, else none of it is used and
+     *   every line goes through the normal one-line path;
+     * - each translation still passes the quality gate; a flagged one is redone on its own;
+     * - a line the provider's rate limit deferred is handed back (never dropped here);
+     * - any other failure is shown as a visible failure for on-screen lines and counted as lost.
+     * A late translation is saved to the history even when the line has left the screen.
+     */
+    private suspend fun processBatch(batch: List<QueuedRequest>): BatchResult {
+        val settings = settingsRepository.settings.first()
+        val arabicMode = settings.arabicTranslationMode
+        if (lastContextMode != null && lastContextMode != arabicMode) contextMemory.clear()
+        lastContextMode = arabicMode
+        val plannedEngine = hybridEngine.plannedEngineId()
+        val pending = ArrayList<Prepared>()
+        var lastOutcome: ProcessorOutcome? = null
+        for (queued in batch) {
+            val cleaned = com.gamelingo.mobile.core.text.OcrPreprocessor.clean(queued.text).text
+            val request = if (cleaned.isNotBlank() && cleaned != queued.text) queued.copy(text = cleaned) else queued
+            val generation = if (request.generation != TranslationSessionBus.NO_ID) {
+                request.generation
+            } else {
+                TranslationSessionBus.currentGeneration()
+            }
+            if (isStale(generation)) continue
+            val contextLines = contextMemory.select(request.text, settings.contextLines, MAX_CONTEXT_CHARS, sourceOf(request.subtitleId))
+            val cacheContext = cacheContextFor(settings, arabicMode, plannedEngine, contextLines)
+            val hit = if (settings.cacheEnabled) cache.get(request.text, cacheContext) else null
+            if (hit != null) {
+                if (isPublishableNow(generation, arabicMode)) {
+                    publish(
+                        original = request.text,
+                        result = TranslationResult(hit.translatedText, hit.engineId, fromCache = true),
+                        capturedAtMillis = request.capturedAtMillis,
+                        subtitleId = request.subtitleId,
+                        generation = generation,
+                    )
+                    contextMemory.add(request.text, request.capturedAtMillis, sourceOf(request.subtitleId), hit.translatedText, request.subtitleId, arabicMode.name)
+                }
+                lastOutcome = ProcessorOutcome(hit.engineId, isLocalFallback(settings.aiMode, hit.engineId))
+            } else {
+                pending.add(Prepared(queued, request, generation, contextLines, cacheContext))
+            }
+        }
+        if (pending.isEmpty()) return BatchResult(lastOutcome ?: ProcessorOutcome("skipped-stale", false))
+
+        val retry = ArrayList<QueuedRequest>()
+        val lost = ArrayList<QueuedRequest>()
+        var firstError: Exception? = null
+
+        /** One line through the normal path; classifies its failure for the batch result. */
+        suspend fun single(item: Prepared) {
+            try {
+                lastOutcome = processRequest(item.queued, includeOffscreen = true)
+            } catch (timeout: TimeoutCancellationException) {
+                lost.add(item.queued)
+                if (firstError == null) firstError = timeout
+            } catch (cancelled: CancellationException) {
+                throw cancelled
+            } catch (error: Exception) {
+                if (error is QuotaExceededException) retry.add(item.queued) else lost.add(item.queued)
+                if (firstError == null || error is QuotaExceededException) firstError = error
+            }
+        }
+
+        if (pending.size == 1) {
+            single(pending.first())
+            return BatchResult(lastOutcome, retry, lost.toList(), firstError)
+        }
+
+        val requests = pending.map { item ->
+            TranslationRequest(
+                text = item.request.text,
+                contextLines = item.contextLines,
+                glossary = mergedGlossary(item.request.text, arabicMode, settings),
+                arabicMode = arabicMode,
+                understandingHints = understandingHolder.get().promptHints(item.request.text, arabicMode),
+            )
+        }
+        val answers: List<String?>? = try {
+            withTimeout(settings.requestTimeoutSec * BATCH_TIMEOUT_FACTOR_MS) { hybridEngine.translateBatch(requests) }
+        } catch (timeout: TimeoutCancellationException) {
+            pending.forEach { failVisibly(it) }
+            return BatchResult(lastOutcome, emptyList(), pending.map { it.queued }, timeout)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (misaligned: BatchMisalignedException) {
+            null
+        } catch (refused: ProviderRefusedException) {
+            null
+        } catch (error: Exception) {
+            // Quota: the lines wait for the provider's time and are sent again. Anything else: visible failure.
+            pending.forEach { failVisibly(it) }
+            if (error is OnlineNotConfiguredException) {
+                TranslationSessionBus.onNotice(SessionNotice.ONLINE_NOT_CONFIGURED)
+            }
+            return if (error is QuotaExceededException) {
+                BatchResult(lastOutcome, pending.map { it.queued }, emptyList(), error)
+            } else {
+                BatchResult(lastOutcome, emptyList(), pending.map { it.queued }, error)
+            }
+        }
+        if (answers == null) {
+            // No batch path (local mode, active cooldown) or a misaligned answer: one line at a time.
+            pending.forEach { single(it) }
+            return BatchResult(lastOutcome, retry, lost.toList(), firstError)
+        }
+        for ((index, item) in pending.withIndex()) {
+            val translated = answers.getOrNull(index)
+            if (translated.isNullOrBlank()) {
+                // Missing, duplicate, mislabeled or echo-mismatched entry: this line alone, never a guess.
+                single(item)
+                continue
+            }
+            val inspection = com.gamelingo.mobile.core.quality.TranslationQualityGate
+                .inspect(item.request.text, translated, arabicMode)
+            if (inspection.issues.isNotEmpty() || inspection.corrected) {
+                // Anything the gate doubts is redone on its own, with the full single-line checks.
+                single(item)
+                continue
+            }
+            val result = TranslationResult(translated, GeminiTranslationEngine.ENGINE_ID)
+            if (settings.cacheEnabled) {
+                cache.put(item.request.text, item.cacheContext, CachedTranslation(result.translatedText, result.engineId))
+            }
+            if (isPublishableNow(item.generation, arabicMode)) {
+                publish(item.request.text, result, item.request.capturedAtMillis, item.request.subtitleId, item.generation)
+                contextMemory.add(item.request.text, item.request.capturedAtMillis, sourceOf(item.request.subtitleId), result.translatedText, item.request.subtitleId, arabicMode.name)
+                com.gamelingo.mobile.core.context.SuggestionPool.record(item.request.text)
+            }
+            lastOutcome = ProcessorOutcome(result.engineId, false)
+        }
+        return BatchResult(lastOutcome, retry, lost.toList(), firstError)
+    }
+
+    /**
+     * A captured line that ended without a translation keeps its ORIGINAL in the history, with the
+     * reason as status. Runs outside the session scope so a session stop cannot cancel the save.
+     */
+    private fun keepOriginal(queued: QueuedRequest, reason: String) {
+        historyScope.launch {
+            runCatching {
+                historyRecorder.recordUntranslated(
+                    queued.subtitleId, TranslationSessionBus.NO_ID, queued.text, reason, queued.capturedAtMillis,
+                )
+            }
+        }
+    }
+
+    private fun failVisibly(item: Prepared) {
+        if (!isStale(item.generation)) {
+            TranslationSessionBus.onTranslationFailed(item.request.text, item.request.subtitleId, item.generation)
+        }
+    }
+
+    private fun cacheContextFor(
+        settings: com.gamelingo.mobile.data.settings.AppSettings,
+        arabicMode: com.gamelingo.mobile.data.settings.ArabicTranslationMode,
+        plannedEngine: String,
+        contextLines: List<String>,
+    ) = CacheContext(
+        aiMode = settings.aiMode,
+        plannedEngineId = plannedEngine,
+        arabicMode = arabicMode,
+        promptVersion = ArabicStylePrompt.promptVersionFor(arabicMode),
+        contextSignature = CacheContext.signatureOf(contextLines),
+        modelVersion = installedVersionFor(plannedEngine),
+        dictionaryVersion = dictionaryHolder.get().version,
+        understandingVersion = understandingHolder.get().version,
+        glossarySignature = CacheContext.glossarySignatureOf(
+            settings.userGlossaryTerms.map { it.en to it.ar },
+        ),
+    )
+
     /** One engine call under the user's timeout, plus the quality inspection of its output. */
     private suspend fun translateOnce(
         request: TranslationRequest,
@@ -478,6 +673,18 @@ class TranslationCoordinator @Inject constructor(
 
     internal companion object {
         const val MAX_CONTEXT_LINES = 20
+
+        /** Most lines kept waiting while the provider's wait is active; beyond this the oldest is dropped and counted. */
+        const val BACKLOG_CAPACITY = 40
+
+        /** A waiting line older than this is dropped and counted (visible in the diagnostics). */
+        const val BACKLOG_MAX_AGE_MS = 180_000L
+
+        /** Window of the "requests in the last minute" figure. */
+        const val RECENT_WINDOW_MS = 60_000L
+
+        /** A batch gets this much more time than one line (milliseconds per configured timeout second). */
+        const val BATCH_TIMEOUT_FACTOR_MS = 1_500L
 
         /** Character budget for the context sent with one line: keeps the local model fast. */
         const val MAX_CONTEXT_CHARS = 400

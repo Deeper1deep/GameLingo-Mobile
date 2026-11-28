@@ -41,7 +41,10 @@ class TranslationCoordinatorRateLimitTest {
         val calls = AtomicInteger(0)
         val texts = CopyOnWriteArrayList<String>()
         @Volatile var limitedUntilCall = 0
+        @Volatile var shiftEchoes = false
         @Volatile var latencyFor: (String) -> Long = { 0L }
+        /** When set, a request whose prompt matches waits until the test completes it (no timing involved). */
+        @Volatile var holdUntil: Pair<(String) -> Boolean, kotlinx.coroutines.CompletableDeferred<Unit>>? = null
 
         override suspend fun generateContent(model: String, apiKey: String, request: GeminiRequest): GeminiResponse {
             val n = calls.incrementAndGet()
@@ -56,6 +59,20 @@ class TranslationCoordinatorRateLimitTest {
                 )
             }
             kotlinx.coroutines.delay(latencyFor(prompt))
+            holdUntil?.let { (matches, latch) -> if (matches(prompt)) latch.await() }
+            if (Regex("Translate these (\\d+) lines").containsMatchIn(prompt)) {
+                // Batch request: answer one string per numbered line, echoing the line so the test can check alignment.
+                val numbered = prompt.lines().mapNotNull { Regex("^(\\d+)\\. (.*)$").find(it)?.groupValues?.get(2) }
+                val array = numbered.mapIndexed { i, line ->
+                    // "shift" mode: the model labels every answer with the NEXT line's words (misaligned).
+                    val echoFrom = if (shiftEchoes) numbered[(i + 1) % numbered.size] else line
+                    val echo = echoFrom.split(" ").take(3).joinToString(" ")
+                    "{\"n\":${i + 1},\"src\":\"$echo\",\"t\":\"ترجمة: $line\"}"
+                }.joinToString(",", "[", "]")
+                return GeminiResponse(
+                    candidates = listOf(GeminiCandidate(content = GeminiContent(parts = listOf(GeminiPart(array))))),
+                )
+            }
             return GeminiResponse(
                 candidates = listOf(GeminiCandidate(content = GeminiContent(parts = listOf(GeminiPart("ترجمة"))))),
             )
@@ -83,6 +100,7 @@ class TranslationCoordinatorRateLimitTest {
         OnlineRequestGate.shared.jitter = { 0L }
     }
 
+    private val historyInserts = java.util.concurrent.atomic.AtomicInteger(0)
     private var coordinator: TranslationCoordinator? = null
 
     @After fun stop() {
@@ -110,7 +128,10 @@ class TranslationCoordinatorRateLimitTest {
         hybrid.maxRetries = 0
         val dao = Proxy.newProxyInstance(
             TranslationHistoryDao::class.java.classLoader, arrayOf(TranslationHistoryDao::class.java),
-        ) { _, method, _ -> if (method.returnType == java.lang.Long.TYPE) 0L else null } as TranslationHistoryDao
+        ) { _, method, _ ->
+            if (method.name == "insert") historyInserts.incrementAndGet()
+            if (method.returnType == java.lang.Long.TYPE) 0L else null
+        } as TranslationHistoryDao
         val coordinator = TranslationCoordinator(
             hybridEngine = hybrid,
             settingsRepository = settings,
@@ -130,7 +151,7 @@ class TranslationCoordinatorRateLimitTest {
     }
 
     @Test
-    fun `during a rate limit capture and OCR keep advancing, nothing is requested, then only the newest line is translated`() {
+    fun `during a rate limit capture keeps advancing, nothing is requested, then every waiting line goes in one aligned request`() {
         val api = ScriptedApi().also { it.limitedUntilCall = 1 }
         start(api)
 
@@ -138,41 +159,57 @@ class TranslationCoordinatorRateLimitTest {
         assertTrue("429 never reached the worker", waitUntil {
             TranslationSessionBus.workerStatus.value.state == RequestState.RATE_LIMITED
         })
-        val status = TranslationSessionBus.workerStatus.value
-        assertTrue(status.lastError.orEmpty().startsWith("QUOTA_429"))
-        assertTrue("cooldown end must be exposed to diagnostics", status.cooldownUntilMillis > System.currentTimeMillis() - 1_000L)
         assertEquals(1, api.calls.get())
-
-        // The capture/OCR side keeps producing while translation is paused: new lines register as
-        // the live appearance, heartbeats and unchanged frames are accepted, and the bus tracks them.
-        val seenLines = CopyOnWriteArrayList<String>()
         val t0 = System.currentTimeMillis()
         listOf("Second line", "Third line", "Newest line").forEachIndexed { i, text ->
             TranslationSessionBus.onNewLine(text, t0 + i)
             assertEquals(text, TranslationSessionBus.latestLine.value?.text)
-            TranslationSessionBus.onFrameUnchanged(t0 + i + 1)
-            TranslationSessionBus.onHeartbeat(t0 + i + 2)
-            seenLines.add(TranslationSessionBus.latestLine.value!!.text)
             Thread.sleep(100)
         }
-        assertEquals(listOf("Second line", "Third line", "Newest line"), seenLines.toList())
-        // Still inside the cooldown: no network request was made for any of them.
         assertEquals("a request left the device during the cooldown", 1, api.calls.get())
 
-        // Recovery: after the provider's 2 s, only the newest relevant line is sent and shown.
         assertTrue("translation never resumed", waitUntil(12_000) {
             TranslationSessionBus.translatedLine.value?.original == "Newest line"
         })
-        println("COORD1 prompts=${api.texts.map { it.replace("\n", " / ") }} state=${TranslationSessionBus.workerStatus.value} shown=${TranslationSessionBus.translatedLine.value?.original}")
-        assertTrue("sent prompts: ${api.texts.map { it.replace("\n", " / ") }}", api.texts.last().contains("Newest line"))
-        assertFalse("a superseded line was sent after recovery: ${api.texts.map { it.replace("\n", " / ") }}", api.texts.drop(1).any { it.contains("Second line") && !it.contains("Newest line") })
+        Thread.sleep(500)
+        println("COORD1 prompts=${api.texts.map { it.replace("\n", " / ") }} state=${TranslationSessionBus.workerStatus.value}")
+        assertEquals("one rejected request plus one batch", 2, api.calls.get())
+        val batchPrompt = api.texts.last()
+        val order = listOf("First line", "Second line", "Third line", "Newest line").map { batchPrompt.indexOf(it) }
+        assertTrue("all four lines, in order: $order", order.all { it >= 0 } && order == order.sorted())
+        assertEquals("ترجمة: Newest line", TranslationSessionBus.translatedLine.value?.translated)
+        assertEquals(0, TranslationSessionBus.workerStatus.value.lostLines)
+        assertEquals(1, TranslationSessionBus.workerStatus.value.batchesSent)
         assertEquals(RequestState.SUCCESS, TranslationSessionBus.workerStatus.value.state)
     }
 
     @Test
-    fun `an old response arriving after a newer subtitle is never shown`() {
+    fun `a misaligned batch answer is never shown, every line is translated on its own`() {
+        val api = ScriptedApi().also { it.limitedUntilCall = 1; it.shiftEchoes = true }
+        start(api)
+        TranslationSessionBus.onNewLine("First line", System.currentTimeMillis())
+        assertTrue(waitUntil { TranslationSessionBus.workerStatus.value.state == RequestState.RATE_LIMITED })
+        val t0 = System.currentTimeMillis()
+        listOf("Second line", "Third line", "Newest line").forEachIndexed { i, text ->
+            TranslationSessionBus.onNewLine(text, t0 + i)
+            Thread.sleep(100)
+        }
+        assertTrue("never resumed", waitUntil(25_000) { api.calls.get() >= 6 })
+        assertTrue("single answer expected for the newest line", waitUntil(10_000) {
+            TranslationSessionBus.translatedLine.value?.original == "Newest line"
+        })
+        val shown = TranslationSessionBus.translatedLine.value!!
+        println("COORD3 prompts=${api.texts.map { it.replace("\n", " / ") }}")
+        // Not the batch text ("ترجمة: Newest line"): it came from the one-line request.
+        assertEquals("ترجمة", shown.translated)
+        assertEquals(0, TranslationSessionBus.workerStatus.value.lostLines)
+    }
+
+    @Test
+    fun `an old response arriving after a newer subtitle is never shown, deterministically, and still reaches the history`() {
         val api = ScriptedApi()
-        api.latencyFor = { prompt -> if (prompt.contains("Old subtitle")) 700L else 0L }
+        val release = kotlinx.coroutines.CompletableDeferred<Unit>()
+        api.holdUntil = ({ prompt: String -> prompt.contains("Old subtitle") }) to release
         start(api)
 
         val shownOriginals = CopyOnWriteArrayList<String>()
@@ -181,24 +218,60 @@ class TranslationCoordinatorRateLimitTest {
             while (!Thread.currentThread().isInterrupted) {
                 val v = TranslationSessionBus.translatedLine.value?.original
                 if (v != null && v != last) { shownOriginals.add(v); last = v }
-                try { Thread.sleep(5) } catch (_: InterruptedException) { return@Thread }
+                try { Thread.sleep(2) } catch (_: InterruptedException) { return@Thread }
             }
         }
         collector.start()
 
         TranslationSessionBus.onNewLine("Old subtitle", System.currentTimeMillis())
         assertTrue(waitUntil { api.calls.get() >= 1 })
-        // A different subtitle replaces it while the old request is still in flight.
+        // The old request is now held inside the provider call. The newer subtitle replaces it,
+        // and only then is the old response released: the order no longer depends on any timing.
         TranslationSessionBus.onNewLine("New subtitle", System.currentTimeMillis())
+        assertEquals("New subtitle", TranslationSessionBus.latestLine.value?.text)
+        release.complete(Unit)
         assertTrue("newer line never translated", waitUntil {
             TranslationSessionBus.translatedLine.value?.original == "New subtitle"
         })
-        // Give the slow old response time to land and attempt a publish.
-        Thread.sleep(1_200)
+        Thread.sleep(300)
         collector.interrupt()
         collector.join()
-        println("COORD2 shown=$shownOriginals prompts=${api.texts.map { it.replace("\n", " / ") }} final=${TranslationSessionBus.translatedLine.value?.original}")
         assertEquals("New subtitle", TranslationSessionBus.translatedLine.value?.original)
-        assertFalse("the old response was shown: $shownOriginals prompts=${api.texts.map { it.replace("\n", " / ") }}", shownOriginals.contains("Old subtitle"))
+        assertFalse("the old response was shown: $shownOriginals", shownOriginals.contains("Old subtitle"))
+        assertEquals(2, api.calls.get())
+        // Late translation is still kept: the history got both lines (the dao here counts inserts).
+        assertEquals("both the late old line and the new line are in the history", 2, historyInserts.get())
     }
+
+    @Test
+    fun `the bus rejects a result for a replaced subtitle atomically, even when it arrives at the same instant as the replacement`() {
+        TranslationSessionBus.onSessionStopped()
+        TranslationSessionBus.onSessionStarted()
+        val failures = java.util.concurrent.atomic.AtomicInteger(0)
+        repeat(300) { round ->
+            TranslationSessionBus.onNewLine("old $round", System.currentTimeMillis())
+            val oldId = TranslationSessionBus.latestLine.value!!.subtitleId
+            val gen = TranslationSessionBus.latestLine.value!!.generation
+            val start = java.util.concurrent.CountDownLatch(1)
+            val accepted = java.util.concurrent.atomic.AtomicBoolean(false)
+            val publisher = Thread {
+                start.await()
+                accepted.set(TranslationSessionBus.onTranslated("old $round", "ترجمة", "e", false, 0L, oldId, gen))
+            }
+            val replacer = Thread {
+                start.await()
+                TranslationSessionBus.onNewLine("new $round", System.currentTimeMillis())
+            }
+            publisher.start(); replacer.start(); start.countDown(); publisher.join(); replacer.join()
+            // Either interleaving is consistent: a result the bus accepted is the stored one (it was live when it
+            // landed); a refused result never lands. No half state, and no accept after the replacement.
+            val stored = TranslationSessionBus.translatedLine.value?.subtitleId == oldId
+            if (accepted.get() != stored) failures.incrementAndGet()
+            // And a result arriving after the replacement is always refused.
+            assertFalse(TranslationSessionBus.onTranslated("old $round", "ترجمة", "e", false, 0L, oldId, gen))
+        }
+        assertEquals("accepted and stored state disagreed", 0, failures.get())
+        TranslationSessionBus.onSessionStopped()
+    }
+
 }

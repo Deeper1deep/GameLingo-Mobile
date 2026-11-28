@@ -23,6 +23,7 @@ import com.gamelingo.mobile.core.session.SessionError
 import com.gamelingo.mobile.core.session.SessionState
 import com.gamelingo.mobile.core.timing.PipelineTiming
 import com.gamelingo.mobile.core.session.TranslationSessionBus
+import com.gamelingo.mobile.core.session.waitingOnRateLimit
 import com.gamelingo.mobile.data.settings.AppSettings
 import com.gamelingo.mobile.data.settings.OverlayPosition
 import com.gamelingo.mobile.data.settings.SettingsRepository
@@ -338,6 +339,14 @@ class OverlayService : Service() {
                             .associate { it.en.trim().lowercase() to it.ar },
                     )
                     PipelineTiming.endToEnd("overlay_displayed", line.capturedAtMillis)
+                }
+            }
+        }
+        serviceScope.launch {
+            TranslationSessionBus.workerStatus.collect { worker ->
+                val waiting = worker.waitingOnRateLimit()
+                if (uiState.value.rateLimitWaiting != waiting) {
+                    uiState.value = uiState.value.copy(rateLimitWaiting = waiting)
                 }
             }
         }

@@ -20,6 +20,7 @@ class TranslationWorkerRateLimitTest {
         calls: ConcurrentLinkedQueue<String>,
         relevant: (QueuedRequest) -> Boolean = { true },
         maxAutoResumes: Int = 5,
+        cooldown: () -> Long = { 0L },
         behavior: suspend (QueuedRequest) -> ProcessorOutcome,
     ) = TranslationWorker(
         processor = { calls.add(it.text); behavior(it) },
@@ -30,6 +31,7 @@ class TranslationWorkerRateLimitTest {
         enableWatchdog = false,
         isRelevant = relevant,
         maxAutoResumes = maxAutoResumes,
+        cooldownRemainingMs = cooldown,
     )
 
     @Test fun `after a 429 the newest line is retried once when the cooldown ends, without new text`() = runTest {
@@ -159,6 +161,45 @@ class TranslationWorkerRateLimitTest {
         assertEquals(1, calls.size)
         assertEquals(RequestState.RATE_LIMITED, w.currentStatus().state)
         assertEquals(Long.MAX_VALUE, w.currentStatus().cooldownUntilMillis)
+        w.stop()
+    }
+
+    @Test fun `the real provider limit is kept apart from a later local refusal and kept as history after a success`() = runTest {
+        val calls = ConcurrentLinkedQueue<String>()
+        var mode = 0
+        val info = ProviderErrorInfo(status = "RESOURCE_EXHAUSTED", quotaId = "PerMinutePerProject")
+        val w = worker(calls) {
+            when (mode) {
+                0 -> throw QuotaExceededException("429", retryAfterMs = 20_000L, provider = info)
+                1 -> throw QuotaExceededException("cooldown", retryAfterMs = 15_000L, fromCooldown = true)
+                else -> ok
+            }
+        }
+        w.start()
+        w.enqueue("one", 0, subtitleId = 1, generation = 1)
+        runCurrent()
+        mode = 1
+        w.enqueue("two", 1, subtitleId = 2, generation = 1)
+        runCurrent()
+        val st = w.currentStatus()
+        assertTrue(st.lastError.orEmpty(), st.lastError.orEmpty().startsWith("QUOTA_COOLDOWN"))
+        assertEquals("QUOTA_429/RESOURCE_EXHAUSTED/PerMinutePerProject/wait=20s", st.lastProviderLimit)
+        assertTrue(st.lastProviderLimitAtMillis >= 0L)
+        mode = 2
+        advanceTimeBy(60_000L)
+        runCurrent()
+        assertEquals(-1L, w.currentStatus().cooldownUntilMillis)
+        assertEquals("QUOTA_429/RESOURCE_EXHAUSTED/PerMinutePerProject/wait=20s", w.currentStatus().lastProviderLimit)
+        w.stop()
+    }
+
+    @Test fun `an unrepresentable wait is not held, it keeps the visible failure path`() = runTest {
+        val calls = ConcurrentLinkedQueue<String>()
+        val w = worker(calls, cooldown = { Long.MAX_VALUE }) { throw QuotaExceededException("blocked", fromCooldown = true, retryAfterMs = Long.MAX_VALUE) }
+        w.start()
+        w.enqueue("line", 0, subtitleId = 1, generation = 1)
+        runCurrent()
+        assertEquals(listOf("line"), calls.toList())
         w.stop()
     }
 }

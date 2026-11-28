@@ -19,5 +19,12 @@ object Migrations {
         }
     }
 
-    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2)
+    /** v2 -> v3: add the status column; every existing row becomes 'translated'. Additive, no row is touched. */
+    val MIGRATION_2_3 = object : Migration(2, 3) {
+        override fun migrate(db: SupportSQLiteDatabase) {
+            db.execSQL("ALTER TABLE `translation_history` ADD COLUMN `status` TEXT NOT NULL DEFAULT 'translated'")
+        }
+    }
+
+    val ALL: Array<Migration> = arrayOf(MIGRATION_1_2, MIGRATION_2_3)
 }

@@ -59,4 +59,37 @@ class HistoryRecorderTest {
         r.record(noId, noId, entry("Hello", "أهلا", 2_000))
         assertEquals(1, s.rows.size)
     }
+
+    @Test fun `an untranslated original is kept with its reason and no translation`() = runBlocking {
+        val s = FakeStore(); val r = HistoryRecorder(s)
+        r.recordUntranslated(5, noId, "Watch out", "overflow", 1_000)
+        val row = s.rows.values.single()
+        assertEquals("Watch out", row.sourceText)
+        assertEquals("", row.translatedText)
+        assertEquals("untranslated_overflow", row.status)
+        assertEquals(true, row.isUntranslated)
+    }
+
+    @Test fun `an untranslated save never overwrites a translated row of the same subtitle`() = runBlocking {
+        val s = FakeStore(); val r = HistoryRecorder(s)
+        r.record(7, noId, entry("Get down", "انزل", 1_000))
+        r.recordUntranslated(7, noId, "Get down", "stopped", 1_000)
+        assertEquals(1, s.rows.size)
+        assertEquals("انزل", s.rows.values.single().translatedText)
+        assertEquals("translated", s.rows.values.single().status)
+    }
+
+    @Test fun `a later translation upgrades the saved original and a repeat of the text is its own row`() = runBlocking {
+        val s = FakeStore(); val r = HistoryRecorder(s)
+        r.recordUntranslated(7, noId, "Get down", "expired", 1_000)
+        r.recordUntranslated(8, noId, "Get down", "expired", 5_000)
+        assertEquals("same text, other appearance: its own row", 2, s.rows.size)
+        r.recordUntranslated(7, noId, "Get down", "failed", 1_000)
+        assertEquals("the same appearance is not saved twice", 2, s.rows.size)
+        r.record(7, noId, entry("Get down", "انزل", 6_000))
+        assertEquals(2, s.rows.size)
+        assertEquals("translated", s.rows[1L]!!.status)
+        assertEquals("انزل", s.rows[1L]!!.translatedText)
+        assertEquals("untranslated_expired", s.rows[2L]!!.status)
+    }
 }

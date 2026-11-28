@@ -183,17 +183,7 @@ fun HistoryScreen(
                                         style = MaterialTheme.typography.labelSmall,
                                         color = GlColors.TextSecondary,
                                     )
-                                    Text(
-                                        text = entry.translatedText,
-                                        style = MaterialTheme.typography.titleMedium,
-                                        color = GlColors.TextPrimary,
-                                        modifier = Modifier.padding(top = GlSpacing.xs),
-                                    )
-                                    Text(
-                                        text = entry.sourceText,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = GlColors.TextSecondary,
-                                    )
+                                    HistoryEntryTexts(entry)
                                 }
                                 IconButton(onClick = { pendingDelete = entry }) {
                                     Icon(
@@ -224,9 +214,9 @@ fun HistoryScreen(
                     color = GlColors.Secondary,
                 )
                 Text(
-                    text = entry.translatedText,
+                    text = if (entry.isUntranslated) untranslatedLabel(entry.status) else entry.translatedText,
                     style = MaterialTheme.typography.titleMedium,
-                    color = GlColors.TextPrimary,
+                    color = if (entry.isUntranslated) GlColors.Error else GlColors.TextPrimary,
                 )
                 Text(
                     text = stringResource(R.string.history_original),
@@ -235,7 +225,11 @@ fun HistoryScreen(
                 )
                 Text(
                     text = entry.sourceText,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Right,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
                     color = GlColors.TextPrimary,
                 )
                 InfoRow(
@@ -254,7 +248,9 @@ fun HistoryScreen(
                 )
                 GlButton(
                     text = stringResource(R.string.history_copy),
-                    onClick = { copy("translation", entry.translatedText) },
+                    onClick = {
+                        if (entry.isUntranslated) copy("original", entry.sourceText) else copy("translation", entry.translatedText)
+                    },
                     modifier = Modifier.fillMaxWidth(),
                 )
                 GlButton(
@@ -322,3 +318,38 @@ private fun EmptyMessage(text: String) {
         )
     }
 }
+
+/** The translation (or, for a saved original that was never translated, the reason) over the source text. */
+@Composable
+internal fun HistoryEntryTexts(entry: com.gamelingo.mobile.data.local.TranslationHistoryEntity) {
+    Column {
+        Text(
+            text = if (entry.isUntranslated) untranslatedLabel(entry.status) else entry.translatedText,
+            style = MaterialTheme.typography.titleMedium,
+            color = if (entry.isUntranslated) GlColors.Error else GlColors.TextPrimary,
+            modifier = Modifier.padding(top = GlSpacing.xs),
+        )
+        Text(
+            text = entry.sourceText,
+            // English reads left to right even inside the right-to-left screen, so its
+            // punctuation stays at the end of the sentence; the block keeps the right edge.
+            style = MaterialTheme.typography.bodySmall.copy(
+                textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Right,
+            ),
+            modifier = Modifier.fillMaxWidth(),
+            color = if (entry.isUntranslated) GlColors.TextPrimary else GlColors.TextSecondary,
+        )
+    }
+}
+
+@Composable
+internal fun untranslatedLabel(status: String): String = stringResource(
+    when (status.removePrefix(com.gamelingo.mobile.data.local.TranslationHistoryEntity.STATUS_PREFIX_UNTRANSLATED)) {
+        "overflow" -> R.string.history_untranslated_overflow
+        "expired" -> R.string.history_untranslated_expired
+        "retries" -> R.string.history_untranslated_retries
+        "stopped" -> R.string.history_untranslated_stopped
+        else -> R.string.history_untranslated_failed
+    },
+)

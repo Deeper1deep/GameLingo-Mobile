@@ -104,7 +104,8 @@ class CorruptOutputPipelineTest {
         assertEquals("more than one retry", 2, engine.callsA.get())
         assertNull(TranslationSessionBus.translatedLine.value)
         assertEquals(0, cache.size())
-        assertEquals(0, inserts.get())
+        // The rejected line is never a translation, but its ORIGINAL is kept as an untranslated history row.
+        assertEquals(1, inserts.get())
 
         // Line B: corrupt first, clean retry: shown, cached and saved once.
         TranslationSessionBus.onNewLine("Stay close to me", System.currentTimeMillis())
@@ -113,7 +114,7 @@ class CorruptOutputPipelineTest {
         assertEquals(2, engine.callsB.get())
         assertEquals(clean, TranslationSessionBus.translatedLine.value!!.translated)
         assertEquals(1, cache.size())
-        assertEquals(1, inserts.get())
+        assertEquals("line A's untranslated original plus line B's translation", 2, inserts.get())
         val outcomes = com.gamelingo.mobile.core.diagnostics.PipelineTrace.snapshot().map { it.outcome }
         assertTrue(outcomes.contains("rejected") && outcomes.contains("accepted"))
         val exported = com.gamelingo.mobile.core.diagnostics.PipelineTrace.export()

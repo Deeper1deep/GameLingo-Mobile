@@ -105,6 +105,63 @@ class GeminiTranslationEngine @Inject constructor(
         return TranslationResult(translatedText = translated, engineId = engineId)
     }
 
+    /**
+     * One request for several lines. Same model, same style/profanity mandate,
+     * same gate (so it counts as ONE request against the provider limit).
+     * Entries that fail the number or source-echo check come back null (translate those
+     * lines alone). Throws [BatchMisalignedException] when no entry is usable.
+     */
+    override suspend fun translateBatch(requests: List<TranslationRequest>): List<String?>? {
+        if (requests.size < 2) return null
+        val apiKey = settingsRepository.settings.first().onlineApiKey.trim()
+        if (apiKey.isEmpty()) throw OnlineNotConfiguredException()
+        val first = requests.first()
+        val glossary = LinkedHashMap<String, String>()
+        requests.forEach { glossary.putAll(it.glossary) }
+        val hints = requests.withIndex()
+            .filter { it.value.understandingHints.isNotBlank() }
+            .associate { (it.index + 1) to it.value.understandingHints }
+        val system = PromptComposer.systemPrompt(first.arabicMode, requests.joinToString("\n") { it.text }) +
+            BatchFormat.SYSTEM_SUFFIX
+        val user = BatchFormat.userPrompt(requests.map { it.text }, first.contextLines, glossary, hints)
+
+        val response = gate.run {
+            val answer = try {
+                api.generateContent(
+                    model = MODEL,
+                    apiKey = apiKey,
+                    request = GeminiRequest(
+                        systemInstruction = GeminiContent(parts = listOf(GeminiPart(system))),
+                        contents = listOf(GeminiContent(role = "user", parts = listOf(GeminiPart(user)))),
+                        generationConfig = GeminiGenerationConfig(
+                            temperature = TEMPERATURE,
+                            maxOutputTokens = BatchFormat.maxOutputTokens(requests.size),
+                        ),
+                        safetySettings = SAFETY_SETTINGS,
+                    ),
+                )
+            } catch (http: HttpException) {
+                throw classifyHttpError(http, gate.now())
+            }
+            answer.error?.let { error -> throw classifyApiError(error.code ?: 0, error.status) }
+            answer
+        }
+        val candidate = response.candidates?.firstOrNull()
+        val finishReason = candidate?.finishReason
+        if (finishReason == FINISH_MAX_TOKENS) {
+            throw BatchMisalignedException("Gemini truncated the batch (MAX_TOKENS)")
+        }
+        if (finishReason != null && finishReason != FINISH_STOP) {
+            throw ProviderRefusedException("Gemini refused the batch ($finishReason)")
+        }
+        val raw = candidate?.content?.parts?.firstOrNull()?.text.orEmpty()
+        val entries = BatchFormat.parseEntries(raw, requests.map { it.text })
+        if (entries == null || entries.all { it == null }) {
+            throw BatchMisalignedException("Gemini batch answer had no usable entry for ${requests.size} lines")
+        }
+        return entries
+    }
+
     override fun close() = Unit
 
     companion object {

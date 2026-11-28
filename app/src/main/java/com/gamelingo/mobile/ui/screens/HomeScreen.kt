@@ -48,6 +48,7 @@ import com.gamelingo.mobile.R
 import com.gamelingo.mobile.core.session.ResumeRequest
 import com.gamelingo.mobile.core.session.SessionNotice
 import com.gamelingo.mobile.core.session.SessionState
+import com.gamelingo.mobile.core.session.waitingOnRateLimit
 import com.gamelingo.mobile.core.status.SessionPhase
 import com.gamelingo.mobile.core.status.resolveEngineReadiness
 import com.gamelingo.mobile.core.status.resolveSessionPhase
@@ -86,6 +87,7 @@ fun HomeScreen(
     val latestLine by sessionViewModel.latestLine.collectAsStateWithLifecycle()
     val translated by sessionViewModel.translatedLine.collectAsStateWithLifecycle()
     val failure by sessionViewModel.translationFailure.collectAsStateWithLifecycle()
+    val workerStatus by sessionViewModel.workerStatus.collectAsStateWithLifecycle()
     val notice by sessionViewModel.notice.collectAsStateWithLifecycle()
     val settings by settingsViewModel.settings.collectAsStateWithLifecycle()
     val online by statusViewModel.online.collectAsStateWithLifecycle()
@@ -195,7 +197,13 @@ fun HomeScreen(
                     Text(
 text = when {
                             current == SessionPhase.ERROR && failure != null && running ->
-                                stringResource(R.string.home_translation_failed)
+                                stringResource(
+                                    if (workerStatus.waitingOnRateLimit()) {
+                                        R.string.home_translation_waiting
+                                    } else {
+                                        R.string.home_translation_failed
+                                    },
+                                )
                             current == SessionPhase.ERROR && sessionError != null ->
                                 stringResource(sessionErrorMessageRes(sessionError!!))
                             else -> phaseDescription(current)
@@ -238,6 +246,8 @@ text = when {
                                 R.string.overlay_notice_online_not_configured
                             SessionNotice.FELL_BACK_TO_LOCAL ->
                                 R.string.overlay_notice_fell_back_local
+                            SessionNotice.TRANSLATION_LINES_LOST ->
+                                R.string.overlay_notice_lines_lost
                         },
                     ),
                     style = MaterialTheme.typography.bodySmall,

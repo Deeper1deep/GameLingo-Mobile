@@ -31,6 +31,21 @@ class OnlineRequestGate(
     private val consecutive = AtomicInteger(0)
     private val inFlight = AtomicInteger(0)
 
+    /** Provider fields of the last REAL 429 (not a local refusal); kept so a refusal can still name them. */
+    @Volatile private var lastRealProvider: ProviderErrorInfo = ProviderErrorInfo()
+
+    /** Start times of real network attempts, newest last; pruned to the last [START_WINDOW_MS]. */
+    private val starts = java.util.ArrayDeque<Long>()
+
+    /** Network attempts started in the last [windowMs] (retries included; local refusals are not). */
+    fun startsInLast(windowMs: Long): Int = synchronized(starts) {
+        val cutoff = now() - windowMs
+        while (starts.isNotEmpty() && starts.peekFirst() < now() - START_WINDOW_MS) starts.pollFirst()
+        starts.count { it >= cutoff }
+    }
+
+    private fun recordStart() = synchronized(starts) { starts.addLast(now()) }
+
     /** Highest number of simultaneous requests seen (diagnostics and tests). */
     val peakInFlight = AtomicInteger(0)
 
@@ -49,6 +64,7 @@ class OnlineRequestGate(
             // A request that waited for a permit must re-check: the call ahead
             // of it may just have been rate limited.
             throwIfCoolingDown()
+            recordStart()
             val running = inFlight.incrementAndGet()
             peakInFlight.accumulateAndGet(running) { a, b -> maxOf(a, b) }
             try {
@@ -89,6 +105,7 @@ class OnlineRequestGate(
             throw QuotaExceededException(
                 "online requests paused after a rate limit",
                 retryAfterMs = remaining,
+                provider = lastRealProvider,
                 fromCooldown = true,
             )
         }
@@ -96,6 +113,7 @@ class OnlineRequestGate(
 
     private fun onRateLimited(quota: QuotaExceededException) {
         val attempt = consecutive.incrementAndGet()
+        lastRealProvider = quota.provider
         val hint = quota.retryAfterMs ?: quota.provider.retryDelayMs
         val base = hint ?: backoffMs(attempt)
         val until = if (RetryAfter.isIndefinite(base)) {
@@ -121,6 +139,7 @@ class OnlineRequestGate(
         const val DEFAULT_MAX_CONCURRENT = 1
         const val BASE_BACKOFF_MS = 15_000L
         const val MAX_BACKOFF_MS = 300_000L
+        private const val START_WINDOW_MS = 120_000L
         private const val JITTER_DIVISOR = 10L
 
         /** The process-wide gate the real engine uses. */

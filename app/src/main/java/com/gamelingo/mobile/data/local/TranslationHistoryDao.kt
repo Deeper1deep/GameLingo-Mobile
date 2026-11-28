@@ -29,9 +29,17 @@ interface TranslationHistoryDao {
 
     @Query(
         "UPDATE translation_history SET source_text = :source, translated_text = :translated, " +
-            "engine = :engine, was_cached = :cached, created_at = :createdAt WHERE id = :id",
+            "engine = :engine, was_cached = :cached, created_at = :createdAt, status = :status WHERE id = :id",
     )
-    suspend fun updateEntry(id: Long, source: String, translated: String, engine: String, cached: Boolean, createdAt: Long)
+    suspend fun updateEntry(
+        id: Long,
+        source: String,
+        translated: String,
+        engine: String,
+        cached: Boolean,
+        createdAt: Long,
+        status: String = TranslationHistoryEntity.STATUS_TRANSLATED,
+    )
 
     /** Id of a row with exactly this pair written at or after [since], or null. */
     @Query(

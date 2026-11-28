@@ -28,6 +28,9 @@ enum class SessionNotice {
 
     /** Online translation failed and AUTO quietly used the on-device engine. */
     FELL_BACK_TO_LOCAL,
+
+    /** At least one captured line ended without a translation (see the diagnostics screen). */
+    TRANSLATION_LINES_LOST,
 }
 
 /**
@@ -115,7 +118,31 @@ data class WorkerStatus(
     val recoveryCount: Int = 0,
     /** Epoch millis the online rate-limit cooldown ends at; -1 when none is active. */
     val cooldownUntilMillis: Long = -1,
+    /**
+     * Stable code of the last REAL provider rate limit (never a local
+     * cooldown refusal), with its provider wait. History, not current state:
+     * it is kept after a success; the active cooldown is [cooldownUntilMillis].
+     */
+    val lastProviderLimit: String? = null,
+    /** When that real limit was received; -1 when none. */
+    val lastProviderLimitAtMillis: Long = -1,
+    /** Lines that ended without a translation (overflow, too old, timeout, failure, retries used up). */
+    val lostLines: Int = 0,
+    /** Requests that carried several lines, and how many lines they carried in total. */
+    val batchesSent: Int = 0,
+    val batchedLines: Int = 0,
+    /** Real network attempts to the provider in the last minute when this status was written. */
+    val onlineRequestsLastMinute: Int = 0,
 )
+
+/**
+ * True while the app is deliberately waiting out a provider rate limit
+ * (an active, representable cooldown): a temporary pause, not a failure.
+ */
+fun WorkerStatus.waitingOnRateLimit(nowMillis: Long = System.currentTimeMillis()): Boolean =
+    state == RequestState.RATE_LIMITED &&
+        cooldownUntilMillis != Long.MAX_VALUE &&
+        cooldownUntilMillis > nowMillis
 
 /** One accepted OCR line, ready for the translation engine (Phase 4). */
 data class OcrLine(

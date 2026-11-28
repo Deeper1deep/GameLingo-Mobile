@@ -33,6 +33,19 @@ data class QueuedRequest(
     val subtitleId: Long = 0L,
     /** The session generation it was captured in (0 = untracked). */
     val generation: Long = 0L,
+    /** How many times this line was sent back to the queue after a provider rate limit. */
+    val attempts: Int = 0,
+)
+
+/** What a batch processor reports back to the worker. It never throws for a single bad line. */
+data class BatchResult(
+    val outcome: ProcessorOutcome?,
+    /** Lines the provider's rate limit deferred, oldest first: the worker queues them again. */
+    val retry: List<QueuedRequest> = emptyList(),
+    /** Lines that ended without a translation (already shown as a visible failure). */
+    val lost: List<QueuedRequest> = emptyList(),
+    /** The failure that decided the worker state, or null when everything was translated. */
+    val error: Exception? = null,
 )
 
 /** What the per-request processor reports back to the worker. */
@@ -81,7 +94,26 @@ class TranslationWorker(
     /** True while a queued line still belongs on screen (same session, subtitle still shown). */
     private val isRelevant: (QueuedRequest) -> Boolean = { true },
     private val maxAutoResumes: Int = DEFAULT_MAX_AUTO_RESUMES,
+    /**
+     * Translates several waiting lines in one provider request (null = one line per request).
+     * Only called with two or more lines.
+     */
+    private val batchProcessor: (suspend (List<QueuedRequest>) -> BatchResult)? = null,
+    /** Real network attempts to the provider in the last minute (retries included). */
+    private val recentOnlineRequests: () -> Int = { 0 },
+    /** Above this many requests per minute, lines are gathered for [coalesceWindowMs] before each send. */
+    private val softRequestsPerMinute: Int = DEFAULT_SOFT_REQUESTS_PER_MINUTE,
+    private val coalesceWindowMs: Long = DEFAULT_COALESCE_WINDOW_MS,
+    private val maxBatchLines: Int = BatchFormat.MAX_LINES,
+    private val maxBatchChars: Int = BatchFormat.MAX_CHARS,
+    /**
+     * A line that ends without a translation: its ORIGINAL goes to the history with this reason
+     * (overflow, expired, failed, retries, stopped), so no captured sentence is silently discarded.
+     */
+    private val onLost: (QueuedRequest, String) -> Unit = { _, _ -> },
 ) {
+    @Volatile private var inFlight: List<QueuedRequest> = emptyList()
+
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
 
@@ -120,6 +152,8 @@ class TranslationWorker(
 
     @Volatile
     private var resumeJob: Job? = null
+    private var batchesSent: Int = 0
+    private var batchedLines: Int = 0
     private val autoResumes = java.util.concurrent.atomic.AtomicInteger(0)
 
     @Volatile
@@ -146,12 +180,18 @@ class TranslationWorker(
      */
     fun stop() {
         if (!running.compareAndSet(true, false)) return
+        val inFlightAtStop = inFlight
         workerJob?.cancel()
         watchdogJob?.cancel()
         workerJob = null
         watchdogJob = null
         activeRequest = null
-        synchronized(queueLock) { queue.clear() }
+        // Stopping is deliberate: waiting and in-flight lines are kept in the history as untranslated
+        // originals (no loss notice, the user stopped the session).
+        val leftovers = ArrayList<QueuedRequest>(inFlightAtStop)
+        inFlight = emptyList()
+        synchronized(queueLock) { leftovers.addAll(queue); queue.clear() }
+        leftovers.forEach { runCatching { onLost(it, REASON_STOPPED) } }
         lastEnqueuedText = null
         lastEnqueuedSubtitleId = 0L
         updateStatus(RequestState.IDLE, activeRequestId = null)
@@ -187,11 +227,13 @@ class TranslationWorker(
             generation = generation,
         )
         synchronized(queueLock) {
-            if (queue.size >= queueCapacity) {
+            while (queue.size >= queueCapacity) {
                 // Full: the oldest queued line is the most stale one.
-                // Drop it so the fresh subtitle gets in.
+                // Drop it so the fresh subtitle gets in. Never silent: counted
+                // in the diagnostics and announced once as a notice.
                 val dropped = queue.pollFirst()
                 log("queue full: dropped #${dropped?.id}, enqueued #${request.id}")
+                if (dropped != null) markLost(listOf(dropped), REASON_OVERFLOW)
             }
             queue.addLast(request)
         }
@@ -210,11 +252,10 @@ class TranslationWorker(
             while (currentCoroutineContext().isActive) {
                 val request = synchronized(queueLock) { queue.pollFirst() }
                 if (request != null && now() - request.capturedAtMillis > maxQueueAgeMs) {
-                    // Max Queue Age: a subtitle this old is off screen by the
-                    // time its translation lands. Drop it and take the next
-                    // one; translating it would show stale text over new
-                    // dialogue.
+                    // Max Queue Age: a line this old waited too long for the
+                    // provider. It is counted and announced, never silent.
                     log("dropped #${request.id}: older than maxQueueAgeMs=$maxQueueAgeMs")
+                    markLost(listOf(request), REASON_EXPIRED)
                     continue
                 }
                 if (request == null) {
@@ -224,7 +265,37 @@ class TranslationWorker(
                     wakeup.receive()
                     continue
                 }
+                val batching = batchProcessor != null
+                if (batching) {
+                    // While the provider's wait is active nothing is sent and
+                    // nothing is dropped: lines keep queueing (bounded) and go
+                    // out together once the wait has passed.
+                    val coolMs = cooldownRemainingMs()
+                    if (coolMs > 0L && !RetryAfter.isIndefinite(coolMs)) {
+                        synchronized(queueLock) { queue.addFirst(request) }
+                        lastProgressAtMillis = now()
+                        updateStatus(
+                            RequestState.RATE_LIMITED,
+                            activeRequestId = null,
+                            cooldownUntilMillis = now() + coolMs,
+                        )
+                        delay(minOf(coolMs, WAIT_SLICE_MS))
+                        continue
+                    }
+                    // Close to the request budget: gather waiting lines for a moment so
+                    // one request carries more of them (delay only, nothing skipped).
+                    if (recentOnlineRequests() >= softRequestsPerMinute) {
+                        delay(coalesceWindowMs)
+                        lastProgressAtMillis = now()
+                    }
+                    val batch = takeBatch(request)
+                    if (batch.size >= 2) {
+                        runBatch(batch)
+                        continue
+                    }
+                }
                 activeRequest = request
+                inFlight = listOf(request)
                 lastProgressAtMillis = now()
                 updateStatus(RequestState.TRANSLATING, activeRequestId = request.id)
                 log(
@@ -257,6 +328,7 @@ class TranslationWorker(
                         activeRequestId = null,
                         error = TranslationErrorCode.of(timeout),
                     )
+                    markLost(listOf(request), REASON_FAILED)
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
@@ -272,6 +344,14 @@ class TranslationWorker(
                     val waitMs = (error as? QuotaExceededException)?.let {
                         maxOf(cooldownRemainingMs(), it.retryAfterMs ?: 0L)
                     } ?: 0L
+                    if (error is QuotaExceededException && !error.fromCooldown) {
+                        val hint = error.retryAfterMs?.takeIf { !RetryAfter.isIndefinite(it) }
+                            ?.let { "/wait=${it / 1_000L}s" }.orEmpty()
+                        status = status.copy(
+                            lastProviderLimit = code + hint,
+                            lastProviderLimitAtMillis = now(),
+                        )
+                    }
                     updateStatus(
                         state,
                         activeRequestId = null,
@@ -284,9 +364,14 @@ class TranslationWorker(
                     )
                     // An unrepresentable provider hint is a block that needs deliberate recovery:
                     // no automatic resume is scheduled for it.
-                    if (error is QuotaExceededException && !RetryAfter.isIndefinite(waitMs)) scheduleResume(request, waitMs)
+                    if (error is QuotaExceededException && !RetryAfter.isIndefinite(waitMs)) {
+                        if (batchProcessor != null) requeueFront(listOf(request)) else scheduleResume(request, waitMs)
+                    } else {
+                        markLost(listOf(request), REASON_FAILED)
+                    }
                 } finally {
                     activeRequest = null
+                    inFlight = emptyList()
                 }
             }
         } catch (cancelled: CancellationException) {
@@ -296,6 +381,102 @@ class TranslationWorker(
             // the watchdog sees no progress and recovers the worker.
             log("worker loop crashed: ${error.javaClass.simpleName}")
         }
+    }
+
+    /** The first line plus the lines already waiting, in order, within the batch limits. */
+    private fun takeBatch(first: QueuedRequest): List<QueuedRequest> {
+        val batch = ArrayList<QueuedRequest>()
+        batch.add(first)
+        var chars = first.text.length
+        synchronized(queueLock) {
+            while (batch.size < maxBatchLines) {
+                val next = queue.peekFirst() ?: break
+                if (chars + next.text.length > maxBatchChars) break
+                queue.pollFirst()
+                if (now() - next.capturedAtMillis > maxQueueAgeMs) {
+                    markLost(listOf(next), REASON_EXPIRED)
+                    continue
+                }
+                batch.add(next)
+                chars += next.text.length
+            }
+        }
+        return batch
+    }
+
+    private suspend fun runBatch(batch: List<QueuedRequest>) {
+        val lead = batch.first()
+        activeRequest = lead
+        inFlight = batch
+        lastProgressAtMillis = now()
+        updateStatus(RequestState.TRANSLATING, activeRequestId = lead.id)
+        log("started batch #${lead.id} size=${batch.size} depth=${queueSize()}")
+        val startedAt = now()
+        try {
+            val result = batchProcessor!!(batch)
+            lastProgressAtMillis = now()
+            val error = result.error
+            if (error == null) {
+                val outcome = result.outcome
+                val state = if (outcome?.usedLocalFallback == true) RequestState.LOCAL_FALLBACK else RequestState.SUCCESS
+                batchesSent += 1
+                batchedLines += batch.size
+                log("finished batch #${lead.id} size=${batch.size} took=${now() - startedAt}ms depth=${queueSize()}")
+                autoResumes.set(0)
+                updateStatus(state, activeRequestId = null, clearError = true)
+            } else {
+                val state = classify(error)
+                val code = TranslationErrorCode.of(error)
+                log("failed batch #${lead.id} state=$state code=$code size=${batch.size} took=${now() - startedAt}ms")
+                val waitMs = (error as? QuotaExceededException)?.let {
+                    maxOf(cooldownRemainingMs(), it.retryAfterMs ?: 0L)
+                } ?: 0L
+                if (error is QuotaExceededException) recordRealLimit(error, code)
+                updateStatus(
+                    state,
+                    activeRequestId = null,
+                    error = code,
+                    cooldownUntilMillis = when {
+                        waitMs <= 0L -> null
+                        RetryAfter.isIndefinite(waitMs) -> Long.MAX_VALUE
+                        else -> now() + waitMs
+                    },
+                )
+                if (result.retry.isNotEmpty() && RetryAfter.isIndefinite(waitMs)) markLost(result.retry, REASON_FAILED)
+                else if (result.retry.isNotEmpty()) requeueFront(result.retry)
+            }
+            if (result.lost.isNotEmpty()) markLost(result.lost, REASON_FAILED)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } finally {
+            activeRequest = null
+            inFlight = emptyList()
+        }
+    }
+
+    /** Puts lines deferred by a rate limit back at the FRONT, in order. A line is retried a bounded number of times. */
+    private fun requeueFront(lines: List<QueuedRequest>) {
+        val keep = ArrayList<QueuedRequest>()
+        for (line in lines) {
+            if (line.attempts + 1 >= MAX_LINE_ATTEMPTS) markLost(listOf(line), REASON_RETRIES) else keep.add(line.copy(attempts = line.attempts + 1))
+        }
+        synchronized(queueLock) { keep.asReversed().forEach { queue.addFirst(it) } }
+        wakeup.trySend(Unit)
+    }
+
+    /** Lines that ended without a translation: counted in the diagnostics and announced once as a notice. */
+    private fun markLost(lines: List<QueuedRequest>, reason: String) {
+        if (lines.isEmpty()) return
+        lines.forEach { runCatching { onLost(it, reason) } }
+        status = status.copy(lostLines = status.lostLines + lines.size)
+        TranslationSessionBus.onNotice(com.gamelingo.mobile.core.session.SessionNotice.TRANSLATION_LINES_LOST)
+        TranslationSessionBus.onWorkerStatus(status)
+    }
+
+    private fun recordRealLimit(error: QuotaExceededException, code: String) {
+        if (error.fromCooldown) return
+        val hint = error.retryAfterMs?.takeIf { !RetryAfter.isIndefinite(it) }?.let { "/wait=${it / 1_000L}s" }.orEmpty()
+        status = status.copy(lastProviderLimit = code + hint, lastProviderLimitAtMillis = now())
     }
 
     /**
@@ -319,6 +500,8 @@ class TranslationWorker(
     private fun resumeAfterCooldown() {
         val candidate = resumeCandidate ?: return
         resumeCandidate = null
+        // The wait is over: the state no longer reads as "waiting" even if the line is dropped below.
+        updateStatus(RequestState.RATE_LIMITED, activeRequestId = null, cooldownUntilMillis = -1L)
         if (!running.get()) return
         if (!isRelevant(candidate)) {
             log("resume skipped #${candidate.id}: no longer on screen or session changed")
@@ -439,6 +622,9 @@ class TranslationWorker(
             state = state,
             activeRequestId = activeRequestId,
             queueDepth = queueSize(),
+            batchesSent = batchesSent,
+            batchedLines = batchedLines,
+            onlineRequestsLastMinute = recentOnlineRequests(),
             lastSuccessAtMillis =
                 if (state == RequestState.SUCCESS || state == RequestState.LOCAL_FALLBACK) {
                     now()
@@ -462,6 +648,21 @@ class TranslationWorker(
         private const val TAG = "GameLingoWorker"
         const val DEFAULT_MAX_AUTO_RESUMES = 5
         const val RESUME_SLACK_MS = 250L
+
+        /** A queued line is sent back after a rate limit at most this many times before it counts as lost. */
+        const val REASON_OVERFLOW = "overflow"
+        const val REASON_EXPIRED = "expired"
+        const val REASON_FAILED = "failed"
+        const val REASON_RETRIES = "retries"
+        const val REASON_STOPPED = "stopped"
+        const val MAX_LINE_ATTEMPTS = 6
+        const val WAIT_SLICE_MS = 1_000L
+
+        // Assumption, not a provider guarantee: tuned to the free-tier 15 requests per minute seen in
+        // the user's AI Studio for gemini-3.5-flash-lite. Above this many requests in the last minute,
+        // lines are gathered for the window below before each send.
+        const val DEFAULT_SOFT_REQUESTS_PER_MINUTE = 10
+        const val DEFAULT_COALESCE_WINDOW_MS = 5_000L
         const val DEFAULT_QUEUE_CAPACITY = 16
         const val DEFAULT_DEDUP_WINDOW_MS = 2_000L
         const val DEFAULT_WATCHDOG_INTERVAL_MS = 5_000L

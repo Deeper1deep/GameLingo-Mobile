@@ -37,6 +37,8 @@ data class OverlayUiState(
     val original: String? = null,
     val translated: String? = null,
     val failure: String? = null,
+    /** Deliberate wait for a provider rate limit: a temporary pause, not a failure. */
+    val rateLimitWaiting: Boolean = false,
     val sessionError: Boolean = false,
     val notice: SessionNotice? = null,
     /** True while a session runs: shows the stop affordance. */
@@ -178,6 +180,14 @@ fun OverlayContent(
                 style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl),
             )
 
+            state.rateLimitWaiting && state.translated == null -> Text(
+                text = stringResource(R.string.home_translation_waiting),
+                color = textColor,
+                fontSize = (settings.overlayTextSizeSp - 4).coerceAtLeast(10).sp,
+                textAlign = TextAlign.Center,
+                style = LocalTextStyle.current.copy(textDirection = TextDirection.Rtl),
+            )
+
             state.failure != null -> Text(
                 text = stringResource(R.string.home_translation_failed),
                 color = textColor,
@@ -252,6 +262,8 @@ fun OverlayContent(
                             R.string.overlay_notice_online_not_configured
                         SessionNotice.FELL_BACK_TO_LOCAL ->
                             R.string.overlay_notice_fell_back_local
+                        SessionNotice.TRANSLATION_LINES_LOST ->
+                            R.string.overlay_notice_lines_lost
                     },
                 ),
                 color = textColor.copy(alpha = 0.85f),

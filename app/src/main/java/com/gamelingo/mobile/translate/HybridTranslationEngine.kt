@@ -105,6 +105,31 @@ class HybridTranslationEngine @Inject constructor(
     }
 
     /**
+     * Several lines in one online request, only when online is the engine that
+     * would answer a single line anyway. Null otherwise (LOCAL, AUTO with a local
+     * model, no key or consent, or an active cooldown): the caller then translates
+     * line by line through the normal path. No retry here: every attempt is a request.
+     */
+    override suspend fun translateBatch(requests: List<TranslationRequest>): List<String?>? {
+        val settings = settingsRepository.settings.first()
+        val cloudAllowed = settings.cloudTranslationOptIn && settings.onlineApiKey.isNotBlank()
+        val online = when (settings.aiMode) {
+            AiMode.ONLINE -> cloudAllowed
+            AiMode.AUTO -> cloudAllowed && !localChain.hasLocalAiModel() && !inCooldown()
+            AiMode.LOCAL -> false
+        }
+        if (!online) return null
+        return try {
+            onlineEngine.translateBatch(requests)
+        } catch (cancelled: CancellationException) {
+            throw cancelled
+        } catch (error: Exception) {
+            if (settings.aiMode == AiMode.AUTO) coolDownOnlineIfNeeded(error)
+            throw error
+        }
+    }
+
+    /**
      * The engine the next request would run on under current settings. The
      * translation cache keys on this so a mode or readiness change never
      * serves an entry from a different effective configuration.
