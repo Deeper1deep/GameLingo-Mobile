@@ -90,6 +90,8 @@ class BatchBacklogRenderTest {
         TranslationSessionBus.onWorkerStatus(WorkerStatus())
     }
 
+    // SYNTHETIC FIXTURE for layout only: invented text, NOT a real model output and NOT an accepted
+    // source-to-translation mapping. The Arabic and English rows below are unrelated on purpose.
     private val longArabic = "أنا مش هسيبك تعدّي من هنا يا صاحبي، لو فكرت إنك تقدر تهرب بعد كل اللي حصل ده تبقى بتحلم، " +
         "والمرة دي مفيش حد هيلحقك ولا حد هيسمع صوتك قدام الباب الكبير ده"
 

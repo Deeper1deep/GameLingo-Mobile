@@ -225,7 +225,11 @@ fun HistoryScreen(
                 )
                 Text(
                     text = entry.sourceText,
-                    style = MaterialTheme.typography.bodyMedium,
+                    style = MaterialTheme.typography.bodyMedium.copy(
+                        textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                        textAlign = androidx.compose.ui.text.style.TextAlign.Right,
+                    ),
+                    modifier = Modifier.fillMaxWidth(),
                     color = GlColors.TextPrimary,
                 )
                 InfoRow(
@@ -327,7 +331,13 @@ internal fun HistoryEntryTexts(entry: com.gamelingo.mobile.data.local.Translatio
         )
         Text(
             text = entry.sourceText,
-            style = MaterialTheme.typography.bodySmall,
+            // English reads left to right even inside the right-to-left screen, so its
+            // punctuation stays at the end of the sentence; the block keeps the right edge.
+            style = MaterialTheme.typography.bodySmall.copy(
+                textDirection = androidx.compose.ui.text.style.TextDirection.Ltr,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Right,
+            ),
+            modifier = Modifier.fillMaxWidth(),
             color = if (entry.isUntranslated) GlColors.TextPrimary else GlColors.TextSecondary,
         )
     }

@@ -124,7 +124,14 @@ class DatabaseMigrationTest {
         val rows = kotlinx.coroutines.runBlocking {
             second.translationHistoryDao().observeRecent().let { it.first() }
         }
+        val actualHash = second.openHelper.readableDatabase
+            .query("SELECT identity_hash FROM room_master_table WHERE id = 42").use { c -> c.moveToFirst(); c.getString(0) }
         second.close()
+        val exported = java.io.File("schemas").walkTopDown().first { it.name == "3.json" }.readText()
+        val debugCopy = java.io.File("src/debug/assets").walkTopDown().first { it.name == "3.json" }.readText()
+        assertEquals("the schema copy used by the migration tests must equal the exported one", exported, debugCopy)
+        val declared = Regex("\"identityHash\": \"([0-9a-f]+)\"").find(exported)?.groupValues?.get(1)
+        assertEquals("ACTUAL_HASH=$actualHash", actualHash, declared)
         assertEquals(2, rows.size)
         val saved = rows.single { it.sourceText == "Watch out" }
         assertEquals("untranslated_expired", saved.status)
