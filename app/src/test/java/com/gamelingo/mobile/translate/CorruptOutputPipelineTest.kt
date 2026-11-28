@@ -119,5 +119,6 @@ class CorruptOutputPipelineTest {
         val exported = com.gamelingo.mobile.core.diagnostics.PipelineTrace.export()
         assertTrue("trace leaked subtitle text", !exported.contains("truck") && !exported.contains(clean))
         TranslationSessionBus.onSessionStopped()
+        coordinator.shutdownForTest()
     }
 }

@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
@@ -53,6 +54,12 @@ class TranslationCoordinator @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val started = AtomicBoolean(false)
+
+    /** Test support: end this coordinator's collectors so it cannot keep consuming the shared bus. */
+    internal fun shutdownForTest() {
+        worker?.stop()
+        scope.cancel()
+    }
     private fun sourceOf(subtitleId: Long): com.gamelingo.mobile.core.context.ContextMemory.Source = when {
         subtitleId == 0L -> com.gamelingo.mobile.core.context.ContextMemory.Source.UNKNOWN
         com.gamelingo.mobile.core.session.TranslationSessionBus.isAudioId(subtitleId) -> com.gamelingo.mobile.core.context.ContextMemory.Source.AUDIO
@@ -70,7 +77,16 @@ class TranslationCoordinator @Inject constructor(
     /** Idempotent: safe to call from every service start and app launch. */
     fun start() {
         if (!started.compareAndSet(false, true)) return
-        val translationWorker = TranslationWorker(processor = ::processRequest)
+        val translationWorker = TranslationWorker(
+            processor = ::processRequest,
+            cooldownRemainingMs = { OnlineRequestGate.shared.remainingMs() },
+            isRelevant = { r ->
+                TranslationSessionBus.state.value == SessionState.RUNNING &&
+                    (r.generation == TranslationSessionBus.NO_ID ||
+                        r.generation == TranslationSessionBus.currentGeneration()) &&
+                    TranslationSessionBus.isSubtitleActive(r.subtitleId)
+            },
+        )
         worker = translationWorker
         translationWorker.start()
         scope.launch {
@@ -109,7 +125,11 @@ class TranslationCoordinator @Inject constructor(
         scope.launch {
             TranslationSessionBus.state.collect { state ->
                 when (state) {
-                    SessionState.RUNNING -> translationWorker.start()
+                    SessionState.RUNNING -> {
+                        // Starting a session is the deliberate recovery from an indefinite block.
+                        OnlineRequestGate.shared.clearIndefiniteBlock()
+                        translationWorker.start()
+                    }
                     SessionState.STOPPED -> {
                         translationWorker.stop()
                         contextMemory.clear()

@@ -115,6 +115,19 @@ fun DiagnosticsScreen(liveClock: Boolean = true) {
                 label = stringResource(R.string.diag_last_success),
                 value = ago(workerStatus.lastSuccessAtMillis, tick),
             )
+            InfoRow(
+                label = stringResource(R.string.diag_cooldown),
+                value = if (workerStatus.cooldownUntilMillis == Long.MAX_VALUE) {
+                    stringResource(R.string.diag_cooldown_blocked)
+                } else if (workerStatus.cooldownUntilMillis > tick) {
+                    stringResource(
+                        R.string.diag_cooldown_fmt,
+                        ((workerStatus.cooldownUntilMillis - tick) / 1_000L).coerceAtLeast(0L),
+                    )
+                } else {
+                    stringResource(R.string.diag_none)
+                },
+            )
             workerStatus.lastError?.let { error ->
                 HintText(stringResource(R.string.diag_last_error_fmt, error))
             }

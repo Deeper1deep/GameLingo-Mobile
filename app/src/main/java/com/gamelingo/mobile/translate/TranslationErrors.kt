@@ -17,6 +17,10 @@ class OnlineNotConfiguredException : IOException("online mode selected but key o
 class QuotaExceededException(
     message: String,
     val retryAfterMs: Long? = null,
+    /** Whitelisted provider fields (status, quota id); never the message text. */
+    val provider: ProviderErrorInfo = ProviderErrorInfo(),
+    /** True when the local cooldown refused the call and no request was sent. */
+    val fromCooldown: Boolean = false,
 ) : IOException(message)
 
 /** The provider is temporarily unavailable (HTTP 5xx). */

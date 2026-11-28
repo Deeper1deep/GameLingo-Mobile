@@ -172,7 +172,9 @@ class HybridTranslationEngine @Inject constructor(
     private fun coolDownOnlineIfNeeded(error: Throwable?) {
         if (error !is QuotaExceededException && error !is ProviderUnavailableException) return
         val hintMs = (error as? QuotaExceededException)?.retryAfterMs ?: 0L
-        onlineCooldownUntil.set(now() + maxOf(cooldownMs, hintMs))
+        val wait = maxOf(cooldownMs, hintMs)
+        val until = now() + wait
+        onlineCooldownUntil.set(if (RetryAfter.isIndefinite(wait) || until < 0L) Long.MAX_VALUE else until)
     }
 
     private suspend fun translateAuto(

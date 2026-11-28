@@ -76,6 +76,11 @@ class TranslationWorker(
     // Tests drive virtual time: an infinite watchdog loop under a test
     // scheduler never lets the scheduler idle, so they disable it.
     private val enableWatchdog: Boolean = true,
+    /** Milliseconds until the online gate lets requests through again (0 = open). */
+    private val cooldownRemainingMs: () -> Long = { 0L },
+    /** True while a queued line still belongs on screen (same session, subtitle still shown). */
+    private val isRelevant: (QueuedRequest) -> Boolean = { true },
+    private val maxAutoResumes: Int = DEFAULT_MAX_AUTO_RESUMES,
 ) {
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -108,6 +113,14 @@ class TranslationWorker(
 
     @Volatile
     private var lastProgressAtMillis: Long = -1
+
+    /** The newest line that failed on a rate limit; re-sent once when the cooldown ends. */
+    @Volatile
+    private var resumeCandidate: QueuedRequest? = null
+
+    @Volatile
+    private var resumeJob: Job? = null
+    private val autoResumes = java.util.concurrent.atomic.AtomicInteger(0)
 
     @Volatile
     private var lastEnqueuedText: String? = null
@@ -231,6 +244,7 @@ class TranslationWorker(
                         "finished #${request.id} state=$state engine=${outcome.engineId} " +
                             "took=${now() - startedAt}ms depth=${queueSize()}",
                     )
+                    autoResumes.set(0)
                     updateStatus(state, activeRequestId = null, clearError = true)
                 } catch (timeout: TimeoutCancellationException) {
                     // A timeout is a failed request, not a cancellation:
@@ -241,20 +255,36 @@ class TranslationWorker(
                     updateStatus(
                         RequestState.TIMEOUT,
                         activeRequestId = null,
-                        error = "TimeoutCancellationException",
+                        error = TranslationErrorCode.of(timeout),
                     )
                 } catch (cancelled: CancellationException) {
                     throw cancelled
                 } catch (error: Exception) {
                     lastProgressAtMillis = now()
                     val state = classify(error)
+                    val code = TranslationErrorCode.of(error)
                     // One failed request changes nothing about the loop: the
                     // next queued line is processed right after.
                     log(
-                        "failed #${request.id} state=$state error=${error.javaClass.simpleName} " +
+                        "failed #${request.id} state=$state code=$code " +
                             "took=${now() - startedAt}ms depth=${queueSize()}",
                     )
-                    updateStatus(state, activeRequestId = null, error = error.javaClass.simpleName)
+                    val waitMs = (error as? QuotaExceededException)?.let {
+                        maxOf(cooldownRemainingMs(), it.retryAfterMs ?: 0L)
+                    } ?: 0L
+                    updateStatus(
+                        state,
+                        activeRequestId = null,
+                        error = code,
+                        cooldownUntilMillis = when {
+                            waitMs <= 0L -> null
+                            RetryAfter.isIndefinite(waitMs) -> Long.MAX_VALUE
+                            else -> now() + waitMs
+                        },
+                    )
+                    // An unrepresentable provider hint is a block that needs deliberate recovery:
+                    // no automatic resume is scheduled for it.
+                    if (error is QuotaExceededException && !RetryAfter.isIndefinite(waitMs)) scheduleResume(request, waitMs)
                 } finally {
                     activeRequest = null
                 }
@@ -266,6 +296,50 @@ class TranslationWorker(
             // the watchdog sees no progress and recovers the worker.
             log("worker loop crashed: ${error.javaClass.simpleName}")
         }
+    }
+
+    /**
+     * A rate limit pauses only the online requests: capture and OCR keep
+     * running and new lines keep queueing (oldest dropped when full). When
+     * the cooldown ends, the NEWEST line that failed on the limit is sent
+     * once more, but only if it is still on screen in the same session, and
+     * without waiting for the text to change. Bounded by [maxAutoResumes] in
+     * a row; a success resets the count.
+     */
+    private fun scheduleResume(request: QueuedRequest, waitMs: Long) {
+        if (waitMs <= 0L || autoResumes.get() >= maxAutoResumes) return
+        resumeCandidate = request
+        resumeJob?.cancel()
+        resumeJob = scope.launch {
+            delay(waitMs + RESUME_SLACK_MS)
+            resumeAfterCooldown()
+        }
+    }
+
+    private fun resumeAfterCooldown() {
+        val candidate = resumeCandidate ?: return
+        resumeCandidate = null
+        if (!running.get()) return
+        if (!isRelevant(candidate)) {
+            log("resume skipped #${candidate.id}: no longer on screen or session changed")
+            return
+        }
+        // A newer line is already queued or translating: it supersedes this one.
+        if (activeRequest != null || queueSize() > 0) return
+        val at = now()
+        val retry = QueuedRequest(
+            id = nextRequestId.incrementAndGet(),
+            text = candidate.text,
+            capturedAtMillis = at,
+            enqueuedAtMillis = at,
+            subtitleId = candidate.subtitleId,
+            generation = candidate.generation,
+        )
+        autoResumes.incrementAndGet()
+        synchronized(queueLock) { queue.addLast(retry) }
+        wakeup.trySend(Unit)
+        log("resumed after cooldown as #${retry.id} (auto-resume ${autoResumes.get()}/$maxAutoResumes)")
+        updateStatus(RequestState.QUEUED, activeRequestId = null)
     }
 
     private suspend fun watchdogLoop() {
@@ -354,8 +428,14 @@ class TranslationWorker(
         activeRequestId: Long?,
         error: String? = null,
         clearError: Boolean = false,
+        cooldownUntilMillis: Long? = null,
     ) {
         status = status.copy(
+            cooldownUntilMillis = when {
+                state == RequestState.SUCCESS || state == RequestState.LOCAL_FALLBACK -> -1L
+                cooldownUntilMillis != null -> cooldownUntilMillis
+                else -> status.cooldownUntilMillis
+            },
             state = state,
             activeRequestId = activeRequestId,
             queueDepth = queueSize(),
@@ -380,6 +460,8 @@ class TranslationWorker(
 
     companion object {
         private const val TAG = "GameLingoWorker"
+        const val DEFAULT_MAX_AUTO_RESUMES = 5
+        const val RESUME_SLACK_MS = 250L
         const val DEFAULT_QUEUE_CAPACITY = 16
         const val DEFAULT_DEDUP_WINDOW_MS = 2_000L
         const val DEFAULT_WATCHDOG_INTERVAL_MS = 5_000L

@@ -106,5 +106,6 @@ class TranslationCoordinatorGeometryTest {
         assertNotNull(shown)
         assertEquals("They are coming for us", shown.original)
         TranslationSessionBus.onSessionStopped()
+        coordinator.shutdownForTest()
     }
 }

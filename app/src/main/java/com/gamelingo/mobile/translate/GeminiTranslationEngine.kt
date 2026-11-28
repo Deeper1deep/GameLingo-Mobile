@@ -25,6 +25,12 @@ class GeminiTranslationEngine @Inject constructor(
 
     override val engineId: String = ENGINE_ID
 
+    /**
+     * Every online request goes through this gate: bounded concurrency and a
+     * local cooldown after a 429. Settable so tests use an isolated instance.
+     */
+    internal var gate: OnlineRequestGate = OnlineRequestGate.shared
+
     /** Nothing to warm up: the model runs in the cloud. */
     override suspend fun ensureReady() = Unit
 
@@ -34,41 +40,43 @@ class GeminiTranslationEngine @Inject constructor(
             throw OnlineNotConfiguredException()
         }
 
-        val response = try {
-            api.generateContent(
-                model = MODEL,
-                apiKey = apiKey,
-                request = GeminiRequest(
-                    // Mode-appropriate mandate: the request carries the
-                    // user's Arabic style (MSA or Egyptian); the profanity
-                    // policy is identical in both.
-                    systemInstruction = GeminiContent(
-                        parts = listOf(GeminiPart(PromptComposer.systemPrompt(request.arabicMode, request.text))),
-                    ),
-                    contents = listOf(
-                        GeminiContent(
-                            role = "user",
-                            parts = listOf(GeminiPart(ArabicStylePrompt.buildUserPrompt(request))),
+        val response = gate.run {
+            val answer = try {
+                api.generateContent(
+                    model = MODEL,
+                    apiKey = apiKey,
+                    request = GeminiRequest(
+                        // Mode-appropriate mandate: the request carries the
+                        // user's Arabic style (MSA or Egyptian); the profanity
+                        // policy is identical in both.
+                        systemInstruction = GeminiContent(
+                            parts = listOf(GeminiPart(PromptComposer.systemPrompt(request.arabicMode, request.text))),
                         ),
+                        contents = listOf(
+                            GeminiContent(
+                                role = "user",
+                                parts = listOf(GeminiPart(ArabicStylePrompt.buildUserPrompt(request))),
+                            ),
+                        ),
+                        generationConfig = GeminiGenerationConfig(
+                            temperature = TEMPERATURE,
+                            maxOutputTokens = MAX_OUTPUT_TOKENS,
+                        ),
+                        // Game dialogue carries profanity and violence the
+                        // translation must PRESERVE, never soften or drop. The
+                        // default safety filters silently swallow those lines;
+                        // explicit BLOCK_NONE keeps the established profanity
+                        // policy intact on the online path too.
+                        safetySettings = SAFETY_SETTINGS,
                     ),
-                    generationConfig = GeminiGenerationConfig(
-                        temperature = TEMPERATURE,
-                        maxOutputTokens = MAX_OUTPUT_TOKENS,
-                    ),
-                    // Game dialogue carries profanity and violence the
-                    // translation must PRESERVE, never soften or drop. The
-                    // default safety filters silently swallow those lines;
-                    // explicit BLOCK_NONE keeps the established profanity
-                    // policy intact on the online path too.
-                    safetySettings = SAFETY_SETTINGS,
-                ),
-            )
-        } catch (http: HttpException) {
-            throw classifyHttpError(http)
-        }
-
-        response.error?.let { error ->
-            throw classifyApiError(error.code ?: 0, error.message.orEmpty())
+                )
+            } catch (http: HttpException) {
+                throw classifyHttpError(http, gate.now())
+            }
+            answer.error?.let { error ->
+                throw classifyApiError(error.code ?: 0, error.status)
+            }
+            answer
         }
 
         val candidate = response.candidates?.firstOrNull()
@@ -117,12 +125,22 @@ class GeminiTranslationEngine @Inject constructor(
         )
 
         /** Maps an HTTP failure to the typed error the rest of the app understands. */
-        private fun classifyHttpError(error: HttpException): IOException = when (error.code()) {
-            HTTP_TOO_MANY_REQUESTS ->
+        private fun classifyHttpError(error: HttpException, nowMillis: Long): IOException = when (error.code()) {
+            HTTP_TOO_MANY_REQUESTS -> {
+                // Only whitelisted fields of the body are kept (status, quota
+                // id, retry delay); the message text and headers other than
+                // Retry-After are never stored.
+                val body = runCatching { error.response()?.errorBody()?.string() }.getOrNull()
+                val info = ProviderErrorInfo.parse(body)
                 QuotaExceededException(
                     "Gemini quota or rate limit hit (429)",
-                    retryAfterMs = parseRetryAfter(error),
+                    retryAfterMs = RetryAfter.parseMillis(
+                        error.response()?.headers()?.get("Retry-After"),
+                        nowMillis,
+                    ) ?: info.retryDelayMs,
+                    provider = info,
                 )
+            }
             HTTP_BAD_REQUEST, HTTP_UNAUTHORIZED, HTTP_FORBIDDEN ->
                 ApiAuthException("Gemini rejected the API key (${error.code()})")
             in HTTP_SERVER_ERROR_START..HTTP_SERVER_ERROR_END ->
@@ -131,25 +149,18 @@ class GeminiTranslationEngine @Inject constructor(
         }
 
         /** Same classification for a 200 response carrying an error body. */
-        private fun classifyApiError(code: Int, message: String): IOException = when (code) {
-            HTTP_TOO_MANY_REQUESTS -> QuotaExceededException("Gemini quota ($code): $message")
+        private fun classifyApiError(code: Int, status: String?): IOException = when (code) {
+            HTTP_TOO_MANY_REQUESTS ->
+                QuotaExceededException(
+                    "Gemini quota ($code)",
+                    provider = ProviderErrorInfo.parse("\"status\":\"${status.orEmpty()}\""),
+                )
             HTTP_BAD_REQUEST, HTTP_UNAUTHORIZED, HTTP_FORBIDDEN ->
-                ApiAuthException("Gemini key error ($code): $message")
+                ApiAuthException("Gemini key error ($code)")
             in HTTP_SERVER_ERROR_START..HTTP_SERVER_ERROR_END ->
-                ProviderUnavailableException("Gemini unavailable ($code): $message")
-            else -> IOException("Gemini API error $code: $message")
+                ProviderUnavailableException("Gemini unavailable ($code)")
+            else -> IOException("Gemini API error $code")
         }
-
-        /**
-         * Reads the Retry-After header (seconds) from a 429 response. Null
-         * when absent or unparsable: the default cooldown then applies.
-         */
-        private fun parseRetryAfter(error: HttpException): Long? =
-            error.response()?.headers()?.get("Retry-After")
-                ?.trim()
-                ?.toLongOrNull()
-                ?.takeIf { it in 0..MAX_RETRY_AFTER_SEC }
-                ?.let { it * MILLIS_PER_SECOND }
 
         private const val HTTP_BAD_REQUEST = 400
         private const val HTTP_UNAUTHORIZED = 401
@@ -157,10 +168,5 @@ class GeminiTranslationEngine @Inject constructor(
         private const val HTTP_TOO_MANY_REQUESTS = 429
         private const val HTTP_SERVER_ERROR_START = 500
         private const val HTTP_SERVER_ERROR_END = 599
-        private const val MILLIS_PER_SECOND = 1_000L
-
-        /** Caps a Retry-After hint at 10 minutes so a hostile or buggy
-         *  header cannot park the online engine for hours. */
-        private const val MAX_RETRY_AFTER_SEC = 600L
     }
 }
