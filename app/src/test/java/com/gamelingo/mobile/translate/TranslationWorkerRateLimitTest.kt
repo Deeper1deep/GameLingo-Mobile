@@ -162,7 +162,7 @@ class TranslationWorkerRateLimitTest {
         w.stop()
     }
 
-    @Test fun `the real provider limit is kept apart from a later local refusal and cleared by a success`() = runTest {
+    @Test fun `the real provider limit is kept apart from a later local refusal and kept as history after a success`() = runTest {
         val calls = ConcurrentLinkedQueue<String>()
         var mode = 0
         val info = ProviderErrorInfo(status = "RESOURCE_EXHAUSTED", quotaId = "PerMinutePerProject")
@@ -186,7 +186,8 @@ class TranslationWorkerRateLimitTest {
         mode = 2
         advanceTimeBy(60_000L)
         runCurrent()
-        assertEquals(null, w.currentStatus().lastProviderLimit)
+        assertEquals(-1L, w.currentStatus().cooldownUntilMillis)
+        assertEquals("QUOTA_429/RESOURCE_EXHAUSTED/PerMinutePerProject/wait=20s", w.currentStatus().lastProviderLimit)
         w.stop()
     }
 }

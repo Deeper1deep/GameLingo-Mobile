@@ -497,7 +497,7 @@
     <string name="diag_recovery_count">عدد مرات الاسترداد</string>
     <string name="diag_last_success">آخر ترجمة ناجحة</string>
     <string name="diag_last_error">آخر خطأ</string>
-    <string name="diag_last_provider_limit_fmt">آخر حد فعلي من الخدمة: %1$s (من %2$s)</string>
+    <string name="diag_last_provider_limit_fmt">آخر مرة الخدمة رفضت فيها بحد الطلبات (سجل قديم، مش حالة دلوقتي): %1$s، من %2$s</string>
     <string name="diag_last_error_fmt">الخطأ: %1$s</string>
     <string name="diag_cooldown">انتظار بعد حد الطلبات</string>
     <string name="diag_cooldown_blocked">موقوف لحد ما تبدأ جلسة جديدة</string>

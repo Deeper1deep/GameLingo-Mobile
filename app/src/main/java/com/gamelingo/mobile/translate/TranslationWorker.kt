@@ -439,8 +439,6 @@ class TranslationWorker(
         cooldownUntilMillis: Long? = null,
     ) {
         status = status.copy(
-            lastProviderLimit = if (state == RequestState.SUCCESS || state == RequestState.LOCAL_FALLBACK) null else status.lastProviderLimit,
-            lastProviderLimitAtMillis = if (state == RequestState.SUCCESS || state == RequestState.LOCAL_FALLBACK) -1L else status.lastProviderLimitAtMillis,
             cooldownUntilMillis = when {
                 state == RequestState.SUCCESS || state == RequestState.LOCAL_FALLBACK -> -1L
                 cooldownUntilMillis != null -> cooldownUntilMillis

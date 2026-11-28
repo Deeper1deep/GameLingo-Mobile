@@ -117,7 +117,8 @@ data class WorkerStatus(
     val cooldownUntilMillis: Long = -1,
     /**
      * Stable code of the last REAL provider rate limit (never a local
-     * cooldown refusal), with its provider wait; kept until a success.
+     * cooldown refusal), with its provider wait. History, not current state:
+     * it is kept after a success; the active cooldown is [cooldownUntilMillis].
      */
     val lastProviderLimit: String? = null,
     /** When that real limit was received; -1 when none. */
