@@ -19,6 +19,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeout
 
@@ -53,6 +54,12 @@ class TranslationCoordinator @Inject constructor(
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val started = AtomicBoolean(false)
+
+    /** Test support: end this coordinator's collectors so it cannot keep consuming the shared bus. */
+    internal fun shutdownForTest() {
+        worker?.stop()
+        scope.cancel()
+    }
     private fun sourceOf(subtitleId: Long): com.gamelingo.mobile.core.context.ContextMemory.Source = when {
         subtitleId == 0L -> com.gamelingo.mobile.core.context.ContextMemory.Source.UNKNOWN
         com.gamelingo.mobile.core.session.TranslationSessionBus.isAudioId(subtitleId) -> com.gamelingo.mobile.core.context.ContextMemory.Source.AUDIO

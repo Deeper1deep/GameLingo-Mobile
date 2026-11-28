@@ -83,7 +83,10 @@ class TranslationCoordinatorRateLimitTest {
         OnlineRequestGate.shared.jitter = { 0L }
     }
 
+    private var coordinator: TranslationCoordinator? = null
+
     @After fun stop() {
+        coordinator?.shutdownForTest()
         TranslationSessionBus.onSessionStopped()
         OnlineRequestGate.shared.resetForTest()
     }
@@ -121,6 +124,7 @@ class TranslationCoordinatorRateLimitTest {
         TranslationSessionBus.onSessionStopped()
         TranslationSessionBus.onSessionStarted()
         coordinator.start()
+        this.coordinator = coordinator
         Thread.sleep(800)
         return coordinator
     }
