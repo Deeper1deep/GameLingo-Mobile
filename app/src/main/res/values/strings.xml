@@ -499,6 +499,7 @@
     <string name="diag_last_error">آخر خطأ</string>
     <string name="diag_last_error_fmt">الخطأ: %1$s</string>
     <string name="diag_cooldown">انتظار بعد حد الطلبات</string>
+    <string name="diag_cooldown_blocked">موقوف لحد ما تبدأ جلسة جديدة</string>
     <string name="diag_cooldown_fmt">%1$d ثانية</string>
     <string name="diag_end_to_end">زمن السطر من الشاشة للترجمة</string>
     <string name="diag_geometry_export">مشاركة تقرير دوران الشاشة</string>

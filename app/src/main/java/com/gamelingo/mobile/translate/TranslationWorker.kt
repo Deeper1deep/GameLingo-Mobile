@@ -276,9 +276,15 @@ class TranslationWorker(
                         state,
                         activeRequestId = null,
                         error = code,
-                        cooldownUntilMillis = if (waitMs > 0L) now() + waitMs else null,
+                        cooldownUntilMillis = when {
+                            waitMs <= 0L -> null
+                            RetryAfter.isIndefinite(waitMs) -> Long.MAX_VALUE
+                            else -> now() + waitMs
+                        },
                     )
-                    if (error is QuotaExceededException) scheduleResume(request, waitMs)
+                    // An unrepresentable provider hint is a block that needs deliberate recovery:
+                    // no automatic resume is scheduled for it.
+                    if (error is QuotaExceededException && !RetryAfter.isIndefinite(waitMs)) scheduleResume(request, waitMs)
                 } finally {
                     activeRequest = null
                 }

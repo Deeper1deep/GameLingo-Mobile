@@ -100,9 +100,16 @@ class RateLimitParsingTest {
         assertEquals(900_000L, RetryAfter.parseMillis("900", now))
         assertEquals(86_400_000L, RetryAfter.parseMillis("86400", now))
         assertEquals(86_400_000L, RetryAfter.parseMillis("Sun, 29 Nov 2026 03:00:00 GMT", now))
-        // Only an overflow-sized value is capped (seven days), without arithmetic overflow.
-        assertEquals(RetryAfter.MAX_SECONDS * 1_000L, RetryAfter.parseMillis("99999999999999999999999", now))
-        assertEquals(RetryAfter.MAX_SECONDS * 1_000L, RetryAfter.parseMillis("9223372036854775807", now))
+        // A valid hint over seven days is kept exactly, never shortened.
+        assertEquals(8L * 86_400_000L, RetryAfter.parseMillis("691200", now))
+        // Boundary: the largest representable value is exact, one second more is unrepresentable
+        // and becomes the blocked marker instead of a shorter wait.
+        assertEquals(4_611_686_018_427_387_000L, RetryAfter.parseMillis("4611686018427387", now))
+        assertEquals(RetryAfter.INDEFINITE_MS, RetryAfter.parseMillis("4611686018427388", now))
+        assertEquals(RetryAfter.INDEFINITE_MS, RetryAfter.parseMillis("99999999999999999999999", now))
+        assertEquals(RetryAfter.INDEFINITE_MS, RetryAfter.parseMillis("9223372036854775807", now))
+        assertTrue(RetryAfter.isIndefinite(RetryAfter.INDEFINITE_MS))
+        assertFalse(RetryAfter.isIndefinite(8L * 86_400_000L))
         assertNull(RetryAfter.parseMillis("soon", now))
         assertNull(RetryAfter.parseMillis("-5", now))
         assertNull(RetryAfter.parseMillis(null, now))
@@ -121,6 +128,40 @@ class RateLimitParsingTest {
         assertTrue(early.fromCooldown)
         assertEquals(1, api.calls)
         t += 1_140_001L
+        runCatching { eng.translate(TranslationRequest(text = "c")) }
+        assertEquals(2, api.calls)
+    }
+
+    @Test fun `an unrepresentable provider hint blocks until deliberate recovery and never retries on its own`() = runTest {
+        var t = 1_000L
+        val api = ThrowingApi(http(429, body429, "Retry-After" to "99999999999999999999999"))
+        val eng = engine(api) { t }
+        val e = runCatching { eng.translate(TranslationRequest(text = "a")) }.exceptionOrNull() as QuotaExceededException
+        assertEquals(RetryAfter.INDEFINITE_MS, e.retryAfterMs)
+        assertTrue(eng.gate.isBlockedIndefinitely())
+        // Ten years later: still no request leaves the device.
+        t += 315_360_000_000L
+        val later = runCatching { eng.translate(TranslationRequest(text = "b")) }.exceptionOrNull() as QuotaExceededException
+        assertTrue(later.fromCooldown)
+        assertEquals(1, api.calls)
+        // Deliberate recovery clears it.
+        eng.gate.clearIndefiniteBlock()
+        assertFalse(eng.gate.isBlockedIndefinitely())
+        runCatching { eng.translate(TranslationRequest(text = "c")) }
+        assertEquals(2, api.calls)
+    }
+
+    @Test fun `a valid eight day hint is honoured in full by the gate`() = runTest {
+        var t = 0L
+        val api = ThrowingApi(http(429, body429, "Retry-After" to "691200"))
+        val eng = engine(api) { t }
+        runCatching { eng.translate(TranslationRequest(text = "a")) }
+        assertFalse(eng.gate.isBlockedIndefinitely())
+        t += 8L * 86_400_000L - 1L
+        assertTrue(eng.gate.remainingMs() > 0L)
+        runCatching { eng.translate(TranslationRequest(text = "b")) }
+        assertEquals(1, api.calls)
+        t += 2L
         runCatching { eng.translate(TranslationRequest(text = "c")) }
         assertEquals(2, api.calls)
     }

@@ -99,6 +99,30 @@ class DiagnosticsScreenRenderTest {
         rule.onNodeWithText(ctx.getString(R.string.diag_last_frame)).performScrollTo().assertIsDisplayed()
         rule.onNodeWithText(ctx.getString(R.string.diag_last_ocr)).performScrollTo().assertIsDisplayed()
         rule.onAllNodes(textMatching(Regex("^من [0-9]+ ثانية$"))).assertCountEquals(3)
+        // Real pixels: draw the activity and save the PNG (also printed between markers for CI recovery).
+        rule.mainClock.autoAdvance = false
+        rule.mainClock.advanceTimeByFrame()
+        val view = rule.activity.window.decorView
+        val w = view.width.coerceAtLeast(1)
+        val h = view.height.coerceAtLeast(1)
+        val bitmap = android.graphics.Bitmap.createBitmap(w, h, android.graphics.Bitmap.Config.ARGB_8888)
+        view.draw(android.graphics.Canvas(bitmap))
+        val out = java.io.ByteArrayOutputStream()
+        bitmap.compress(android.graphics.Bitmap.CompressFormat.PNG, 100, out)
+        println("DIAG_RL_PNG_BEGIN")
+        android.util.Base64.encodeToString(out.toByteArray(), android.util.Base64.NO_WRAP).chunked(4000).forEach { println(it) }
+        println("DIAG_RL_PNG_END")
+        TranslationSessionBus.onWorkerStatus(WorkerStatus())
+    }
+
+    @Test
+    fun `an indefinite block shows its own cooldown text`() {
+        TranslationSessionBus.onWorkerStatus(
+            WorkerStatus(state = RequestState.RATE_LIMITED, lastError = "QUOTA_429", cooldownUntilMillis = Long.MAX_VALUE),
+        )
+        rule.setContent { GameLingoTheme { DiagnosticsScreen(liveClock = false) } }
+        val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
+        rule.onNodeWithText(ctx.getString(R.string.diag_cooldown_blocked)).performScrollTo().assertIsDisplayed()
         TranslationSessionBus.onWorkerStatus(WorkerStatus())
     }
 }

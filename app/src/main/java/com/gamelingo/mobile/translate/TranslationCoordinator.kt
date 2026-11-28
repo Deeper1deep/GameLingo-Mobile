@@ -125,7 +125,11 @@ class TranslationCoordinator @Inject constructor(
         scope.launch {
             TranslationSessionBus.state.collect { state ->
                 when (state) {
-                    SessionState.RUNNING -> translationWorker.start()
+                    SessionState.RUNNING -> {
+                        // Starting a session is the deliberate recovery from an indefinite block.
+                        OnlineRequestGate.shared.clearIndefiniteBlock()
+                        translationWorker.start()
+                    }
                     SessionState.STOPPED -> {
                         translationWorker.stop()
                         contextMemory.clear()

@@ -148,4 +148,17 @@ class TranslationWorkerRateLimitTest {
         assertEquals(2, calls.size)
         w.stop()
     }
+
+    @Test fun `an unrepresentable hint enters a blocked state with no automatic resume`() = runTest {
+        val calls = ConcurrentLinkedQueue<String>()
+        val w = worker(calls) { throw QuotaExceededException("429", retryAfterMs = RetryAfter.INDEFINITE_MS) }
+        w.start()
+        w.enqueue("line", 0, subtitleId = 1, generation = 1)
+        advanceTimeBy(10L * 365 * 86_400_000L)
+        runCurrent()
+        assertEquals(1, calls.size)
+        assertEquals(RequestState.RATE_LIMITED, w.currentStatus().state)
+        assertEquals(Long.MAX_VALUE, w.currentStatus().cooldownUntilMillis)
+        w.stop()
+    }
 }

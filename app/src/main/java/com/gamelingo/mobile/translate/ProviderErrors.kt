@@ -24,9 +24,8 @@ data class ProviderErrorInfo(
         )
         private val STATUS_RE = Regex("\"status\"\\s*:\\s*\"([A-Z_]{3,40})\"")
         private val QUOTA_ID_RE = Regex("\"quotaId\"\\s*:\\s*\"([A-Za-z0-9_\\-]{1,100})\"")
-        private val RETRY_DELAY_RE = Regex("\"retryDelay\"\\s*:\\s*\"(\\d{1,12})(?:\\.\\d+)?s\"")
+        private val RETRY_DELAY_RE = Regex("\"retryDelay\"\\s*:\\s*\"(\\d+)(?:\\.\\d+)?s\"")
         private const val MAX_BODY_CHARS = 8_000
-        private const val MAX_RETRY_DELAY_SEC = RetryAfter.MAX_SECONDS
 
         /** Extracts only whitelisted fields; null body or no match gives an empty info. */
         fun parse(body: String?): ProviderErrorInfo {
@@ -34,8 +33,7 @@ data class ProviderErrorInfo(
             val text = body.take(MAX_BODY_CHARS)
             val status = STATUS_RE.find(text)?.groupValues?.get(1)?.takeIf { it in STATUSES }
             val quota = QUOTA_ID_RE.find(text)?.groupValues?.get(1)
-            val delay = RETRY_DELAY_RE.find(text)?.groupValues?.get(1)?.toLongOrNull()
-                ?.coerceIn(0L, MAX_RETRY_DELAY_SEC)?.times(1_000L)
+            val delay = RETRY_DELAY_RE.find(text)?.groupValues?.get(1)?.let { RetryAfter.secondsToMillis(it) }
             return ProviderErrorInfo(status, quota, delay)
         }
     }
@@ -44,25 +42,29 @@ data class ProviderErrorInfo(
 /** Parses an HTTP Retry-After header: delta-seconds or an HTTP-date. */
 object RetryAfter {
     /**
-     * Overflow guard only, not a retry policy: a valid provider hint is honoured in
-     * full up to seven days (a longer one pauses online requests for the whole cap, so
-     * no request is ever sent earlier than the provider allowed). The separate retry
-     * budget (maxAutoResumes) limits how many times we try, never when we may try.
+     * Marker for a hint too large to represent as milliseconds. It is NEVER shortened into a
+     * retry time: the gate treats it as blocked until a deliberate recovery (a new session).
      */
-    const val MAX_SECONDS = 7L * 24 * 3600
+    const val INDEFINITE_MS = Long.MAX_VALUE
 
-    /** Milliseconds to wait, at most MAX_SECONDS; null when absent or unparsable. */
+    /** True for the indefinite marker or any wait so large that it cannot be a real delay. */
+    fun isIndefinite(ms: Long): Boolean = ms >= INDEFINITE_MS / 2
+
+    /** Whole seconds as text to milliseconds; exact when representable, else [INDEFINITE_MS]. */
+    fun secondsToMillis(digits: String): Long {
+        val seconds = digits.toLongOrNull() ?: return INDEFINITE_MS
+        return if (seconds > Long.MAX_VALUE / 2 / 1_000L) INDEFINITE_MS else seconds * 1_000L
+    }
+
+    /** Milliseconds to wait, exactly as given; [INDEFINITE_MS] when unrepresentable; null when absent or unparsable. */
     fun parseMillis(header: String?, nowMillis: Long): Long? {
         val value = header?.trim().orEmpty()
         if (value.isEmpty()) return null
-        if (value.all { it.isDigit() } && value.toLongOrNull() == null) return MAX_SECONDS * 1_000L
-        value.toLongOrNull()?.let { seconds ->
-            return if (seconds < 0) null else minOf(seconds, MAX_SECONDS) * 1_000L
-        }
+        if (value.all { it.isDigit() }) return secondsToMillis(value)
         val dateMillis = runCatching {
             ZonedDateTime.parse(value, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli()
         }.getOrNull() ?: return null
-        return (dateMillis - nowMillis).coerceIn(0L, MAX_SECONDS * 1_000L)
+        return (dateMillis - nowMillis).coerceAtLeast(0L)
     }
 }
 

@@ -65,6 +65,17 @@ class OnlineRequestGate(
         }
     }
 
+    /** True when the provider's hint could not be represented: no automatic retry, ever. */
+    fun isBlockedIndefinitely(): Boolean = cooldownUntil.get() == Long.MAX_VALUE
+
+    /** Deliberate recovery (the user starts a new session): clears an indefinite block. */
+    fun clearIndefiniteBlock() {
+        if (cooldownUntil.get() == Long.MAX_VALUE) {
+            cooldownUntil.set(0L)
+            consecutive.set(0)
+        }
+    }
+
     /** Test support: forget the cooldown, backoff and peak counters of this gate. */
     internal fun resetForTest() {
         cooldownUntil.set(0L)
@@ -87,8 +98,14 @@ class OnlineRequestGate(
         val attempt = consecutive.incrementAndGet()
         val hint = quota.retryAfterMs ?: quota.provider.retryDelayMs
         val base = hint ?: backoffMs(attempt)
-        val delayMs = base + jitter(base / JITTER_DIVISOR)
-        val until = now() + delayMs
+        val until = if (RetryAfter.isIndefinite(base)) {
+            Long.MAX_VALUE
+        } else {
+            val delayMs = base + jitter(base / JITTER_DIVISOR)
+            val sum = now() + delayMs
+            // Overflow means the hint cannot be represented: blocked, never shortened.
+            if (sum < 0L) Long.MAX_VALUE else sum
+        }
         cooldownUntil.accumulateAndGet(until) { a, b -> maxOf(a, b) }
     }
 
