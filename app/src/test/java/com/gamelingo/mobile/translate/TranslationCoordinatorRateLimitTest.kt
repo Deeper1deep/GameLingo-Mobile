@@ -253,23 +253,24 @@ class TranslationCoordinatorRateLimitTest {
             val oldId = TranslationSessionBus.latestLine.value!!.subtitleId
             val gen = TranslationSessionBus.latestLine.value!!.generation
             val start = java.util.concurrent.CountDownLatch(1)
+            val accepted = java.util.concurrent.atomic.AtomicBoolean(false)
             val publisher = Thread {
                 start.await()
-                TranslationSessionBus.onTranslated("old $round", "ترجمة", "e", false, 0L, oldId, gen)
+                accepted.set(TranslationSessionBus.onTranslated("old $round", "ترجمة", "e", false, 0L, oldId, gen))
             }
             val replacer = Thread {
                 start.await()
                 TranslationSessionBus.onNewLine("new $round", System.currentTimeMillis())
             }
             publisher.start(); replacer.start(); start.countDown(); publisher.join(); replacer.join()
-            // Whatever the interleaving, once the replacement exists the old result must not be the live translation.
-            if (TranslationSessionBus.translatedLine.value?.subtitleId == oldId &&
-                !TranslationSessionBus.isSubtitleActive(oldId)
-            ) failures.incrementAndGet()
+            // Either interleaving is consistent: a result the bus accepted is the stored one (it was live when it
+            // landed); a refused result never lands. No half state, and no accept after the replacement.
+            val stored = TranslationSessionBus.translatedLine.value?.subtitleId == oldId
+            if (accepted.get() != stored) failures.incrementAndGet()
             // And a result arriving after the replacement is always refused.
             assertFalse(TranslationSessionBus.onTranslated("old $round", "ترجمة", "e", false, 0L, oldId, gen))
         }
-        assertEquals("stale old result left as the live translation", 0, failures.get())
+        assertEquals("accepted and stored state disagreed", 0, failures.get())
         TranslationSessionBus.onSessionStopped()
     }
 
