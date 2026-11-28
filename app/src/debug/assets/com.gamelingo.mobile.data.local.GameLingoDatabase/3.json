@@ -2,7 +2,7 @@
   "formatVersion": 1,
   "database": {
     "version": 3,
-    "identityHash": "00000000000000000000000000000003",
+    "identityHash": "d281bab89220c62c59b2863de269d103",
     "entities": [
       {
         "tableName": "translation_history",
@@ -78,7 +78,7 @@
     ],
     "setupQueries": [
       "CREATE TABLE IF NOT EXISTS room_master_table (id INTEGER PRIMARY KEY,identity_hash TEXT)",
-      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, '00000000000000000000000000000003')"
+      "INSERT OR REPLACE INTO room_master_table (id,identity_hash) VALUES(42, 'd281bab89220c62c59b2863de269d103')"
     ]
   }
 }
