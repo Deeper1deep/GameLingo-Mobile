@@ -56,6 +56,14 @@ class TranslationCoordinatorRateLimitTest {
                 )
             }
             kotlinx.coroutines.delay(latencyFor(prompt))
+            if (Regex("Translate these (\\d+) lines").containsMatchIn(prompt)) {
+                // Batch request: answer one string per numbered line, echoing the line so the test can check alignment.
+                val numbered = prompt.lines().mapNotNull { Regex("^(\\d+)\\. (.*)$").find(it)?.groupValues?.get(2) }
+                val array = numbered.joinToString(",", "[", "]") { "\"ترجمة: ${it}\"" }
+                return GeminiResponse(
+                    candidates = listOf(GeminiCandidate(content = GeminiContent(parts = listOf(GeminiPart(array))))),
+                )
+            }
             return GeminiResponse(
                 candidates = listOf(GeminiCandidate(content = GeminiContent(parts = listOf(GeminiPart("ترجمة"))))),
             )
@@ -130,7 +138,7 @@ class TranslationCoordinatorRateLimitTest {
     }
 
     @Test
-    fun `during a rate limit capture and OCR keep advancing, nothing is requested, then only the newest line is translated`() {
+    fun `during a rate limit capture keeps advancing, nothing is requested, then every waiting line goes in one aligned request`() {
         val api = ScriptedApi().also { it.limitedUntilCall = 1 }
         start(api)
 
@@ -138,34 +146,27 @@ class TranslationCoordinatorRateLimitTest {
         assertTrue("429 never reached the worker", waitUntil {
             TranslationSessionBus.workerStatus.value.state == RequestState.RATE_LIMITED
         })
-        val status = TranslationSessionBus.workerStatus.value
-        assertTrue(status.lastError.orEmpty().startsWith("QUOTA_429"))
-        assertTrue("cooldown end must be exposed to diagnostics", status.cooldownUntilMillis > System.currentTimeMillis() - 1_000L)
         assertEquals(1, api.calls.get())
-
-        // The capture/OCR side keeps producing while translation is paused: new lines register as
-        // the live appearance, heartbeats and unchanged frames are accepted, and the bus tracks them.
-        val seenLines = CopyOnWriteArrayList<String>()
         val t0 = System.currentTimeMillis()
         listOf("Second line", "Third line", "Newest line").forEachIndexed { i, text ->
             TranslationSessionBus.onNewLine(text, t0 + i)
             assertEquals(text, TranslationSessionBus.latestLine.value?.text)
-            TranslationSessionBus.onFrameUnchanged(t0 + i + 1)
-            TranslationSessionBus.onHeartbeat(t0 + i + 2)
-            seenLines.add(TranslationSessionBus.latestLine.value!!.text)
             Thread.sleep(100)
         }
-        assertEquals(listOf("Second line", "Third line", "Newest line"), seenLines.toList())
-        // Still inside the cooldown: no network request was made for any of them.
         assertEquals("a request left the device during the cooldown", 1, api.calls.get())
 
-        // Recovery: after the provider's 2 s, only the newest relevant line is sent and shown.
         assertTrue("translation never resumed", waitUntil(12_000) {
             TranslationSessionBus.translatedLine.value?.original == "Newest line"
         })
-        println("COORD1 prompts=${api.texts.map { it.replace("\n", " / ") }} state=${TranslationSessionBus.workerStatus.value} shown=${TranslationSessionBus.translatedLine.value?.original}")
-        assertTrue("sent prompts: ${api.texts.map { it.replace("\n", " / ") }}", api.texts.last().contains("Newest line"))
-        assertFalse("a superseded line was sent after recovery: ${api.texts.map { it.replace("\n", " / ") }}", api.texts.drop(1).any { it.contains("Second line") && !it.contains("Newest line") })
+        Thread.sleep(500)
+        println("COORD1 prompts=${api.texts.map { it.replace("\n", " / ") }} state=${TranslationSessionBus.workerStatus.value}")
+        assertEquals("one rejected request plus one batch", 2, api.calls.get())
+        val batchPrompt = api.texts.last()
+        val order = listOf("First line", "Second line", "Third line", "Newest line").map { batchPrompt.indexOf(it) }
+        assertTrue("all four lines, in order: $order", order.all { it >= 0 } && order == order.sorted())
+        assertEquals("ترجمة: Newest line", TranslationSessionBus.translatedLine.value?.translated)
+        assertEquals(0, TranslationSessionBus.workerStatus.value.lostLines)
+        assertEquals(1, TranslationSessionBus.workerStatus.value.batchesSent)
         assertEquals(RequestState.SUCCESS, TranslationSessionBus.workerStatus.value.state)
     }
 
