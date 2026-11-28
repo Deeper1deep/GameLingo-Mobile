@@ -131,6 +131,9 @@ fun DiagnosticsScreen(liveClock: Boolean = true) {
             workerStatus.lastError?.let { error ->
                 HintText(stringResource(R.string.diag_last_error_fmt, error))
             }
+            HintText(stringResource(R.string.diag_requests_minute_fmt, workerStatus.onlineRequestsLastMinute))
+            HintText(stringResource(R.string.diag_batch_fmt, workerStatus.batchesSent, workerStatus.batchedLines))
+            HintText(stringResource(R.string.diag_lost_lines_fmt, workerStatus.lostLines))
             workerStatus.lastProviderLimit?.let { limit ->
                 HintText(
                     stringResource(

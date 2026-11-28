@@ -276,6 +276,7 @@ fun SessionScreen(
                     when (it) {
                         SessionNotice.ONLINE_NOT_CONFIGURED -> R.string.overlay_notice_online_not_configured
                         SessionNotice.FELL_BACK_TO_LOCAL -> R.string.overlay_notice_fell_back_local
+                        SessionNotice.TRANSLATION_LINES_LOST -> R.string.overlay_notice_lines_lost
                     },
                 ),
                 style = MaterialTheme.typography.bodySmall,

@@ -28,6 +28,9 @@ enum class SessionNotice {
 
     /** Online translation failed and AUTO quietly used the on-device engine. */
     FELL_BACK_TO_LOCAL,
+
+    /** At least one captured line ended without a translation (see the diagnostics screen). */
+    TRANSLATION_LINES_LOST,
 }
 
 /**
@@ -123,6 +126,13 @@ data class WorkerStatus(
     val lastProviderLimit: String? = null,
     /** When that real limit was received; -1 when none. */
     val lastProviderLimitAtMillis: Long = -1,
+    /** Lines that ended without a translation (overflow, too old, timeout, failure, retries used up). */
+    val lostLines: Int = 0,
+    /** Requests that carried several lines, and how many lines they carried in total. */
+    val batchesSent: Int = 0,
+    val batchedLines: Int = 0,
+    /** Real network attempts to the provider in the last minute when this status was written. */
+    val onlineRequestsLastMinute: Int = 0,
 )
 
 /**

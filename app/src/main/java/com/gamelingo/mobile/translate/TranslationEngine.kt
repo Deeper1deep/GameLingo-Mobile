@@ -49,6 +49,14 @@ interface TranslationEngine {
     /** Translates [request.text] into natural Egyptian colloquial Arabic. */
     suspend fun translate(request: TranslationRequest): TranslationResult
 
+    /**
+     * Translates several lines in one provider request, one translation per
+     * input, in input order. Null when this engine has no batch path (callers
+     * then translate line by line). Throws [BatchMisalignedException] when the
+     * answer does not map exactly onto the inputs.
+     */
+    suspend fun translateBatch(requests: List<TranslationRequest>): List<String>? = null
+
     fun close()
 }
 
