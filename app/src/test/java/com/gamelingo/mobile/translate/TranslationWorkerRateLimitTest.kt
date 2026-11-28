@@ -20,6 +20,7 @@ class TranslationWorkerRateLimitTest {
         calls: ConcurrentLinkedQueue<String>,
         relevant: (QueuedRequest) -> Boolean = { true },
         maxAutoResumes: Int = 5,
+        cooldown: () -> Long = { 0L },
         behavior: suspend (QueuedRequest) -> ProcessorOutcome,
     ) = TranslationWorker(
         processor = { calls.add(it.text); behavior(it) },
@@ -30,6 +31,7 @@ class TranslationWorkerRateLimitTest {
         enableWatchdog = false,
         isRelevant = relevant,
         maxAutoResumes = maxAutoResumes,
+        cooldownRemainingMs = cooldown,
     )
 
     @Test fun `after a 429 the newest line is retried once when the cooldown ends, without new text`() = runTest {
@@ -188,6 +190,55 @@ class TranslationWorkerRateLimitTest {
         runCurrent()
         assertEquals(-1L, w.currentStatus().cooldownUntilMillis)
         assertEquals("QUOTA_429/RESOURCE_EXHAUSTED/PerMinutePerProject/wait=20s", w.currentStatus().lastProviderLimit)
+        w.stop()
+    }
+
+    @Test fun `lines arriving during a cooldown are held, only the newest is sent after it, none fails`() = runTest {
+        val calls = ConcurrentLinkedQueue<String>()
+        var coolUntil = 10_000L
+        val w = worker(calls, cooldown = { (coolUntil - testScheduler.currentTime).coerceAtLeast(0L) }) { ok }
+        w.start()
+        w.enqueue("a", 0, subtitleId = 1, generation = 1)
+        runCurrent()
+        w.enqueue("b", 1, subtitleId = 2, generation = 1)
+        runCurrent()
+        w.enqueue("c", 2, subtitleId = 3, generation = 1)
+        runCurrent()
+        // Nothing reached the provider and nothing was reported as an error.
+        assertEquals(emptyList<String>(), calls.toList())
+        val held = w.currentStatus()
+        assertEquals(RequestState.RATE_LIMITED, held.state)
+        assertTrue(held.cooldownUntilMillis > testScheduler.currentTime)
+        assertEquals(null, held.lastError)
+        advanceTimeBy(12_000L)
+        runCurrent()
+        assertEquals(listOf("c"), calls.toList())
+        assertEquals(RequestState.SUCCESS, w.currentStatus().state)
+        w.stop()
+    }
+
+    @Test fun `a held line that left the screen is not sent and the waiting state ends`() = runTest {
+        val calls = ConcurrentLinkedQueue<String>()
+        var relevant = true
+        val w = worker(calls, relevant = { relevant }, cooldown = { (5_000L - testScheduler.currentTime).coerceAtLeast(0L) }) { ok }
+        w.start()
+        w.enqueue("gone", 0, subtitleId = 1, generation = 1)
+        runCurrent()
+        relevant = false
+        advanceTimeBy(8_000L)
+        runCurrent()
+        assertEquals(emptyList<String>(), calls.toList())
+        assertEquals(-1L, w.currentStatus().cooldownUntilMillis)
+        w.stop()
+    }
+
+    @Test fun `an unrepresentable wait is not held, it keeps the visible failure path`() = runTest {
+        val calls = ConcurrentLinkedQueue<String>()
+        val w = worker(calls, cooldown = { Long.MAX_VALUE }) { throw QuotaExceededException("blocked", fromCooldown = true, retryAfterMs = Long.MAX_VALUE) }
+        w.start()
+        w.enqueue("line", 0, subtitleId = 1, generation = 1)
+        runCurrent()
+        assertEquals(listOf("line"), calls.toList())
         w.stop()
     }
 }

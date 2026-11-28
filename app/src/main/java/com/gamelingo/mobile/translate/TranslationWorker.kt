@@ -224,6 +224,23 @@ class TranslationWorker(
                     wakeup.receive()
                     continue
                 }
+                // Pacing: while a provider rate limit cools down, a request would
+                // only be refused locally and shown as a failure. Hold the newest
+                // line instead (older held lines are replaced, never sent) and
+                // send it once the provider's wait has passed. Skipped when the
+                // wait is unrepresentable or the resume budget is spent: those
+                // keep the visible-failure path.
+                val coolMs = cooldownRemainingMs()
+                if (coolMs > 0L && !RetryAfter.isIndefinite(coolMs) && autoResumes.get() < maxAutoResumes) {
+                    log("held #${request.id} during cooldown (${coolMs}ms left)")
+                    updateStatus(
+                        RequestState.RATE_LIMITED,
+                        activeRequestId = null,
+                        cooldownUntilMillis = now() + coolMs,
+                    )
+                    scheduleResume(request, coolMs)
+                    continue
+                }
                 activeRequest = request
                 lastProgressAtMillis = now()
                 updateStatus(RequestState.TRANSLATING, activeRequestId = request.id)
@@ -327,6 +344,8 @@ class TranslationWorker(
     private fun resumeAfterCooldown() {
         val candidate = resumeCandidate ?: return
         resumeCandidate = null
+        // The wait is over: the state no longer reads as "waiting" even if the line is dropped below.
+        updateStatus(RequestState.RATE_LIMITED, activeRequestId = null, cooldownUntilMillis = -1L)
         if (!running.get()) return
         if (!isRelevant(candidate)) {
             log("resume skipped #${candidate.id}: no longer on screen or session changed")

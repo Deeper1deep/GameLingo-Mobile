@@ -37,6 +37,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.gamelingo.mobile.R
 import com.gamelingo.mobile.core.session.SessionNotice
 import com.gamelingo.mobile.core.session.SessionState
+import com.gamelingo.mobile.core.session.waitingOnRateLimit
 import com.gamelingo.mobile.core.status.SessionPhase
 import com.gamelingo.mobile.core.status.formatElapsed
 import com.gamelingo.mobile.core.status.resolveEngineReadiness
@@ -72,6 +73,7 @@ fun SessionScreen(
     val latestLine by sessionViewModel.latestLine.collectAsStateWithLifecycle()
     val translated by sessionViewModel.translatedLine.collectAsStateWithLifecycle()
     val failure by sessionViewModel.translationFailure.collectAsStateWithLifecycle()
+    val workerStatus by sessionViewModel.workerStatus.collectAsStateWithLifecycle()
     val notice by sessionViewModel.notice.collectAsStateWithLifecycle()
     val startedAt by sessionViewModel.startedAtMillis.collectAsStateWithLifecycle()
     val count by sessionViewModel.translatedCount.collectAsStateWithLifecycle()
@@ -195,7 +197,13 @@ fun SessionScreen(
             )
             when {
                 phase == SessionPhase.ERROR && failure != null -> Text(
-                    text = stringResource(R.string.home_translation_failed),
+                    text = stringResource(
+                        if (workerStatus.waitingOnRateLimit()) {
+                            R.string.home_translation_waiting
+                        } else {
+                            R.string.home_translation_failed
+                        },
+                    ),
                     style = MaterialTheme.typography.bodyMedium,
                     color = GlColors.Error,
                     modifier = Modifier.padding(top = GlSpacing.xs),

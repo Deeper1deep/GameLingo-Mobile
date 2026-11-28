@@ -18,6 +18,7 @@ class SessionViewModel @Inject constructor() : ViewModel() {
     val latestLine: StateFlow<OcrLine?> = TranslationSessionBus.latestLine
     val translatedLine: StateFlow<TranslatedLine?> = TranslationSessionBus.translatedLine
     val translationFailure: StateFlow<String?> = TranslationSessionBus.translationFailure
+    val workerStatus: StateFlow<com.gamelingo.mobile.core.session.WorkerStatus> = TranslationSessionBus.workerStatus
     val notice: StateFlow<SessionNotice?> = TranslationSessionBus.notice
     val startedAtMillis: StateFlow<Long?> = TranslationSessionBus.startedAtMillis
     val translatedCount: StateFlow<Int> = TranslationSessionBus.translatedCount

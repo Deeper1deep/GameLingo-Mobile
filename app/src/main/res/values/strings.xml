@@ -27,6 +27,7 @@
     <string name="session_error_projection_ended">النظام أنهى إذن التقاط الشاشة (انتهت صلاحيته أو اتسحب). ابدأ الجلسة من جديد ووافق على الإذن.</string>
     <string name="home_stop">إيقاف الترجمة</string>
     <string name="home_capture_cancelled">تم إلغاء إذن التقاط الشاشة</string>
+    <string name="home_translation_waiting">الترجمة واقفة مؤقتًا بسبب حدّ الطلبات من الخدمة — هترجع لوحدها</string>
     <string name="home_translation_failed">تعذّرت ترجمة آخر جملة — هتتعاد مع الجملة الجاية</string>
     <string name="home_latest_ocr">آخر نص مقروء: %1$s</string>
     <string name="notif_channel_capture">التقاط الشاشة</string>

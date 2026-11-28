@@ -125,6 +125,15 @@ data class WorkerStatus(
     val lastProviderLimitAtMillis: Long = -1,
 )
 
+/**
+ * True while the app is deliberately waiting out a provider rate limit
+ * (an active, representable cooldown): a temporary pause, not a failure.
+ */
+fun WorkerStatus.waitingOnRateLimit(nowMillis: Long = System.currentTimeMillis()): Boolean =
+    state == RequestState.RATE_LIMITED &&
+        cooldownUntilMillis != Long.MAX_VALUE &&
+        cooldownUntilMillis > nowMillis
+
 /** One accepted OCR line, ready for the translation engine (Phase 4). */
 data class OcrLine(
     val text: String,
