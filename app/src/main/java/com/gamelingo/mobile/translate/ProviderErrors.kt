@@ -24,9 +24,9 @@ data class ProviderErrorInfo(
         )
         private val STATUS_RE = Regex("\"status\"\\s*:\\s*\"([A-Z_]{3,40})\"")
         private val QUOTA_ID_RE = Regex("\"quotaId\"\\s*:\\s*\"([A-Za-z0-9_\\-]{1,100})\"")
-        private val RETRY_DELAY_RE = Regex("\"retryDelay\"\\s*:\\s*\"(\\d{1,5})(?:\\.\\d+)?s\"")
+        private val RETRY_DELAY_RE = Regex("\"retryDelay\"\\s*:\\s*\"(\\d{1,12})(?:\\.\\d+)?s\"")
         private const val MAX_BODY_CHARS = 8_000
-        private const val MAX_RETRY_DELAY_SEC = 600L
+        private const val MAX_RETRY_DELAY_SEC = RetryAfter.MAX_SECONDS
 
         /** Extracts only whitelisted fields; null body or no match gives an empty info. */
         fun parse(body: String?): ProviderErrorInfo {
@@ -43,13 +43,19 @@ data class ProviderErrorInfo(
 
 /** Parses an HTTP Retry-After header: delta-seconds or an HTTP-date. */
 object RetryAfter {
-    /** A hostile or buggy header cannot park the online engine longer than this. */
-    const val MAX_SECONDS = 600L
+    /**
+     * Overflow guard only, not a retry policy: a valid provider hint is honoured in
+     * full up to seven days (a longer one pauses online requests for the whole cap, so
+     * no request is ever sent earlier than the provider allowed). The separate retry
+     * budget (maxAutoResumes) limits how many times we try, never when we may try.
+     */
+    const val MAX_SECONDS = 7L * 24 * 3600
 
-    /** Milliseconds to wait, clamped to [0, MAX_SECONDS]; null when absent or unparsable. */
+    /** Milliseconds to wait, at most MAX_SECONDS; null when absent or unparsable. */
     fun parseMillis(header: String?, nowMillis: Long): Long? {
         val value = header?.trim().orEmpty()
         if (value.isEmpty()) return null
+        if (value.all { it.isDigit() } && value.toLongOrNull() == null) return MAX_SECONDS * 1_000L
         value.toLongOrNull()?.let { seconds ->
             return if (seconds < 0) null else minOf(seconds, MAX_SECONDS) * 1_000L
         }

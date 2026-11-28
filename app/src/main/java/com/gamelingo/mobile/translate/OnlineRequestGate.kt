@@ -65,6 +65,13 @@ class OnlineRequestGate(
         }
     }
 
+    /** Test support: forget the cooldown, backoff and peak counters of this gate. */
+    internal fun resetForTest() {
+        cooldownUntil.set(0L)
+        consecutive.set(0)
+        peakInFlight.set(0)
+    }
+
     private fun throwIfCoolingDown() {
         val remaining = remainingMs()
         if (remaining > 0L) {

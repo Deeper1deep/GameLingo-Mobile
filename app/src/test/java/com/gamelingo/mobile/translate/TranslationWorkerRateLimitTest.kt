@@ -131,4 +131,21 @@ class TranslationWorkerRateLimitTest {
         assertTrue(!err.contains("SECRET"))
         w.stop()
     }
+
+    @Test fun `a long hint delays the resume until it has passed, the resume budget is separate`() = runTest {
+        val calls = ConcurrentLinkedQueue<String>()
+        var limited = true
+        val w = worker(calls, maxAutoResumes = 1) { if (limited) throw QuotaExceededException("429", retryAfterMs = 1_800_000L) else ok }
+        w.start()
+        w.enqueue("line", 0, subtitleId = 1, generation = 1)
+        runCurrent()
+        limited = false
+        advanceTimeBy(1_700_000L)
+        runCurrent()
+        assertEquals("not before the provider allows it", 1, calls.size)
+        advanceTimeBy(101_000L)
+        runCurrent()
+        assertEquals(2, calls.size)
+        w.stop()
+    }
 }

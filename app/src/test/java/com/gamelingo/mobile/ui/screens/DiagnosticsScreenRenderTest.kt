@@ -1,6 +1,10 @@
 package com.gamelingo.mobile.ui.screens
 
+import androidx.compose.ui.semantics.SemanticsProperties
+import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertCountEquals
 import androidx.compose.ui.test.captureToImage
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.onNodeWithText
@@ -8,6 +12,10 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performScrollTo
 import androidx.test.core.app.ApplicationProvider
 import com.gamelingo.mobile.R
+import com.gamelingo.mobile.core.capture.CaptureHealth
+import com.gamelingo.mobile.core.session.RequestState
+import com.gamelingo.mobile.core.session.TranslationSessionBus
+import com.gamelingo.mobile.core.session.WorkerStatus
 import com.gamelingo.mobile.ui.theme.GameLingoTheme
 import org.junit.Assert.assertTrue
 import org.junit.Rule
@@ -60,5 +68,37 @@ class DiagnosticsScreenRenderTest {
         println("DIAG_PNG_BEGIN")
         b64.chunked(4000).forEach { println(it) }
         println("DIAG_PNG_END")
+    }
+
+    private fun textMatching(regex: Regex) = SemanticsMatcher("text matches $regex") { node ->
+        node.config.getOrNull(SemanticsProperties.Text)?.any { regex.containsMatchIn(it.text) } == true
+    }
+
+    @Test
+    fun `a rate limit shows as request state, cooldown, last success and API error while capture and OCR rows stay live and separate`() {
+        val now = System.currentTimeMillis()
+        CaptureHealth.onFrameAcquired(now - 2_000L)
+        CaptureHealth.onOcrRun(now - 3_000L)
+        TranslationSessionBus.onWorkerStatus(
+            WorkerStatus(
+                state = RequestState.RATE_LIMITED,
+                lastSuccessAtMillis = now - 20_000L,
+                lastError = "QUOTA_429/RESOURCE_EXHAUSTED",
+                cooldownUntilMillis = now + 3_600_000L,
+            ),
+        )
+        rule.setContent { GameLingoTheme { DiagnosticsScreen(liveClock = false) } }
+        val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
+        // Request state, cooldown, last success and the API error each have their own row.
+        rule.onNodeWithText("RATE_LIMITED").performScrollTo().assertIsDisplayed()
+        rule.onNode(textMatching(Regex("^(35\\d\\d|3600) ثانية$"))).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(ctx.getString(R.string.diag_last_error_fmt, "QUOTA_429/RESOURCE_EXHAUSTED"))
+            .performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(ctx.getString(R.string.diag_cooldown)).performScrollTo().assertIsDisplayed()
+        // Capture and OCR carry their own timestamps, unaffected by the translation state.
+        rule.onNodeWithText(ctx.getString(R.string.diag_last_frame)).performScrollTo().assertIsDisplayed()
+        rule.onNodeWithText(ctx.getString(R.string.diag_last_ocr)).performScrollTo().assertIsDisplayed()
+        rule.onAllNodes(textMatching(Regex("^من [0-9]+ ثانية$"))).assertCountEquals(3)
+        TranslationSessionBus.onWorkerStatus(WorkerStatus())
     }
 }

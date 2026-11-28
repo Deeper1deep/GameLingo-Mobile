@@ -96,13 +96,33 @@ class RateLimitParsingTest {
         assertEquals(45_000L, RetryAfter.parseMillis("Sat, 28 Nov 2026 03:00:45 GMT", now))
         // A date in the past means no wait.
         assertEquals(0L, RetryAfter.parseMillis("Sat, 28 Nov 2026 02:59:00 GMT", now))
-        // Absurd values are clamped to ten minutes, not ignored and not obeyed.
-        assertEquals(600_000L, RetryAfter.parseMillis("86400", now))
-        assertEquals(600_000L, RetryAfter.parseMillis("Sun, 29 Nov 2026 03:00:00 GMT", now))
+        // A long valid hint is preserved in full, never shortened to ten minutes.
+        assertEquals(900_000L, RetryAfter.parseMillis("900", now))
+        assertEquals(86_400_000L, RetryAfter.parseMillis("86400", now))
+        assertEquals(86_400_000L, RetryAfter.parseMillis("Sun, 29 Nov 2026 03:00:00 GMT", now))
+        // Only an overflow-sized value is capped (seven days), without arithmetic overflow.
+        assertEquals(RetryAfter.MAX_SECONDS * 1_000L, RetryAfter.parseMillis("99999999999999999999999", now))
+        assertEquals(RetryAfter.MAX_SECONDS * 1_000L, RetryAfter.parseMillis("9223372036854775807", now))
         assertNull(RetryAfter.parseMillis("soon", now))
         assertNull(RetryAfter.parseMillis("-5", now))
         assertNull(RetryAfter.parseMillis(null, now))
         assertNull(RetryAfter.parseMillis("  ", now))
+    }
+
+    @Test fun `a provider hint over ten minutes blocks every request until it is allowed`() = runTest {
+        var t = 1_000L
+        val api = ThrowingApi(http(429, body429, "Retry-After" to "1800"))
+        val eng = engine(api) { t }
+        val e = runCatching { eng.translate(TranslationRequest(text = "a")) }.exceptionOrNull() as QuotaExceededException
+        assertEquals(1_800_000L, e.retryAfterMs)
+        // 11 minutes later (past the old ten-minute clamp) nothing may be sent yet.
+        t += 660_000L
+        val early = runCatching { eng.translate(TranslationRequest(text = "b")) }.exceptionOrNull() as QuotaExceededException
+        assertTrue(early.fromCooldown)
+        assertEquals(1, api.calls)
+        t += 1_140_001L
+        runCatching { eng.translate(TranslationRequest(text = "c")) }
+        assertEquals(2, api.calls)
     }
 
     @Test fun `provider body parsing keeps only whitelisted tokens`() {
