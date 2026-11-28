@@ -111,12 +111,12 @@ class TranslationWorkerRateLimitTest {
         val calls = ConcurrentLinkedQueue<String>()
         val w = worker(calls) { ok }
         w.start()
-        listOf("a", "b", "b", "c", "d").forEachIndexed { i, t -> w.enqueue(t, i.toLong(), subtitleId = (i + 1).toLong()) }
+        listOf("a" to 1L, "b" to 2L, "b" to 2L, "c" to 3L, "d" to 4L).forEachIndexed { i, (t, id) -> w.enqueue(t, i.toLong(), subtitleId = id) }
         runCurrent()
         val list = calls.toList()
         assertEquals("d", list.last())
         assertTrue(list.count { it == "b" } <= 1)
-        assertTrue(list.size <= 4)
+        assertEquals(listOf("a", "b", "c", "d"), list)
         w.stop()
     }
 
