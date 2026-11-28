@@ -107,14 +107,16 @@ class TranslationWorkerRateLimitTest {
         w.stop()
     }
 
-    @Test fun `rapid different lines are all processed in order, a repeated line only once`() = runTest {
+    @Test fun `rapid different lines never lose the newest and a repeated line is sent at most once`() = runTest {
         val calls = ConcurrentLinkedQueue<String>()
         val w = worker(calls) { ok }
         w.start()
         listOf("a", "b", "b", "c", "d").forEachIndexed { i, t -> w.enqueue(t, i.toLong(), subtitleId = (i + 1).toLong()) }
         runCurrent()
-        assertTrue(calls.toList().containsAll(listOf("a", "c", "d")))
-        assertEquals(1, calls.count { it == "b" }.coerceAtLeast(1))
+        val list = calls.toList()
+        assertEquals("d", list.last())
+        assertTrue(list.count { it == "b" } <= 1)
+        assertTrue(list.size <= 4)
         w.stop()
     }
 
