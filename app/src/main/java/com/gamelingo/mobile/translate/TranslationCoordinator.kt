@@ -458,7 +458,7 @@ class TranslationCoordinator @Inject constructor(
                 understandingHints = understandingHolder.get().promptHints(item.request.text, arabicMode),
             )
         }
-        val answers: List<String>? = try {
+        val answers: List<String?>? = try {
             withTimeout(settings.requestTimeoutSec * BATCH_TIMEOUT_FACTOR_MS) { hybridEngine.translateBatch(requests) }
         } catch (timeout: TimeoutCancellationException) {
             pending.forEach { failVisibly(it) }
