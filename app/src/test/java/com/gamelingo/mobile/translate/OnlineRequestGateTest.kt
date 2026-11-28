@@ -111,4 +111,16 @@ class OnlineRequestGateTest {
         assertTrue(thrown is CancellationException)
         assertFalse(g.remainingMs() > 0)
     }
+
+    @Test fun `a local refusal keeps naming the provider fields of the real 429`() = runTest {
+        var t = 0L
+        val g = gate({ t })
+        val info = ProviderErrorInfo(status = "RESOURCE_EXHAUSTED", quotaId = "PerMinutePerProject", retryDelayMs = 20_000L)
+        runCatching { g.run<Unit> { throw QuotaExceededException("429", retryAfterMs = 20_000L, provider = info) } }
+        t += 5_000L
+        val refused = runCatching { g.run { } }.exceptionOrNull() as QuotaExceededException
+        assertTrue(refused.fromCooldown)
+        assertEquals(info, refused.provider)
+        assertEquals("QUOTA_COOLDOWN/RESOURCE_EXHAUSTED/PerMinutePerProject", TranslationErrorCode.of(refused))
+    }
 }

@@ -272,6 +272,14 @@ class TranslationWorker(
                     val waitMs = (error as? QuotaExceededException)?.let {
                         maxOf(cooldownRemainingMs(), it.retryAfterMs ?: 0L)
                     } ?: 0L
+                    if (error is QuotaExceededException && !error.fromCooldown) {
+                        val hint = error.retryAfterMs?.takeIf { !RetryAfter.isIndefinite(it) }
+                            ?.let { "/wait=${it / 1_000L}s" }.orEmpty()
+                        status = status.copy(
+                            lastProviderLimit = code + hint,
+                            lastProviderLimitAtMillis = now(),
+                        )
+                    }
                     updateStatus(
                         state,
                         activeRequestId = null,
@@ -431,6 +439,8 @@ class TranslationWorker(
         cooldownUntilMillis: Long? = null,
     ) {
         status = status.copy(
+            lastProviderLimit = if (state == RequestState.SUCCESS || state == RequestState.LOCAL_FALLBACK) null else status.lastProviderLimit,
+            lastProviderLimitAtMillis = if (state == RequestState.SUCCESS || state == RequestState.LOCAL_FALLBACK) -1L else status.lastProviderLimitAtMillis,
             cooldownUntilMillis = when {
                 state == RequestState.SUCCESS || state == RequestState.LOCAL_FALLBACK -> -1L
                 cooldownUntilMillis != null -> cooldownUntilMillis

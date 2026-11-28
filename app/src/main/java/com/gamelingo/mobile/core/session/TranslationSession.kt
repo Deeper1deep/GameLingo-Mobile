@@ -115,6 +115,13 @@ data class WorkerStatus(
     val recoveryCount: Int = 0,
     /** Epoch millis the online rate-limit cooldown ends at; -1 when none is active. */
     val cooldownUntilMillis: Long = -1,
+    /**
+     * Stable code of the last REAL provider rate limit (never a local
+     * cooldown refusal), with its provider wait; kept until a success.
+     */
+    val lastProviderLimit: String? = null,
+    /** When that real limit was received; -1 when none. */
+    val lastProviderLimitAtMillis: Long = -1,
 )
 
 /** One accepted OCR line, ready for the translation engine (Phase 4). */

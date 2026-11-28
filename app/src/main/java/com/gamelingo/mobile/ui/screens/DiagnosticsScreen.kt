@@ -131,6 +131,15 @@ fun DiagnosticsScreen(liveClock: Boolean = true) {
             workerStatus.lastError?.let { error ->
                 HintText(stringResource(R.string.diag_last_error_fmt, error))
             }
+            workerStatus.lastProviderLimit?.let { limit ->
+                HintText(
+                    stringResource(
+                        R.string.diag_last_provider_limit_fmt,
+                        limit,
+                        ago(workerStatus.lastProviderLimitAtMillis, tick),
+                    ),
+                )
+            }
         }
 
         SectionHeader(stringResource(R.string.diag_section_timing))

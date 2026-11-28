@@ -31,6 +31,9 @@ class OnlineRequestGate(
     private val consecutive = AtomicInteger(0)
     private val inFlight = AtomicInteger(0)
 
+    /** Provider fields of the last REAL 429 (not a local refusal); kept so a refusal can still name them. */
+    @Volatile private var lastRealProvider: ProviderErrorInfo = ProviderErrorInfo()
+
     /** Highest number of simultaneous requests seen (diagnostics and tests). */
     val peakInFlight = AtomicInteger(0)
 
@@ -89,6 +92,7 @@ class OnlineRequestGate(
             throw QuotaExceededException(
                 "online requests paused after a rate limit",
                 retryAfterMs = remaining,
+                provider = lastRealProvider,
                 fromCooldown = true,
             )
         }
@@ -96,6 +100,7 @@ class OnlineRequestGate(
 
     private fun onRateLimited(quota: QuotaExceededException) {
         val attempt = consecutive.incrementAndGet()
+        lastRealProvider = quota.provider
         val hint = quota.retryAfterMs ?: quota.provider.retryDelayMs
         val base = hint ?: backoffMs(attempt)
         val until = if (RetryAfter.isIndefinite(base)) {
