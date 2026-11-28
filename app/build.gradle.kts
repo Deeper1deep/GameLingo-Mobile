@@ -1,4 +1,3 @@
-import java.util.zip.ZipFile
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
@@ -193,29 +192,5 @@ dependencies {
 configurations.all {
     resolutionStrategy {
         force("org.jetbrains.kotlin:kotlin-stdlib:2.3.20")
-    }
-}
-
-// TEMPORARY, branch-only diagnostic (remove before any merge): on CI, also run the
-// minified release build after the debug build so R8/shrinking is checked without
-// publishing, and print the release APK size. The release is unsigned here (no
-// keystore on PR runs) and is never uploaded.
-if (System.getenv("CI") == "true") {
-    afterEvaluate {
-        tasks.named("assembleDebug") { finalizedBy("assembleRelease") }
-        val releaseApkDir = layout.buildDirectory.dir("outputs/apk/release")
-        tasks.named("assembleRelease") {
-            doLast {
-                releaseApkDir.get().asFile
-                    .walkTopDown().filter { it.extension == "apk" }
-                    .forEach { apk ->
-                        println("RELEASE_APK ${apk.name} bytes=${apk.length()}")
-                        ZipFile(apk).use { z ->
-                            z.entries().asSequence().filter { it.size >= 500_000 }
-                                .forEach { e -> println("RELEASE_ENTRY ${e.name} size=${e.size} compressed=${e.compressedSize}") }
-                        }
-                    }
-            }
-        }
     }
 }
