@@ -3,6 +3,7 @@ package com.gamelingo.mobile.translate
 import com.gamelingo.mobile.data.settings.AppSettings
 import java.io.IOException
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.async
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import okhttp3.MediaType.Companion.toMediaType
@@ -146,7 +147,7 @@ class RateLimitParsingTest {
         val a = engine(api).also { it.gate = shared }
         val b = engine(api).also { it.gate = shared }
         val jobs = (0 until 6).map { i ->
-            kotlinx.coroutines.async { (if (i % 2 == 0) a else b).translate(TranslationRequest(text = "line $i")) }
+            async { (if (i % 2 == 0) a else b).translate(TranslationRequest(text = "line $i")) }
         }
         jobs.forEach { it.await() }
         assertEquals(1, api.peak)
