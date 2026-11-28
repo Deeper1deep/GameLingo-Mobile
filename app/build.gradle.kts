@@ -194,3 +194,11 @@ configurations.all {
         force("org.jetbrains.kotlin:kotlin-stdlib:2.3.20")
     }
 }
+
+// TEMPORARY, branch-only (remove before any merge): on the CI run of the batching trial branch, the unit
+// test step also assembles the R8-minified release build. Unsigned when no keystore exists; never uploaded.
+if (System.getenv("GITHUB_HEAD_REF") == "fix/batch-backlog") {
+    afterEvaluate {
+        tasks.named("testDebugUnitTest") { dependsOn("assembleRelease") }
+    }
+}
